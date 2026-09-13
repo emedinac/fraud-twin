@@ -1,0 +1,30 @@
+simulation:
+  seed: 42
+  start: 2026-01-01T00:00:00Z
+  duration_days: 1
+  speed: batch
+
+population:
+  customers: 10
+  accounts: 15
+  merchants: 3
+  devices: 12
+
+payments:
+  daily_target: 100
+  rails:
+    CARD: 0.55
+    PIX: 0.30
+    ACCOUNT_TRANSFER: 0.15
+
+fraud:
+  target_rate: 0.002
+
+quality:
+  profile: realistic
+
+outputs:
+  parquet: false
+  postgres: false
+  kafka: false
+

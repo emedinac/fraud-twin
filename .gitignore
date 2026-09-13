@@ -1,3 +1,18 @@
+# Specific for development
+/.agents
+AGENTS.md
+FEATURES.md
+.vscode/
+
+# Project-generated runtime outputs
+/runs/
+/outputs/
+/artifacts/
+/reports/
+/logs/
+/data/generated/
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
