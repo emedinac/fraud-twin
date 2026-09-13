@@ -4,7 +4,6 @@ from typing import Annotated
 import typer
 
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
-from fraudtwin.logging_config import configure_logging
 from fraudtwin.manifest import create_manifest, write_manifest
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.parquet import write_behavior_parquet, write_entity_parquet
@@ -28,7 +27,6 @@ def validate_config(
 ) -> None:
     """Validate a simulation configuration without running it."""
 
-    configure_logging()
     config = _load_or_exit(path)
     typer.echo("Configuration is valid.")
     typer.echo(f"Seed: {config.simulation.seed}")
@@ -45,7 +43,6 @@ def generate(
 ) -> None:
     """Validate a configuration and generate entities and legitimate behavior."""
 
-    configure_logging()
     config = _load_or_exit(path)
     manifest = create_manifest(config)
     entity_dataset = EntityGenerator(config).generate()
@@ -57,6 +54,8 @@ def generate(
     event_counts = {
         "payments": len(behavior_dataset.payments),
         "payment_events": len(behavior_dataset.payment_events),
+        "card_lifecycle_events": sum(behavior_dataset.card_lifecycle_event_counts.values()),
+        **behavior_dataset.card_lifecycle_event_counts,
     }
     manifest = manifest.model_copy(
         update={
@@ -65,7 +64,7 @@ def generate(
             "schema_versions": {
                 **{entity_name: "1" for entity_name in entity_counts},
                 "payments": "1",
-                "payment_events": "1",
+                "payment_events": "2",
             },
         }
     )

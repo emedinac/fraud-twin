@@ -33,4 +33,21 @@ poetry run fraudtwin generate configs/minimal.yaml --output-dir /tmp/fraudtwin-r
 
 The behavior section controls `amount_min`, `amount_max`, `active_hours`, `weekday_weights`, `merchant_preference_count`, and `preferred_device_limit`. Generated profiles and payment tables use stable schemas and deterministic IDs. Fraud, chargebacks, streaming, and production infrastructure remain deferred.
 
+Card lifecycle tests can be run directly with:
+
+```bash
+poetry run pytest tests/test_card_lifecycle.py
+```
+
+The complete suite, including lightweight lifecycle generation, is:
+
+```bash
+poetry run pytest
+```
+
+The `card_lifecycle` section controls approval, reversal, and refund
+probabilities plus authorization, capture, clearing, settlement, reversal, and
+refund delays in whole seconds. Use `poetry run fraudtwin config validate
+configs/minimal.yaml` to validate these settings before generation.
+
 Follow the milestone order in [`FEATURES.md`](FEATURES.md). Do not add infrastructure before the simulator has correct state and temporal behavior.

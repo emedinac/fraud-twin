@@ -37,7 +37,11 @@ def test_generate_command_writes_manifest(tmp_path: Path) -> None:
         "pix_keys": 8,
         "behavior_profiles": 10,
     }
-    assert manifest["event_counts"] == {"payments": 100, "payment_events": 100}
+    assert manifest["event_counts"]["payments"] == 100
+    assert manifest["event_counts"]["payment_events"] >= 100
+    assert manifest["event_counts"]["card_lifecycle_events"] > 0
+    assert manifest["event_counts"]["CARD_AUTHORIZATION_REQUESTED"] > 0
+    assert manifest["schema_versions"]["payment_events"] == "2"
     assert manifest["fraud_counts"] == {}
     assert sorted(path.name for path in (run_dir / "entities").glob("*.parquet")) == [
         "accounts.parquet",

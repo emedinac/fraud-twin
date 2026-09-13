@@ -9,7 +9,7 @@ from fraudtwin.domain import BehaviorProfile, Customer
 from fraudtwin.domain.payments import Payment, PaymentEvent
 from fraudtwin.seed import create_stream_rng
 from fraudtwin.simulation.generator import EntityDataset
-from fraudtwin.simulation.payments import PaymentGenerator
+from fraudtwin.simulation.payments import PaymentGenerator, count_card_lifecycle_events
 
 _PROFILE_ID_WIDTH = 6
 _COUNTRIES = ("BR", "US", "GB", "DE")
@@ -31,6 +31,12 @@ class BehaviorDataset:
             "payments": len(self.payments),
             "payment_events": len(self.payment_events),
         }
+
+    @property
+    def card_lifecycle_event_counts(self) -> dict[str, int]:
+        """Return counts for the explicit card event vocabulary."""
+
+        return count_card_lifecycle_events(self.payment_events)
 
 
 class BehaviorGenerator:

@@ -28,6 +28,17 @@ behavior:
   merchant_preference_count: 3
   preferred_device_limit: 3
 
+card_lifecycle:
+  authorization_approval_probability: 0.90
+  reversal_probability: 0.05
+  refund_probability: 0.10
+  authorization_delay_seconds: 1
+  capture_delay_seconds: 5
+  clearing_delay_seconds: 30
+  settlement_delay_seconds: 60
+  reversal_delay_seconds: 10
+  refund_delay_seconds: 60
+
 fraud:
   target_rate: 0.002
 

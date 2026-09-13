@@ -43,20 +43,25 @@ def test_payments_have_stable_order_valid_relationships_and_profile_preferences(
     assert [payment.payment_id for payment in dataset.payments] == [
         f"PAY-{number:08d}" for number in range(1, 101)
     ]
-    assert [event.event_id for event in dataset.payment_events] == [
+    base_events = [
+        event
+        for event in dataset.payment_events
+        if event.event_type in {"CARD_AUTHORIZATION_REQUESTED", "PIX_SETTLED", "TRANSFER_COMPLETED"}
+    ]
+    assert [event.event_id for event in base_events] == [
         f"EVT-{number:08d}" for number in range(1, 101)
     ]
     assert len({payment.payment_id for payment in dataset.payments}) == 100
-    assert len({event.event_id for event in dataset.payment_events}) == 100
+    assert len({event.event_id for event in dataset.payment_events}) == len(dataset.payment_events)
     assert all(1.0 <= payment.amount <= 5_000.0 for payment in dataset.payments)
     assert all(payment.payer_account_id in accounts for payment in dataset.payments)
     assert all(event.account_id in accounts for event in dataset.payment_events)
     assert all(
         event.payment_id == payment.payment_id
-        for payment, event in zip(dataset.payments, dataset.payment_events, strict=True)
+        for payment, event in zip(dataset.payments, base_events, strict=True)
     )
 
-    for payment, event in zip(dataset.payments, dataset.payment_events, strict=True):
+    for payment, event in zip(dataset.payments, base_events, strict=True):
         profile = profiles[event.customer_id]
         assert event.amount == payment.amount
         assert event.currency == payment.currency

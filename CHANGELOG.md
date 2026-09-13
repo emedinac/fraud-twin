@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.4.0 — Milestone 4
+
+- Added deterministic card authorization, decline, reversal, capture, clearing, settlement, and refund lifecycle events.
+- Added configurable card approval, reversal, and refund probabilities plus lifecycle timing delays with strict validation.
+- Extended payment event manifests and schema versioning while keeping payment records separate from their event stream.
+
 ## 0.3.0 — Milestone 3
 
 - Added deterministic, customer-specific behavioral profiles covering spending level, payment hours, weekday preferences, countries, merchant categories, devices, income, online purchases, travel, and card-versus-transfer preference.

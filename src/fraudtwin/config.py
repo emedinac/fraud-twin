@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 Rail = Literal["CARD", "PIX", "ACCOUNT_TRANSFER"]
 Speed = Literal["batch", "real_time", "accelerated"]
+# Five seconds of source delay plus one second each for ingestion and processing.
+CARD_EVENT_ENVELOPE_DELAY_SECONDS = 7
 
 
 class _StrictModel(BaseModel):
@@ -118,6 +120,35 @@ class BehaviorConfig(_StrictModel):
         return self
 
 
+class CardLifecycleConfig(_StrictModel):
+    """Deterministic probabilities and delays for card payment lifecycles."""
+
+    authorization_approval_probability: float = Field(default=0.9, ge=0, le=1)
+    reversal_probability: float = Field(default=0.05, ge=0, le=1)
+    refund_probability: float = Field(default=0.1, ge=0, le=1)
+    authorization_delay_seconds: Annotated[int, Field(ge=0)] = 1
+    capture_delay_seconds: Annotated[int, Field(ge=0)] = 5
+    clearing_delay_seconds: Annotated[int, Field(ge=0)] = 30
+    settlement_delay_seconds: Annotated[int, Field(ge=0)] = 60
+    reversal_delay_seconds: Annotated[int, Field(ge=0)] = 10
+    refund_delay_seconds: Annotated[int, Field(ge=0)] = 60
+
+    @property
+    def maximum_delay_seconds(self) -> int:
+        """Return the largest possible lifecycle delay before envelope timing."""
+
+        return sum(
+            (
+                self.authorization_delay_seconds,
+                self.capture_delay_seconds,
+                self.clearing_delay_seconds,
+                self.settlement_delay_seconds,
+                self.reversal_delay_seconds,
+                self.refund_delay_seconds,
+            )
+        )
+
+
 class FraudConfig(_StrictModel):
     """Ground-truth fraud-rate settings."""
 
@@ -145,9 +176,19 @@ class SimulationRunConfig(_StrictModel):
     population: PopulationConfig
     payments: PaymentsConfig
     behavior: BehaviorConfig = Field(default_factory=BehaviorConfig)
+    card_lifecycle: CardLifecycleConfig = Field(default_factory=CardLifecycleConfig)
     fraud: FraudConfig
     quality: QualityConfig
     outputs: OutputsConfig
+
+    @model_validator(mode="after")
+    def card_lifecycle_must_fit_simulation_window(self) -> "SimulationRunConfig":
+        if (
+            self.card_lifecycle.maximum_delay_seconds + CARD_EVENT_ENVELOPE_DELAY_SECONDS
+            >= self.simulation.duration_days * 24 * 60 * 60
+        ):
+            raise ValueError("card lifecycle timing settings must fit the simulation window")
+        return self
 
 
 def load_config(path: Path) -> SimulationRunConfig:
@@ -164,12 +205,27 @@ def load_config(path: Path) -> SimulationRunConfig:
     return SimulationRunConfig.model_validate(raw_config)
 
 
-def config_hash(config: SimulationRunConfig) -> str:
-    """Return a stable SHA-256 hash of the validated configuration."""
+def config_hash(config: SimulationRunConfig, *, include_card_lifecycle: bool = True) -> str:
+    """Return a stable SHA-256 hash of the validated configuration.
 
+    The optional compatibility mode keeps the M3 payment stream identity
+    unchanged when only card lifecycle settings differ.
+    """
+
+    return hashlib.sha256(
+        _canonical_config(config, include_card_lifecycle=include_card_lifecycle).encode("utf-8")
+    ).hexdigest()
+
+
+def _canonical_config(config: SimulationRunConfig, *, include_card_lifecycle: bool = True) -> str:
+    """Serialize configuration once for hashes and deterministic stream IDs."""
+
+    payload = config.model_dump(mode="json")
+    if not include_card_lifecycle:
+        payload.pop("card_lifecycle", None)
     canonical = json.dumps(
-        config.model_dump(mode="json"),
+        payload,
         sort_keys=True,
         separators=(",", ":"),
-    ).encode("utf-8")
-    return hashlib.sha256(canonical).hexdigest()
+    )
+    return canonical

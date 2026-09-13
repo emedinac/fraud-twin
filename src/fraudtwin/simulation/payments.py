@@ -1,25 +1,71 @@
 """Deterministic generation of legitimate payment records and events."""
 
 import math
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from random import Random
-from typing import Literal, TypeVar
+from typing import TypeVar
 
-from fraudtwin.config import SimulationRunConfig, config_hash
-from fraudtwin.domain import Account, BehaviorProfile, Card, Device, Merchant, Payment, PaymentEvent
-from fraudtwin.domain.payments import PaymentRail
+from fraudtwin.config import (
+    CARD_EVENT_ENVELOPE_DELAY_SECONDS,
+    SimulationRunConfig,
+    config_hash,
+)
+from fraudtwin.domain import (
+    CARD_LIFECYCLE_EVENT_TYPES,
+    Account,
+    BehaviorProfile,
+    Card,
+    CardLifecycleEventType,
+    Device,
+    Merchant,
+    Payment,
+    PaymentEvent,
+    PaymentEventType,
+    PaymentRail,
+    PaymentType,
+    validate_card_lifecycle,
+)
 from fraudtwin.seed import create_stream_rng
 
 _ID_WIDTH = 8
 T = TypeVar("T")
-PaymentType = Literal["PURCHASE", "TRANSFER"]
-EventType = Literal["CARD_PAYMENT_COMPLETED", "PIX_SETTLED", "TRANSFER_COMPLETED"]
+CustomerRecord = TypeVar("CustomerRecord", Account, Card)
 
 
 def _weighted_choice(rng: Random, values: tuple[T, ...], weights: tuple[float, ...]) -> T:
     return rng.choices(values, weights=weights, k=1)[0]
+
+
+def _group_by_customer(
+    records: tuple[CustomerRecord, ...],
+) -> dict[str, tuple[CustomerRecord, ...]]:
+    """Group customer-owned records without duplicating account/card logic."""
+
+    grouped: dict[str, list[CustomerRecord]] = {}
+    for record in records:
+        grouped.setdefault(record.customer_id, []).append(record)
+    return {customer_id: tuple(values) for customer_id, values in grouped.items()}
+
+
+def count_card_lifecycle_events(events: Iterable[PaymentEvent]) -> dict[str, int]:
+    """Count the explicit card lifecycle event types in one pass."""
+
+    counts = dict.fromkeys(CARD_LIFECYCLE_EVENT_TYPES, 0)
+    for event in events:
+        if event.event_type in counts:
+            counts[event.event_type] += 1
+    return counts
+
+
+def _event_times(event_time: datetime, source_delay_seconds: int) -> tuple[datetime, ...]:
+    """Return source, ingestion, and processing times for one event."""
+
+    source_available_at = event_time + timedelta(seconds=source_delay_seconds)
+    ingested_at = source_available_at + timedelta(seconds=1)
+    processed_at = ingested_at + timedelta(seconds=1)
+    return source_available_at, ingested_at, processed_at
 
 
 @dataclass(frozen=True)
@@ -35,6 +81,10 @@ class PaymentDataset:
             "payments": len(self.payments),
             "payment_events": len(self.payment_events),
         }
+
+    @property
+    def card_lifecycle_event_counts(self) -> dict[str, int]:
+        return count_card_lifecycle_events(self.payment_events)
 
 
 class PaymentGenerator:
@@ -55,31 +105,17 @@ class PaymentGenerator:
         self.accounts = accounts
         self.merchants = merchants
         self.simulation_run_id = simulation_run_id or self._stable_run_id()
-        self.accounts_by_customer = self._group_accounts_by_customer(accounts)
-        self.cards_by_customer = self._group_cards_by_customer(cards)
+        self.accounts_by_customer = _group_by_customer(accounts)
+        self.cards_by_customer = _group_by_customer(cards)
         self.accounts_by_id = {account.account_id: account for account in accounts}
         self.devices_by_id = {device.device_id: device for device in devices}
         self._days = self._simulation_days()
         self._valid_hours_by_day = self._build_valid_hours_by_day()
-
-    @staticmethod
-    def _group_accounts_by_customer(
-        records: tuple[Account, ...],
-    ) -> dict[str, tuple[Account, ...]]:
-        grouped: dict[str, list[Account]] = {}
-        for record in records:
-            grouped.setdefault(record.customer_id, []).append(record)
-        return {customer_id: tuple(values) for customer_id, values in grouped.items()}
-
-    @staticmethod
-    def _group_cards_by_customer(records: tuple[Card, ...]) -> dict[str, tuple[Card, ...]]:
-        grouped: dict[str, list[Card]] = {}
-        for record in records:
-            grouped.setdefault(record.customer_id, []).append(record)
-        return {customer_id: tuple(values) for customer_id, values in grouped.items()}
+        self._card_max_delay_seconds = config.card_lifecycle.maximum_delay_seconds
 
     def _stable_run_id(self) -> str:
-        return f"SIM-{config_hash(self.config)[:16]}"
+        # Card lifecycle settings must not change the M3 payment stream ID.
+        return f"SIM-{config_hash(self.config, include_card_lifecycle=False)[:16]}"
 
     def _simulation_days(self) -> tuple[date, ...]:
         first = self.start.date()
@@ -183,6 +219,17 @@ class PaymentGenerator:
         rounded = round(amount, 2)
         return rounded if rounded > 0 else self.config.behavior.amount_min
 
+    def _sample_card_time(self, profile: BehaviorProfile, rng: Random) -> datetime:
+        """Leave room for a complete card lifecycle inside the run window."""
+
+        latest = self.end - timedelta(
+            seconds=self._card_max_delay_seconds + CARD_EVENT_ENVELOPE_DELAY_SECONDS,
+            microseconds=1,
+        )
+        if latest <= self.start:
+            raise ValueError("card lifecycle timing settings exceed the simulation window")
+        return min(self._sample_time(profile, rng), latest)
+
     def _merchant(self, profile: BehaviorProfile, rng: Random) -> Merchant:
         merchants = self.merchants
         if profile.merchant_category_preferences:
@@ -223,14 +270,18 @@ class PaymentGenerator:
         self, number: int, profile: BehaviorProfile, rng: Random
     ) -> tuple[Payment, PaymentEvent]:
         rail = self._choose_rail(profile, rng)
-        initiated_at = self._sample_time(profile, rng)
+        initiated_at = (
+            self._sample_card_time(profile, rng)
+            if rail == "CARD"
+            else self._sample_time(profile, rng)
+        )
         amount = self._sample_amount(profile, rng)
         device_id = self._device_id(profile, rng)
         merchant_id: str | None = None
         card_id: str | None = None
         payee_account_id: str | None = None
         payment_type: PaymentType
-        event_type: EventType
+        event_type: PaymentEventType
 
         if rail == "CARD":
             card = rng.choice(self.cards_by_customer[profile.customer_id])
@@ -240,7 +291,7 @@ class PaymentGenerator:
             merchant_id = merchant.merchant_id
             payment_type = "PURCHASE"
             online = merchant.online_only or rng.random() < profile.online_purchase_rate
-            event_type = "CARD_PAYMENT_COMPLETED"
+            event_type = "CARD_AUTHORIZATION_REQUESTED"
         else:
             payer_account = rng.choice(self.accounts_by_customer[profile.customer_id])
             payer_account_id = payer_account.account_id
@@ -264,9 +315,9 @@ class PaymentGenerator:
             initiated_at=initiated_at,
             current_status="SETTLED" if rail == "PIX" else "COMPLETED",
         )
-        source_available_at = initiated_at + timedelta(seconds=2 if rail == "PIX" else 5)
-        ingested_at = source_available_at + timedelta(seconds=1)
-        processed_at = ingested_at + timedelta(seconds=1)
+        source_available_at, ingested_at, processed_at = _event_times(
+            initiated_at, 2 if rail == "PIX" else 5
+        )
         event = PaymentEvent(
             event_id=event_id,
             event_type=event_type,
@@ -281,7 +332,7 @@ class PaymentGenerator:
             processed_at=processed_at,
             producer="fraudtwin.behavior",
             source_system="synthetic_payment_source",
-            schema_version="1",
+            schema_version="2" if rail == "CARD" else "1",
             correlation_id=payment_id,
             causation_id=None,
             simulation_run_id=self.simulation_run_id,
@@ -297,6 +348,92 @@ class PaymentGenerator:
             currency=payment.currency,
         )
         return payment, event
+
+    @staticmethod
+    def _advance(previous: datetime, delay_seconds: int) -> datetime:
+        """Advance an event clock while keeping zero-delay events ordered."""
+
+        candidate = previous + timedelta(seconds=delay_seconds)
+        return candidate if candidate > previous else previous + timedelta(microseconds=1)
+
+    def _card_event(
+        self,
+        initial: PaymentEvent,
+        event_type: CardLifecycleEventType,
+        event_time: datetime,
+        sequence: int,
+        causation_id: str,
+    ) -> PaymentEvent:
+        """Create a lifecycle event by preserving the common M3 envelope."""
+
+        source_available_at, ingested_at, processed_at = _event_times(event_time, 5)
+        return initial.model_copy(
+            update={
+                "event_id": f"{initial.event_id}-{sequence:02d}",
+                "event_type": event_type,
+                "event_time": event_time,
+                "source_created_at": event_time,
+                "source_available_at": source_available_at,
+                "ingested_at": ingested_at,
+                "processed_at": processed_at,
+                "causation_id": causation_id,
+            }
+        )
+
+    def _card_lifecycle(
+        self,
+        payment: Payment,
+        initial: PaymentEvent,
+        rng: Random,
+    ) -> tuple[Payment, tuple[PaymentEvent, ...]]:
+        """Generate and validate one deterministic card lifecycle."""
+
+        settings = self.config.card_lifecycle
+        events = [initial]
+        previous_time = initial.event_time
+        previous_id = initial.event_id
+
+        def append(event_type: CardLifecycleEventType, delay_seconds: int) -> None:
+            nonlocal previous_time, previous_id
+            previous_time = self._advance(previous_time, delay_seconds)
+            if previous_time >= self.end:
+                raise ValueError("card lifecycle events exceed the simulation window")
+            event = self._card_event(
+                initial,
+                event_type,
+                previous_time,
+                len(events) + 1,
+                previous_id,
+            )
+            events.append(event)
+            previous_id = event.event_id
+
+        if rng.random() >= settings.authorization_approval_probability:
+            append("CARD_DECLINED", settings.authorization_delay_seconds)
+            final_status = "DECLINED"
+        else:
+            append("CARD_AUTHORIZED", settings.authorization_delay_seconds)
+            if rng.random() < settings.reversal_probability:
+                if rng.random() < 0.5:
+                    append("CARD_REVERSED", settings.reversal_delay_seconds)
+                else:
+                    append("CARD_CAPTURED", settings.capture_delay_seconds)
+                    append("CARD_REVERSED", settings.reversal_delay_seconds)
+                final_status = "REVERSED"
+            else:
+                append("CARD_CAPTURED", settings.capture_delay_seconds)
+                append("CARD_CLEARED", settings.clearing_delay_seconds)
+                append("CARD_SETTLED", settings.settlement_delay_seconds)
+                if rng.random() < settings.refund_probability:
+                    append("CARD_REFUNDED", settings.refund_delay_seconds)
+                    final_status = "REFUNDED"
+                else:
+                    final_status = "SETTLED"
+
+        result = payment.model_copy(update={"current_status": final_status})
+        event_tuple = tuple(events)
+        validate_card_lifecycle(result, event_tuple)
+        return result, event_tuple
 
     def iter_generate(
         self, profiles: tuple[BehaviorProfile, ...]
@@ -320,7 +457,13 @@ class PaymentGenerator:
 
         payments: list[Payment] = []
         events: list[PaymentEvent] = []
+        lifecycle_rng = create_stream_rng(self.config.simulation.seed, "milestone-4:card-lifecycle")
         for payment, event in self.iter_generate(profiles):
+            if payment.payment_rail == "CARD":
+                payment, payment_events = self._card_lifecycle(payment, event, lifecycle_rng)
+                events.extend(payment_events)
+            else:
+                payment_events = (event,)
+                events.append(event)
             payments.append(payment)
-            events.append(event)
         return PaymentDataset(tuple(payments), tuple(events))

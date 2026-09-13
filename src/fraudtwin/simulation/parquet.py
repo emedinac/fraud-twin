@@ -176,6 +176,10 @@ PAYMENT_EVENT_SCHEMA: dict[str, Any] = {
     "currency": pl.Utf8,
 }
 
+# Lifecycle events use the same stable envelope as all payment events. Keeping
+# a named alias makes the contract explicit for consumers and tests.
+PAYMENT_LIFECYCLE_EVENT_SCHEMA = PAYMENT_EVENT_SCHEMA
+
 
 def _write_table(records: Iterable[BaseModel], schema: dict[str, Any], path: Path) -> None:
     rows = [record.model_dump(mode="python") for record in records]

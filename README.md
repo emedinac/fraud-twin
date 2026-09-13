@@ -15,9 +15,9 @@ The project is designed for fraud engineers, data scientists, ML engineers,
 and data teams who need realistic relationships and temporal patterns before
 introducing fraud, streaming, or production infrastructure.
 
-## Current release: 0.3.0 — Customer Behavior
+## Current release: 0.4.0 — Card Lifecycle
 
-Milestone 3 is complete. Every generated customer receives a deterministic
+Milestones 3 and 4 are complete. Every generated customer receives a deterministic
 behavior profile, and payments reflect customer-specific preferences for:
 
 - Spending level, income, and monthly budget
@@ -28,7 +28,10 @@ behavior profile, and payments reflect customer-specific preferences for:
 - Travel frequency
 
 The current release generates legitimate CARD, PIX-like, and account-transfer
-payments. Fraud, chargebacks, and fraud labels are intentionally not included.
+payments. Card payments produce ordered authorization, approval or decline,
+capture, clearing, settlement, reversal, and refund events as permitted by
+their configured lifecycle. PIX and account-transfer events retain their M3
+behavior. Fraud, chargebacks, and fraud labels are intentionally not included.
 
 ## Quick start
 
@@ -41,8 +44,9 @@ poetry run fraudtwin generate configs/minimal.yaml
 ```
 
 The command prints the run ID and output location. The default configuration
-generates 10 customers, 10 behavior profiles, 100 payments, and 100 payment
-events.
+generates 10 customers, 10 behavior profiles, 100 payments, and a variable
+number of payment events because each card payment may produce several
+lifecycle events.
 
 To choose another output directory:
 
@@ -114,6 +118,26 @@ behavior:
 Unknown fields, invalid amounts, invalid hours, invalid weights, and invalid
 counts are rejected during configuration validation.
 
+Card lifecycle settings can be adjusted under `card_lifecycle`:
+
+```yaml
+card_lifecycle:
+  authorization_approval_probability: 0.90
+  reversal_probability: 0.05
+  refund_probability: 0.10
+  authorization_delay_seconds: 1
+  capture_delay_seconds: 5
+  clearing_delay_seconds: 30
+  settlement_delay_seconds: 60
+  reversal_delay_seconds: 10
+  refund_delay_seconds: 60
+```
+
+Probabilities must be between 0 and 1, and timing values must be non-negative
+whole seconds. Card lifecycle choices use an isolated deterministic random
+stream, so adding lifecycle events does not change PIX or account-transfer
+choices.
+
 ## Project status
 
 | Capability | Status |
@@ -124,7 +148,8 @@ counts are rejected during configuration validation.
 | Typed Parquet batch output | Available |
 | Reproducible manifests and seed handling | Available |
 | Fraud scenarios and labels | Planned |
-| Full card lifecycle and chargebacks | Planned |
+| Full card lifecycle (without chargebacks) | Available |
+| Chargebacks | Planned |
 | Kafka, PostgreSQL, Flink, and ML workflows | Planned |
 
 FraudTwin is being built milestone by milestone. The priority is a correct,
