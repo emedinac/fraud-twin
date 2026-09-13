@@ -6,14 +6,9 @@
 
 ## Synthetic financial behavior for testing fraud systems
 
-FraudTwin creates a small, coherent financial world that behaves more like a
-real payment environment than a table of random transactions. It generates
-customers, accounts, cards, merchants, devices, customer behavior profiles,
-and legitimate payment events in reproducible batch runs.
+FraudTwin creates a small, coherent financial world that behaves more like a real payment environment than a table of random transactions. It generates customers, accounts, cards, merchants, devices, customer behavior profiles, and legitimate payment events in reproducible batch runs.
 
-The project is designed for fraud engineers, data scientists, ML engineers,
-and data teams who need realistic relationships and temporal patterns before
-introducing fraud, streaming, or production infrastructure.
+The project is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and temporal patterns before introducing fraud, streaming, or production infrastructure.
 
 ## Current release: 0.4.0 — Card Lifecycle
 
@@ -27,11 +22,7 @@ behavior profile, and payments reflect customer-specific preferences for:
 - Online purchases and trusted devices
 - Travel frequency
 
-The current release generates legitimate CARD, PIX-like, and account-transfer
-payments. Card payments produce ordered authorization, approval or decline,
-capture, clearing, settlement, reversal, and refund events as permitted by
-their configured lifecycle. PIX and account-transfer events retain their M3
-behavior. Fraud, chargebacks, and fraud labels are intentionally not included.
+The current release generates legitimate CARD, PIX-like, and account-transfer payments. Card payments produce ordered authorization, approval or decline, capture, clearing, settlement, reversal, and refund events as permitted by their configured lifecycle. PIX and account-transfer events retain their M3 behavior. Fraud, chargebacks, and fraud labels are intentionally not included.
 
 ## Quick start
 
@@ -43,10 +34,7 @@ poetry run fraudtwin config validate configs/minimal.yaml
 poetry run fraudtwin generate configs/minimal.yaml
 ```
 
-The command prints the run ID and output location. The default configuration
-generates 10 customers, 10 behavior profiles, 100 payments, and a variable
-number of payment events because each card payment may produce several
-lifecycle events.
+The command prints the run ID and output location. The default configuration generates 10 customers, 10 behavior profiles, 100 payments, and a variable number of payment events because each card payment may produce several lifecycle events.
 
 To choose another output directory:
 
@@ -76,32 +64,19 @@ runs/<run_id>/
     └── payment_events.parquet
 ```
 
-All Parquet files use explicit, stable schemas and column ordering. Generated
-payments reference existing accounts, cards, merchants, devices, and
-customers. Amounts are positive, timestamps stay within the configured
-simulation window, and no real personal data or payment credentials are used.
+All Parquet files use explicit, stable schemas and column ordering. Generated payments reference existing accounts, cards, merchants, devices, and customers. Amounts are positive, timestamps stay within the configured simulation window, and no real personal data or payment credentials are used.
 
-The manifest records the seed, configuration hash, schema versions, entity
-counts, payment counts, and empty fraud counts for this milestone.
+The manifest records the seed, configuration hash, schema versions, entity counts, payment counts, and empty fraud counts for this milestone.
 
 ## Why behavior matters
 
-Fraud detection depends on understanding what is normal for a customer. A
-payment at 03:00, from a new device, in an unusual merchant category, may be
-ordinary for one customer and suspicious for another.
+Fraud detection depends on understanding what is normal for a customer. A payment at 03:00, from a new device, in an unusual merchant category, may be ordinary for one customer and suspicious for another.
 
-FraudTwin makes that context available in the generated data through
-customer-specific profiles and deterministic temporal behavior. This provides
-a useful foundation for future anomaly and fraud scenarios without mixing
-fraud logic into the legitimate baseline.
+FraudTwin makes that context available in the generated data through customer-specific profiles and deterministic temporal behavior. This provides a useful foundation for future anomaly and fraud scenarios without mixing fraud logic into the legitimate baseline.
 
 ## Reproducibility
 
-Runs are controlled by the validated YAML configuration and simulation seed.
-Named, isolated random-number streams keep profile generation independent from
-entity generation and payment generation. With the same configuration and
-seed, profiles, payment records, event records, IDs, ordering, and schemas are
-equivalent.
+Runs are controlled by the validated YAML configuration and simulation seed. Named, isolated random-number streams keep profile generation independent from entity generation and payment generation. With the same configuration and seed, profiles, payment records, event records, IDs, ordering, and schemas are equivalent.
 
 Behavior settings can be adjusted under `behavior`:
 
@@ -115,8 +90,7 @@ behavior:
   preferred_device_limit: 3
 ```
 
-Unknown fields, invalid amounts, invalid hours, invalid weights, and invalid
-counts are rejected during configuration validation.
+Unknown fields, invalid amounts, invalid hours, invalid weights, and invalid counts are rejected during configuration validation.
 
 Card lifecycle settings can be adjusted under `card_lifecycle`:
 
@@ -133,10 +107,7 @@ card_lifecycle:
   refund_delay_seconds: 60
 ```
 
-Probabilities must be between 0 and 1, and timing values must be non-negative
-whole seconds. Card lifecycle choices use an isolated deterministic random
-stream, so adding lifecycle events does not change PIX or account-transfer
-choices.
+Probabilities must be between 0 and 1, and timing values must be non-negative whole seconds. Card lifecycle choices use an isolated deterministic random stream, so adding lifecycle events does not change PIX or account-transfer choices.
 
 ## Project status
 
@@ -152,9 +123,7 @@ choices.
 | Chargebacks | Planned |
 | Kafka, PostgreSQL, Flink, and ML workflows | Planned |
 
-FraudTwin is being built milestone by milestone. The priority is a correct,
-readable, reproducible simulation core before adding distributed systems or
-advanced modeling.
+FraudTwin is being built milestone by milestone. The priority is a correct, readable, reproducible simulation core before adding distributed systems or advanced modeling.
 
 ## Development
 
@@ -176,11 +145,6 @@ See [`DEVELOPMENT.md`](DEVELOPMENT.md) for contributor workflows and
 
 FraudTwin is released under the [Apache License 2.0](LICENSE).
 
-The project is informed by work such as
-[SantanderAI/gen-fraud-graph](https://github.com/SantanderAI/gen-fraud-graph)
-and [synthfin-core](https://github.com/afborda/synthfin-core). FraudTwin's
-focus is the reproducible system around a payment: entities, behavior,
-relationships, event timing, and the path toward realistic fraud-data
-workflows.
+The project is informed by work such as [SantanderAI/gen-fraud-graph](https://github.com/SantanderAI/gen-fraud-graph) and [synthfin-core](https://github.com/afborda/synthfin-core). FraudTwin's focus is the reproducible system around a payment: entities, behavior, relationships, event timing, and the path toward realistic fraud-data workflows.
 
 For release history, see [`CHANGELOG.md`](CHANGELOG.md).
