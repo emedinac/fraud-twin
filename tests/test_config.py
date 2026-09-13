@@ -24,6 +24,30 @@ def test_invalid_rail_distribution_is_rejected() -> None:
         SimulationRunConfig.model_validate(config)
 
 
+def test_negative_entity_count_is_rejected() -> None:
+    config = load_config(CONFIG_PATH).model_dump()
+    config["population"]["cards"] = -1
+
+    with pytest.raises(ValidationError):
+        SimulationRunConfig.model_validate(config)
+
+
+def test_unknown_population_field_is_rejected() -> None:
+    config = load_config(CONFIG_PATH).model_dump()
+    config["population"]["unknown"] = 1
+
+    with pytest.raises(ValidationError):
+        SimulationRunConfig.model_validate(config)
+
+
+def test_naive_simulation_start_is_rejected() -> None:
+    config = load_config(CONFIG_PATH).model_dump()
+    config["simulation"]["start"] = "2026-01-01T00:00:00"
+
+    with pytest.raises(ValidationError):
+        SimulationRunConfig.model_validate(config)
+
+
 def test_seeded_generators_start_with_the_same_sequence() -> None:
     first = create_rng(42)
     second = create_rng(42)

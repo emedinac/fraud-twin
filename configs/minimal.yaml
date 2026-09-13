@@ -6,9 +6,12 @@ simulation:
 
 population:
   customers: 10
+  institutions: 3
   accounts: 15
+  cards: 12
   merchants: 3
   devices: 12
+  pix_keys: 8
 
 payments:
   daily_target: 100
@@ -24,7 +27,6 @@ quality:
   profile: realistic
 
 outputs:
-  parquet: false
+  parquet: true
   postgres: false
   kafka: false
-

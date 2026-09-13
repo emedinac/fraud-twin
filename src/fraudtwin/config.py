@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Rail = Literal["CARD", "PIX", "ACCOUNT_TRANSFER"]
 Speed = Literal["batch", "real_time", "accelerated"]
@@ -35,9 +35,26 @@ class PopulationConfig(_StrictModel):
     """Requested population sizes."""
 
     customers: Annotated[int, Field(ge=0)]
+    institutions: Annotated[int, Field(ge=0)]
     accounts: Annotated[int, Field(ge=0)]
+    cards: Annotated[int, Field(ge=0)]
     merchants: Annotated[int, Field(ge=0)]
     devices: Annotated[int, Field(ge=0)]
+    pix_keys: Annotated[int, Field(ge=0)]
+
+    @model_validator(mode="after")
+    def relationships_have_required_pools(self) -> "PopulationConfig":
+        """Reject populations that cannot satisfy the entity relationships."""
+
+        if self.accounts and (not self.customers or not self.institutions):
+            raise ValueError("accounts require at least one customer and institution")
+        if self.cards and not self.accounts:
+            raise ValueError("cards require at least one account")
+        if self.merchants and not self.institutions:
+            raise ValueError("merchants require at least one institution")
+        if self.pix_keys and (not self.accounts or not self.customers or not self.institutions):
+            raise ValueError("pix_keys require at least one account, customer, and institution")
+        return self
 
 
 class PaymentsConfig(_StrictModel):

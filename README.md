@@ -58,12 +58,12 @@ systems around fraud detection—not just the classifier at the end of the pipe.
 
 ## Current status
 
-Milestone 0 is complete. The project currently provides validated YAML
-configuration, deterministic seed handling, a typed CLI, logging, and
-reproducible run manifests.
+Milestone 1 is complete. FraudTwin now creates deterministic synthetic
+customers, institutions, accounts, cards, merchants, devices, and PIX-like
+keys as typed Parquet tables with reproducible run manifests. Payment, fraud,
+and streaming behavior remain on the roadmap.
 
-Entity and event generation is the next step. The current foundation can be
-tried with:
+Try the entity generator with:
 
 ```bash
 poetry install
@@ -71,8 +71,8 @@ poetry run fraudtwin config validate configs/minimal.yaml
 poetry run fraudtwin generate configs/minimal.yaml
 ```
 
-At this stage, `generate` initializes a reproducible run manifest. It does not
-yet generate customers or payments.
+The generated run contains one Parquet file per entity under
+`runs/<run_id>/entities/`.
 
 ## Why this project exists
 

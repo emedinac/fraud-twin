@@ -47,7 +47,7 @@ def _git_commit() -> str:
 
 
 def create_manifest(config: SimulationRunConfig) -> RunManifest:
-    """Create a manifest for a run before domain generation exists."""
+    """Create reproducibility metadata for a simulation run."""
 
     now = datetime.now(UTC)
     return RunManifest(
@@ -71,7 +71,7 @@ def write_manifest(manifest: RunManifest, output_dir: Path) -> Path:
     """Persist a manifest and return its path."""
 
     run_dir = output_dir / manifest.run_id
-    run_dir.mkdir(parents=True, exist_ok=False)
+    run_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = run_dir / "manifest.json"
     manifest_path.write_text(
         manifest.model_dump_json(indent=2) + "\n",
