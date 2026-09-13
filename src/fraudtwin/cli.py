@@ -43,35 +43,32 @@ def generate(
         typer.Option("--output-dir", help="Directory in which to store run manifests."),
     ] = Path("runs"),
 ) -> None:
-    """Validate a configuration and generate entities and legitimate behavior."""
+    """Validate a configuration and generate a reproducible batch dataset."""
 
     config = _load_or_exit(path)
-    manifest = create_manifest(config)
+    base_manifest = create_manifest(config)
     entity_dataset = EntityGenerator(config).generate()
-    behavior_dataset = BehaviorGenerator(config, entity_dataset).generate()
-    run_dir = output_dir / manifest.run_id
+    behavior_dataset = BehaviorGenerator(
+        config, entity_dataset, simulation_run_id=base_manifest.run_id
+    ).generate()
+    run_dir = output_dir / base_manifest.run_id
     write_entity_parquet(entity_dataset, run_dir)
     write_behavior_parquet(behavior_dataset, run_dir)
     entity_counts = {**entity_dataset.counts, "behavior_profiles": len(behavior_dataset.profiles)}
-    event_counts = {
-        "payments": len(behavior_dataset.payments),
-        "payment_events": len(behavior_dataset.payment_events),
-        "ledger_entries": len(behavior_dataset.ledger_entries),
-        "card_lifecycle_events": sum(behavior_dataset.card_lifecycle_event_counts.values()),
-        "pix_lifecycle_events": sum(behavior_dataset.pix_lifecycle_event_counts.values()),
-        **behavior_dataset.card_lifecycle_event_counts,
-        **behavior_dataset.pix_lifecycle_event_counts,
-    }
-    manifest = manifest.model_copy(
+    event_counts = behavior_dataset.event_counts
+    manifest = base_manifest.model_copy(
         update={
             "entity_counts": entity_counts,
             "event_counts": event_counts,
             "schema_versions": {
                 **{entity_name: "1" for entity_name in entity_counts},
                 "payments": "2",
-                "payment_events": "3",
+                "payment_events": "4",
                 "ledger_entries": "1",
+                "fraud_records": "1",
             },
+            "fraud_counts": behavior_dataset.fraud_counts,
+            "fraud_rates": behavior_dataset.fraud_rates,
         }
     )
     manifest_path = write_manifest(manifest, output_dir)

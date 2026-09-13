@@ -10,9 +10,9 @@ FraudTwin creates a small, coherent financial world that behaves more like a rea
 
 The project is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and temporal patterns before introducing fraud, streaming, or production infrastructure.
 
-## Current release: 0.5.0 — PIX-Like Lifecycle
+## Current release: 0.6.0 — First Fraud Scenarios
 
-Milestones 3, 4, and 5 are complete. Every generated customer receives a deterministic
+Milestones 3, 4, 5, and 6 are complete. Every generated customer receives a deterministic
 behavior profile, and payments reflect customer-specific preferences for:
 
 - Spending level, income, and monthly budget
@@ -22,7 +22,7 @@ behavior profile, and payments reflect customer-specific preferences for:
 - Online purchases and trusted devices
 - Travel frequency
 
-The current release generates legitimate CARD, PIX-like, and account-transfer payments. Card payments produce ordered authorization, approval or decline, capture, clearing, settlement, reversal, and refund events. PIX payments produce ordered initiation, validation, authorization, submission, settlement, receipt, and optional return events, or a rejection without settlement. Account-transfer events retain their M3 behavior. Fraud, chargebacks, and fraud labels are intentionally not included.
+The current release generates legitimate CARD, PIX-like, and account-transfer payments, plus explicit F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack scenarios when fraud generation is enabled. Fraud events retain the existing event envelope and carry scenario ID, type, trigger, reason, and affected entities. The fraud record table contains scenario-linked truth records and legitimate hard negatives. Delayed labels, alerts, cases, disputes, and chargebacks remain deferred.
 
 ## Quick start
 
@@ -64,11 +64,13 @@ runs/<run_id>/
     └── payment_events.parquet
 └── ledger/
     └── ledger_entries.parquet
+└── fraud/
+    └── fraud_records.parquet
 ```
 
 All Parquet files use explicit, stable schemas and column ordering. Generated payments reference existing accounts, cards, merchants, devices, and customers. Amounts are positive, timestamps stay within the configured simulation window, and no real personal data or payment credentials are used.
 
-The manifest records the seed, configuration hash, schema versions, entity counts, payment/lifecycle/ledger counts, and empty fraud counts for this milestone.
+The manifest records the seed, configuration hash, schema versions, entity counts, payment/lifecycle/ledger counts, fraud event/record counts, and per-scenario fraud rates. The default configuration keeps fraud disabled, so it produces the same legitimate CARD, PIX-like, and account-transfer behavior as the previous release.
 
 ## Why behavior matters
 
@@ -78,7 +80,7 @@ FraudTwin makes that context available in the generated data through customer-sp
 
 ## Reproducibility
 
-Runs are controlled by the validated YAML configuration and simulation seed. Named, isolated random-number streams keep profile generation independent from entity generation and payment generation. With the same configuration and seed, profiles, payment records, event records, IDs, ordering, and schemas are equivalent.
+Runs are controlled by the validated YAML configuration and simulation seed. Named, isolated random-number streams keep profile generation independent from entity generation, payment generation, lifecycle generation, and each fraud scenario campaign. With the same configuration and seed, profiles, payment records, event records, fraud records, IDs, ordering, and schemas are equivalent. Scenario generation never uses current time or global uncontrolled randomness.
 
 Behavior settings can be adjusted under `behavior`:
 
@@ -135,6 +137,37 @@ entries in `ledger/ledger_entries.parquet`. Validate a generated run with:
 poetry run fraudtwin validate-ledger --run-id <run-id>
 ```
 
+Fraud generation can be enabled with explicit scenario controls:
+
+```yaml
+fraud:
+  enabled: true
+  target_rate: 1.0
+  scenario_count: 5
+  hard_negative_rate: 1.0
+  scenarios:
+    F01:
+      weight: 1.0
+    F02:
+      weight: 1.0
+      attempt_count: 20
+    F03:
+      weight: 1.0
+    F04:
+      weight: 1.0
+    F05:
+      weight: 1.0
+      attempt_count: 20
+      window_seconds: 60
+```
+
+`target_rate` limits the number of selected scenario campaigns relative to
+the legitimate payment count; scenario constraints can make the realized
+record rate lower. Each enabled campaign creates a corresponding legitimate
+lookalike when `hard_negative_rate` is greater than zero. Unknown fields,
+invalid probabilities, counts, amounts, durations, and windows are rejected
+before generation.
+
 ## Project status
 
 | Capability | Status |
@@ -144,10 +177,10 @@ poetry run fraudtwin validate-ledger --run-id <run-id>
 | Legitimate payment records and events | Available |
 | Typed Parquet batch output | Available |
 | Reproducible manifests and seed handling | Available |
-| Fraud scenarios and labels | Planned |
+| Fraud scenarios and ground truth records | Available |
 | Full card lifecycle (without chargebacks) | Available |
 | PIX-like lifecycle and transfer ledger | Available |
-| Chargebacks | Planned |
+| Delayed labels, alerts, cases, disputes, and chargebacks | Planned |
 | Kafka, PostgreSQL, Flink, and ML workflows | Planned |
 
 FraudTwin is being built milestone by milestone. The priority is a correct, readable, reproducible simulation core before adding distributed systems or advanced modeling.

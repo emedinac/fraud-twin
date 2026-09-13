@@ -2,12 +2,14 @@ import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Rail = Literal["CARD", "PIX", "ACCOUNT_TRANSFER"]
+FraudScenarioId = Literal["F01", "F02", "F03", "F04", "F05"]
+FRAUD_SCENARIO_IDS: tuple[FraudScenarioId, ...] = ("F01", "F02", "F03", "F04", "F05")
 Speed = Literal["batch", "real_time", "accelerated"]
 # Five seconds of source delay plus one second each for ingestion and processing.
 CARD_EVENT_ENVELOPE_DELAY_SECONDS = 7
@@ -181,10 +183,67 @@ class PixLifecycleConfig(_StrictModel):
         )
 
 
-class FraudConfig(_StrictModel):
-    """Ground-truth fraud-rate settings."""
+class FraudScenarioSettings(_StrictModel):
+    """Bounds and prevalence controls shared by one M6 scenario."""
 
+    enabled: bool = True
+    weight: Annotated[float, Field(ge=0)] = 1.0
+    count: Annotated[int, Field(ge=0)] = 1
+    amount_min: float | None = Field(default=None, gt=0)
+    amount_max: float | None = Field(default=None, gt=0)
+    duration_seconds: Annotated[int, Field(ge=0)] = 0
+    attempt_count: Annotated[int, Field(ge=1)] = 20
+    window_seconds: Annotated[int, Field(gt=0)] = 60
+
+    @model_validator(mode="after")
+    def amount_bounds_must_be_ordered(self) -> "FraudScenarioSettings":
+        if (
+            self.amount_min is not None
+            and self.amount_max is not None
+            and self.amount_max < self.amount_min
+        ):
+            raise ValueError(
+                "fraud scenario amount_max must be greater than or equal to amount_min"
+            )
+        return self
+
+
+def _default_fraud_scenarios() -> dict[FraudScenarioId, FraudScenarioSettings]:
+    return {scenario_id: FraudScenarioSettings() for scenario_id in FRAUD_SCENARIO_IDS}
+
+
+class FraudConfig(_StrictModel):
+    """Explicit scenario settings for the first fraud release."""
+
+    enabled: bool = False
     target_rate: Annotated[float, Field(ge=0, le=1)]
+    scenario_count: Annotated[int, Field(ge=0)] = 5
+    hard_negative_rate: Annotated[float, Field(ge=0, le=1)] = 1.0
+    scenarios: dict[FraudScenarioId, FraudScenarioSettings] = Field(
+        default_factory=_default_fraud_scenarios
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def fill_missing_scenario_settings(cls, value: Any) -> Any:
+        if isinstance(value, dict) and isinstance(value.get("scenarios", {}), dict):
+            value = dict(value)
+            value["scenarios"] = {
+                **_default_fraud_scenarios(),
+                **value.get("scenarios", {}),
+            }
+        return value
+
+    @model_validator(mode="after")
+    def enabled_scenarios_must_be_selectable(self) -> "FraudConfig":
+        if self.enabled and self.target_rate > 0 and self.scenario_count > 0:
+            if not any(
+                settings.enabled and settings.weight > 0 for settings in self.scenarios.values()
+            ):
+                raise ValueError(
+                    "enabled fraud generation requires a scenario with positive weight"
+                )
+        return self
 
 
 class QualityConfig(_StrictModel):
@@ -216,16 +275,26 @@ class SimulationRunConfig(_StrictModel):
 
     @model_validator(mode="after")
     def card_lifecycle_must_fit_simulation_window(self) -> "SimulationRunConfig":
+        window_seconds = self.simulation.duration_days * 24 * 60 * 60
         if (
             self.card_lifecycle.maximum_delay_seconds + CARD_EVENT_ENVELOPE_DELAY_SECONDS
-            >= self.simulation.duration_days * 24 * 60 * 60
+            >= window_seconds
         ):
             raise ValueError("card lifecycle timing settings must fit the simulation window")
         if (
             self.pix_lifecycle.maximum_delay_seconds + PIX_EVENT_ENVELOPE_DELAY_SECONDS
-            >= self.simulation.duration_days * 24 * 60 * 60
+            >= window_seconds
         ):
             raise ValueError("PIX lifecycle timing settings must fit the simulation window")
+        for scenario_id, settings in self.fraud.scenarios.items():
+            if settings.duration_seconds >= window_seconds:
+                raise ValueError(
+                    f"fraud scenario {scenario_id} duration must fit the simulation window"
+                )
+            if settings.window_seconds >= window_seconds:
+                raise ValueError(
+                    f"fraud scenario {scenario_id} window must fit the simulation window"
+                )
         return self
 
 

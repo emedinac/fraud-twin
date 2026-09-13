@@ -192,11 +192,39 @@ PAYMENT_EVENT_SCHEMA: dict[str, Any] = {
     "online": pl.Boolean,
     "amount": pl.Float64,
     "currency": pl.Utf8,
+    "scenario_type": pl.Utf8,
+    "scenario_trigger": pl.Utf8,
+    "scenario_reason": pl.Utf8,
+    "fraud_record_id": pl.Utf8,
+    "affected_entity_ids": pl.List(pl.Utf8),
 }
 
 # Lifecycle events use the same stable envelope as all payment events. Keeping
 # a named alias makes the contract explicit for consumers and tests.
 PAYMENT_LIFECYCLE_EVENT_SCHEMA = PAYMENT_EVENT_SCHEMA
+
+FRAUD_RECORD_SCHEMA: dict[str, Any] = {
+    "fraud_record_id": pl.Utf8,
+    "record_type": pl.Utf8,
+    "scenario_id": pl.Utf8,
+    "scenario_type": pl.Utf8,
+    "fraud_truth": pl.Boolean,
+    "trigger": pl.Utf8,
+    "reason": pl.Utf8,
+    "customer_id": pl.Utf8,
+    "account_id": pl.Utf8,
+    "card_id": pl.Utf8,
+    "device_id": pl.Utf8,
+    "merchant_id": pl.Utf8,
+    "payment_id": pl.Utf8,
+    "event_id": pl.Utf8,
+    "occurred_at": _UTC_TIMESTAMP,
+    "amount": pl.Float64,
+    "currency": pl.Utf8,
+    "correlation_id": pl.Utf8,
+    "causation_id": pl.Utf8,
+    "affected_entity_ids": pl.List(pl.Utf8),
+}
 
 
 def _write_table(records: Iterable[BaseModel], schema: dict[str, Any], path: Path) -> None:
@@ -224,14 +252,17 @@ def write_behavior_parquet(dataset: BehaviorDataset, run_dir: Path) -> dict[str,
     behavior_dir = run_dir / "behavior"
     payments_dir = run_dir / "payments"
     ledger_dir = run_dir / "ledger"
+    fraud_dir = run_dir / "fraud"
     behavior_dir.mkdir(parents=True, exist_ok=False)
     payments_dir.mkdir(parents=True, exist_ok=False)
     ledger_dir.mkdir(parents=True, exist_ok=False)
+    fraud_dir.mkdir(parents=True, exist_ok=False)
     tables = {
         "behavior_profiles": (dataset.profiles, BEHAVIOR_PROFILE_SCHEMA, behavior_dir),
         "payments": (dataset.payments, PAYMENT_SCHEMA, payments_dir),
         "payment_events": (dataset.payment_events, PAYMENT_EVENT_SCHEMA, payments_dir),
         "ledger_entries": (dataset.ledger_entries, LEDGER_ENTRY_SCHEMA, ledger_dir),
+        "fraud_records": (dataset.fraud_records, FRAUD_RECORD_SCHEMA, fraud_dir),
     }
     written: dict[str, Path] = {}
     for table_name, (records, schema, directory) in tables.items():

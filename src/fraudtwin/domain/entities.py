@@ -140,7 +140,7 @@ class Merchant(_EntityModel):
 
 
 class Device(_EntityModel):
-    """A synthetic device fingerprint used by future behavioral milestones."""
+    """A synthetic device fingerprint associated with payment activity."""
 
     device_id: str
     device_type: Literal["MOBILE", "DESKTOP", "TABLET", "POS_TERMINAL", "ATM"]

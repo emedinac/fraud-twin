@@ -253,9 +253,12 @@ class PaymentGenerator:
             "HIGH": daily_budget * 1.2,
         }
         median = max(self.config.behavior.amount_min, median_by_level[profile.spending_level])
-        amount = math.exp(rng.gauss(math.log(median), 0.65))
-        amount = min(self.config.behavior.amount_max, max(self.config.behavior.amount_min, amount))
-        rounded = round(amount, 2)
+        sampled_amount = math.exp(rng.gauss(math.log(median), 0.65))
+        bounded_amount = min(
+            self.config.behavior.amount_max,
+            max(self.config.behavior.amount_min, sampled_amount),
+        )
+        rounded = round(bounded_amount, 2)
         return rounded if rounded > 0 else self.config.behavior.amount_min
 
     def _sample_lifecycle_time(
@@ -570,6 +573,8 @@ class PaymentGenerator:
         payment: Payment,
         initial: PaymentEvent,
         rng: Random,
+        *,
+        always_approve: bool = False,
     ) -> tuple[Payment, tuple[PaymentEvent, ...]]:
         """Generate and validate one deterministic PIX lifecycle."""
 
@@ -591,7 +596,7 @@ class PaymentGenerator:
             )
 
         append("PIX_VALIDATED", settings.validation_delay_seconds)
-        rejected = (
+        rejected = not always_approve and (
             rng.random() >= settings.authorization_approval_probability
             or rng.random() < settings.rejection_probability
         )
@@ -672,6 +677,19 @@ class PaymentGenerator:
                 )
             )
         return tuple(entries)
+
+    def materialize_ledger(
+        self, payments: tuple[Payment, ...], events: tuple[PaymentEvent, ...]
+    ) -> tuple[LedgerEntry, ...]:
+        """Reconcile a complete payment stream, including scenario payments."""
+
+        payments_by_id = {payment.payment_id: payment for payment in payments}
+        specs: list[tuple[PaymentEvent, str, str]] = []
+        for event in events:
+            payment = payments_by_id.get(event.payment_id)
+            if payment is not None:
+                specs.extend(self._ledger_specs(payment, (event,)))
+        return self._materialize_ledger(specs)
 
     def iter_generate(
         self, profiles: tuple[BehaviorProfile, ...]

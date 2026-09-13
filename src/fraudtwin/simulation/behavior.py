@@ -1,13 +1,18 @@
-"""Customer behavior profiles and their legitimate payment dataset."""
+"""Customer behavior profiles and their generated payment dataset."""
 
 from dataclasses import dataclass
 from random import Random
 from typing import Literal
 
 from fraudtwin.config import SimulationRunConfig
-from fraudtwin.domain import BehaviorProfile, Customer
+from fraudtwin.domain import BehaviorProfile, Customer, FraudRecord
 from fraudtwin.domain.payments import LedgerEntry, Payment, PaymentEvent
 from fraudtwin.seed import create_stream_rng
+from fraudtwin.simulation.fraud import (
+    FraudScenarioGenerator,
+    count_true_fraud_records,
+    scenario_events,
+)
 from fraudtwin.simulation.generator import EntityDataset
 from fraudtwin.simulation.payments import (
     PaymentGenerator,
@@ -22,12 +27,13 @@ SpendingLevel = Literal["LOW", "MEDIUM", "HIGH"]
 
 @dataclass(frozen=True)
 class BehaviorDataset:
-    """Stable, ordered behavior profiles and generated legitimate payments."""
+    """Stable, ordered behavior profiles and their generated payment stream."""
 
     profiles: tuple[BehaviorProfile, ...]
     payments: tuple[Payment, ...]
     payment_events: tuple[PaymentEvent, ...]
     ledger_entries: tuple[LedgerEntry, ...] = ()
+    fraud_records: tuple[FraudRecord, ...] = ()
 
     @property
     def counts(self) -> dict[str, int]:
@@ -36,6 +42,43 @@ class BehaviorDataset:
             "payments": len(self.payments),
             "payment_events": len(self.payment_events),
             "ledger_entries": len(self.ledger_entries),
+            "fraud_records": len(self.fraud_records),
+        }
+
+    @property
+    def fraud_events(self) -> tuple[PaymentEvent, ...]:
+        """Return scenario-linked payment events, excluding hard negatives."""
+
+        return scenario_events(self.payment_events)
+
+    @property
+    def fraud_record_counts(self) -> dict[str, int]:
+        """Count true scenario records for manifest reporting."""
+
+        return count_true_fraud_records(self.fraud_records)
+
+    @property
+    def fraud_counts(self) -> dict[str, int]:
+        """Return manifest fraud counters, or empty counters when disabled."""
+
+        if not self.fraud_records:
+            return {}
+        return {
+            **self.fraud_record_counts,
+            "fraud_events": len(self.fraud_events),
+            "fraud_records": sum(record.fraud_truth for record in self.fraud_records),
+            "hard_negatives": sum(not record.fraud_truth for record in self.fraud_records),
+        }
+
+    @property
+    def fraud_rates(self) -> dict[str, float]:
+        """Return realized true-record rates by scenario."""
+
+        if not self.payments:
+            return {}
+        return {
+            scenario: count / len(self.payments)
+            for scenario, count in self.fraud_record_counts.items()
         }
 
     @property
@@ -50,13 +93,37 @@ class BehaviorDataset:
 
         return count_pix_lifecycle_events(self.payment_events)
 
+    @property
+    def event_counts(self) -> dict[str, int]:
+        """Return payment, lifecycle, ledger, and fraud counts for the manifest."""
+
+        card_counts = self.card_lifecycle_event_counts
+        pix_counts = self.pix_lifecycle_event_counts
+        return {
+            "payments": len(self.payments),
+            "payment_events": len(self.payment_events),
+            "ledger_entries": len(self.ledger_entries),
+            "card_lifecycle_events": sum(card_counts.values()),
+            "pix_lifecycle_events": sum(pix_counts.values()),
+            "fraud_events": len(self.fraud_events),
+            "fraud_records": len(self.fraud_records),
+            **card_counts,
+            **pix_counts,
+        }
+
 
 class BehaviorGenerator:
-    """Generate customer profiles and legitimate payments from M1 entities."""
+    """Generate customer profiles and their payment stream from M1 entities."""
 
-    def __init__(self, config: SimulationRunConfig, entities: EntityDataset) -> None:
+    def __init__(
+        self,
+        config: SimulationRunConfig,
+        entities: EntityDataset,
+        simulation_run_id: str | None = None,
+    ) -> None:
         self.config = config
         self.entities = entities
+        self.simulation_run_id = simulation_run_id
         self.merchant_categories = tuple(
             sorted({merchant.merchant_category_code for merchant in entities.merchants})
         )
@@ -153,7 +220,7 @@ class BehaviorGenerator:
         )
 
     def generate(self) -> BehaviorDataset:
-        """Generate profiles followed by their legitimate payments and events."""
+        """Generate profiles, base payments, fraud scenarios, and events."""
 
         profiles = self.generate_profiles()
         payment_dataset = PaymentGenerator(
@@ -163,12 +230,24 @@ class BehaviorGenerator:
             self.entities.merchants,
             self.entities.devices,
             self.entities.pix_keys,
+            simulation_run_id=self.simulation_run_id,
         ).generate(profiles)
+        fraud_dataset = FraudScenarioGenerator(
+            self.config,
+            self.entities.accounts,
+            self.entities.cards,
+            self.entities.merchants,
+            self.entities.devices,
+            self.entities.pix_keys,
+            payment_dataset,
+            simulation_run_id=self.simulation_run_id,
+        ).generate()
         return BehaviorDataset(
             profiles,
-            payment_dataset.payments,
-            payment_dataset.payment_events,
-            payment_dataset.ledger_entries,
+            fraud_dataset.payments,
+            fraud_dataset.payment_events,
+            fraud_dataset.ledger_entries,
+            fraud_dataset.fraud_records,
         )
 
 

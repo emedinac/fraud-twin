@@ -10,10 +10,12 @@ from fraudtwin.domain.entities import (
     Merchant,
     PixKey,
 )
+from fraudtwin.domain.fraud import FraudRecord, FraudRecordType, FraudScenarioType
 from fraudtwin.domain.payments import (
     CARD_LIFECYCLE_EVENT_TYPES,
     PIX_LIFECYCLE_EVENT_TYPES,
     CardLifecycleEventType,
+    FraudSignalEventType,
     LedgerEntry,
     Payment,
     PaymentEvent,
@@ -36,6 +38,9 @@ __all__ = [
     "Merchant",
     "PixKey",
     "BehaviorProfile",
+    "FraudRecord",
+    "FraudRecordType",
+    "FraudScenarioType",
     "LedgerEntry",
     "Payment",
     "PaymentEvent",
@@ -44,6 +49,7 @@ __all__ = [
     "CardLifecycleEventType",
     "PixLifecycleEventType",
     "PaymentEventType",
+    "FraudSignalEventType",
     "PaymentRail",
     "PaymentType",
     "validate_card_lifecycle",

@@ -1,6 +1,5 @@
 import subprocess
-import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -49,16 +48,17 @@ def _git_commit() -> str:
 def create_manifest(config: SimulationRunConfig) -> RunManifest:
     """Create reproducibility metadata for a simulation run."""
 
-    now = datetime.now(UTC)
+    run_hash = config_hash(config)[:16]
+    start_time = config.simulation.start
     return RunManifest(
-        run_id=str(uuid.uuid4()),
+        run_id=f"RUN-{run_hash}",
         generator_version=__version__,
         git_commit=_git_commit(),
         seed=config.simulation.seed,
         scenario_config_hash=config_hash(config),
         schema_versions={},
-        start_time=now,
-        end_time=now,
+        start_time=start_time,
+        end_time=start_time + timedelta(days=config.simulation.duration_days),
         entity_counts={},
         event_counts={},
         fraud_counts={},

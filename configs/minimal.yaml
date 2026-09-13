@@ -52,7 +52,10 @@ pix_lifecycle:
   return_delay_seconds: 60
 
 fraud:
+  enabled: false
   target_rate: 0.002
+  scenario_count: 5
+  hard_negative_rate: 1.0
 
 quality:
   profile: realistic

@@ -30,7 +30,17 @@ PixLifecycleEventType = Literal[
     "PIX_RETURN_REQUESTED",
     "PIX_RETURNED",
 ]
-PaymentEventType = CardLifecycleEventType | PixLifecycleEventType | Literal["TRANSFER_COMPLETED"]
+FraudSignalEventType = Literal[
+    "FRAUD_AUTHENTICATION_SUSPICIOUS",
+    "FRAUD_PROFILE_CHANGED",
+    "FRAUD_BENEFICIARY_ADDED",
+]
+PaymentEventType = (
+    CardLifecycleEventType
+    | PixLifecycleEventType
+    | FraudSignalEventType
+    | Literal["TRANSFER_COMPLETED"]
+)
 CARD_LIFECYCLE_EVENT_TYPES = (
     "CARD_AUTHORIZATION_REQUESTED",
     "CARD_AUTHORIZED",
@@ -65,7 +75,7 @@ _CARD_LIFECYCLE_TRANSITIONS: dict[str, tuple[str, ...]] = {
 
 
 class Payment(_EntityModel):
-    """The business object represented by one legitimate payment."""
+    """The business object represented by one payment."""
 
     payment_id: str
     payment_rail: PaymentRail
@@ -126,6 +136,11 @@ class PaymentEvent(_EntityModel):
     online: bool
     amount: float = Field(gt=0)
     currency: str
+    scenario_type: str | None = None
+    scenario_trigger: str | None = None
+    scenario_reason: str | None = None
+    fraud_record_id: str | None = None
+    affected_entity_ids: tuple[str, ...] = ()
 
 
 def _validate_lifecycle_envelope(

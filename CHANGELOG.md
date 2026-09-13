@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.6.0 — Milestone 6
+
+- Added deterministic F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack scenario generation.
+- Added scenario metadata to the existing payment event envelope and a typed `fraud_records.parquet` output with explainable truth records and hard negatives.
+- Added isolated fraud RNG streams, strict scenario configuration validation, fraud event/record manifest counts, and realized per-scenario rates.
+- Preserved legitimate CARD, PIX-like, account-transfer, lifecycle, ledger, and reconciliation behavior when fraud generation is disabled.
+- Deferred delayed labels, alerts, cases, customer disputes, chargebacks, and all later milestones.
+
 ## 0.5.0 — Milestone 5
 
 - Added deterministic PIX initiation, validation, authorization, submission, settlement, receipt, rejection, and return lifecycle events.
