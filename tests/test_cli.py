@@ -35,8 +35,9 @@ def test_generate_command_writes_manifest(tmp_path: Path) -> None:
         "merchants": 3,
         "devices": 12,
         "pix_keys": 8,
+        "behavior_profiles": 10,
     }
-    assert manifest["event_counts"] == {}
+    assert manifest["event_counts"] == {"payments": 100, "payment_events": 100}
     assert manifest["fraud_counts"] == {}
     assert sorted(path.name for path in (run_dir / "entities").glob("*.parquet")) == [
         "accounts.parquet",
@@ -46,4 +47,11 @@ def test_generate_command_writes_manifest(tmp_path: Path) -> None:
         "institutions.parquet",
         "merchants.parquet",
         "pix_keys.parquet",
+    ]
+    assert sorted(path.name for path in (run_dir / "behavior").glob("*.parquet")) == [
+        "behavior_profiles.parquet",
+    ]
+    assert sorted(path.name for path in (run_dir / "payments").glob("*.parquet")) == [
+        "payment_events.parquet",
+        "payments.parquet",
     ]

@@ -73,6 +73,51 @@ class PaymentsConfig(_StrictModel):
         return value
 
 
+class BehaviorConfig(_StrictModel):
+    """Settings used by the customer behavior and legitimate payment engine."""
+
+    amount_min: float = Field(default=1.0, gt=0)
+    amount_max: float = Field(default=5_000.0, gt=0)
+    active_hours: tuple[int, ...] = Field(default=tuple(range(24)), min_length=1)
+    weekday_weights: tuple[float, ...] = (
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.85,
+        0.7,
+    )
+    merchant_preference_count: Annotated[int, Field(ge=1)] = 3
+    preferred_device_limit: Annotated[int, Field(ge=0)] = 3
+
+    @field_validator("active_hours")
+    @classmethod
+    def active_hours_must_be_unique_valid_hours(cls, value: tuple[int, ...]) -> tuple[int, ...]:
+        if len(set(value)) != len(value):
+            raise ValueError("active_hours must not contain duplicates")
+        if any(hour < 0 or hour > 23 for hour in value):
+            raise ValueError("active_hours must contain hours from 0 through 23")
+        return value
+
+    @field_validator("weekday_weights")
+    @classmethod
+    def weekday_weights_must_be_valid_distribution(
+        cls, value: tuple[float, ...]
+    ) -> tuple[float, ...]:
+        if len(value) != 7:
+            raise ValueError("weekday_weights must contain seven non-negative values")
+        if any(weight < 0 for weight in value) or sum(value) <= 0:
+            raise ValueError("weekday_weights must contain non-negative values with a positive sum")
+        return value
+
+    @model_validator(mode="after")
+    def amount_bounds_must_be_ordered(self) -> "BehaviorConfig":
+        if self.amount_max < self.amount_min:
+            raise ValueError("amount_max must be greater than or equal to amount_min")
+        return self
+
+
 class FraudConfig(_StrictModel):
     """Ground-truth fraud-rate settings."""
 
@@ -99,6 +144,7 @@ class SimulationRunConfig(_StrictModel):
     simulation: SimulationConfig
     population: PopulationConfig
     payments: PaymentsConfig
+    behavior: BehaviorConfig = Field(default_factory=BehaviorConfig)
     fraud: FraudConfig
     quality: QualityConfig
     outputs: OutputsConfig

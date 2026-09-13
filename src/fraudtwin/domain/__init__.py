@@ -1,5 +1,6 @@
 """Immutable domain entities used by the simulator."""
 
+from fraudtwin.domain.behavior import BehaviorProfile
 from fraudtwin.domain.entities import (
     Account,
     Card,
@@ -9,6 +10,7 @@ from fraudtwin.domain.entities import (
     Merchant,
     PixKey,
 )
+from fraudtwin.domain.payments import LedgerEntry, Payment, PaymentEvent
 
 __all__ = [
     "Account",
@@ -18,4 +20,8 @@ __all__ = [
     "Institution",
     "Merchant",
     "PixKey",
+    "BehaviorProfile",
+    "LedgerEntry",
+    "Payment",
+    "PaymentEvent",
 ]

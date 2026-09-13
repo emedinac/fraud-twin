@@ -4,66 +4,35 @@
 [![Python](https://img.shields.io/badge/python-3.12%2B-3776AB.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 
-## Build and test fraud systems against a financial world that behaves like one
+## Synthetic financial behavior for testing fraud systems
 
-FraudTwin is a synthetic financial-system simulator for fraud engineers, data
-scientists, ML engineers, and data teams who need more than a collection of
-random transaction rows.
+FraudTwin creates a small, coherent financial world that behaves more like a
+real payment environment than a table of random transactions. It generates
+customers, accounts, cards, merchants, devices, customer behavior profiles,
+and legitimate payment events in reproducible batch runs.
 
-Most fraud datasets describe a transaction after everything has happened. Real
-financial systems are different. A payment begins, changes state, produces
-multiple events, and may later become a dispute or a fraud case. Information
-also arrives at different times, and the final label may not be available when
-the original decision was made.
+The project is designed for fraud engineers, data scientists, ML engineers,
+and data teams who need realistic relationships and temporal patterns before
+introducing fraud, streaming, or production infrastructure.
 
-FraudTwin is being built to make those conditions realistic, configurable, and
-reproducible.
+## Current release: 0.3.0 — Customer Behavior
 
-```mermaid
-flowchart LR
-    C[Scenario configuration] --> V[Validation and run manifest]
-    V --> S[Simulation controller]
-    S --> E[State and entity engine]
-    S --> F[Behavior and fraud campaigns]
-    E --> R[Payment-rail simulators]
-    F --> R
-    R --> G[Lifecycle event generator]
-    G --> B[Batch outputs]
-    G --> O[Operational state]
-    G --> K[Event streams]
-    K --> M[Streaming and ML validation]
+Milestone 3 is complete. Every generated customer receives a deterministic
+behavior profile, and payments reflect customer-specific preferences for:
 
-    classDef current fill:#176b87,stroke:#8ed1e8,color:#fff
-    classDef planned fill:#3b4652,stroke:#9aa7b3,color:#fff
-    class C,V current
-    class S,E,F,R,G,B,O,K,M planned
-```
+- Spending level, income, and monthly budget
+- Typical payment hours and weekday activity
+- Merchant categories and countries
+- Card versus transfer usage
+- Online purchases and trusted devices
+- Travel frequency
 
-The blue path is available today. The remaining components represent the
-system FraudTwin is growing toward.
+The current release generates legitimate CARD, PIX-like, and account-transfer
+payments. Fraud, chargebacks, and fraud labels are intentionally not included.
 
-## What FraudTwin is about
+## Quick start
 
-- A stateful world of customers, accounts, cards, merchants, devices, and payments
-- Card, PIX-like, and account-transfer lifecycles
-- Event time that is separate from ingestion and processing time
-- Fraud truth that is separate from what downstream systems can observe
-- Delayed labels for historically correct ML datasets
-- Reproducible scenarios controlled by configuration versions and seeds
-- Failure modes such as duplicates, late events, outages, and schema changes
-- A path from batch simulation to PostgreSQL, Kafka, Flink, graph, and ML workflows
-
-The goal is simple: give professionals a safe environment in which to test the
-systems around fraud detection—not just the classifier at the end of the pipe.
-
-## Current status
-
-Milestone 1 is complete. FraudTwin now creates deterministic synthetic
-customers, institutions, accounts, cards, merchants, devices, and PIX-like
-keys as typed Parquet tables with reproducible run manifests. Payment, fraud,
-and streaming behavior remain on the roadmap.
-
-Try the entity generator with:
+Requirements: Python 3.12 and Poetry 2.x.
 
 ```bash
 poetry install
@@ -71,37 +40,122 @@ poetry run fraudtwin config validate configs/minimal.yaml
 poetry run fraudtwin generate configs/minimal.yaml
 ```
 
-The generated run contains one Parquet file per entity under
-`runs/<run_id>/entities/`.
+The command prints the run ID and output location. The default configuration
+generates 10 customers, 10 behavior profiles, 100 payments, and 100 payment
+events.
 
-## Why this project exists
+To choose another output directory:
 
-Fraud teams need data that reflects the messy parts of production:
+```bash
+poetry run fraudtwin generate configs/minimal.yaml --output-dir output
+```
 
-- State changes over time
-- Multiple payment rails and lifecycle events
-- Labels that arrive after the transaction
-- Late, duplicated, or out-of-order data
-- Coordinated behavior across accounts, devices, and merchants
-- Repeatable scenarios for model comparison and pipeline testing
+## Generated dataset
 
-FraudTwin brings these concerns into one coherent, synthetic environment while
-keeping business rules and temporal correctness ahead of generative complexity.
+Each run is written under `runs/<run_id>/`:
 
-## Related work
+```text
+runs/<run_id>/
+├── manifest.json
+├── entities/
+│   ├── customers.parquet
+│   ├── accounts.parquet
+│   ├── cards.parquet
+│   ├── merchants.parquet
+│   ├── devices.parquet
+│   ├── institutions.parquet
+│   └── pix_keys.parquet
+├── behavior/
+│   └── behavior_profiles.parquet
+└── payments/
+    ├── payments.parquet
+    └── payment_events.parquet
+```
 
-FraudTwin builds on a growing ecosystem of synthetic financial-data projects:
+All Parquet files use explicit, stable schemas and column ordering. Generated
+payments reference existing accounts, cards, merchants, devices, and
+customers. Amounts are positive, timestamps stay within the configured
+simulation window, and no real personal data or payment credentials are used.
 
-- [SantanderAI/gen-fraud-graph](https://github.com/SantanderAI/gen-fraud-graph) is focused on large transaction graphs, fraud-ring generation, and graph ML benchmarking.
-- [afborda/synthfin-core](https://github.com/afborda/synthfin-core) provides broad synthetic banking, PIX, ride-share, batch, and streaming data workflows.
+The manifest records the seed, configuration hash, schema versions, entity
+counts, payment counts, and empty fraud counts for this milestone.
 
-Those projects are valuable reference points. FraudTwin’s focus is the broader
-system around a transaction: state, lifecycle semantics, observability delays,
-data failures, replay, and point-in-time ML correctness.
+## Why behavior matters
 
-## Documentation
+Fraud detection depends on understanding what is normal for a customer. A
+payment at 03:00, from a new device, in an unusual merchant category, may be
+ordinary for one customer and suspicious for another.
 
-- [`FEATURES.md`](FEATURES.md) — specification and roadmap
-- [`CHANGELOG.md`](CHANGELOG.md) — release history
-- [`DEVELOPMENT.md`](DEVELOPMENT.md) — contributor setup
-- [`LICENSE`](LICENSE) — Apache License 2.0
+FraudTwin makes that context available in the generated data through
+customer-specific profiles and deterministic temporal behavior. This provides
+a useful foundation for future anomaly and fraud scenarios without mixing
+fraud logic into the legitimate baseline.
+
+## Reproducibility
+
+Runs are controlled by the validated YAML configuration and simulation seed.
+Named, isolated random-number streams keep profile generation independent from
+entity generation and payment generation. With the same configuration and
+seed, profiles, payment records, event records, IDs, ordering, and schemas are
+equivalent.
+
+Behavior settings can be adjusted under `behavior`:
+
+```yaml
+behavior:
+  amount_min: 1.00
+  amount_max: 5000.00
+  active_hours: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+  weekday_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 0.85, 0.70]
+  merchant_preference_count: 3
+  preferred_device_limit: 3
+```
+
+Unknown fields, invalid amounts, invalid hours, invalid weights, and invalid
+counts are rejected during configuration validation.
+
+## Project status
+
+| Capability | Status |
+| --- | --- |
+| Synthetic customers and financial entities | Available |
+| Customer behavior profiles | Available |
+| Legitimate payment records and events | Available |
+| Typed Parquet batch output | Available |
+| Reproducible manifests and seed handling | Available |
+| Fraud scenarios and labels | Planned |
+| Full card lifecycle and chargebacks | Planned |
+| Kafka, PostgreSQL, Flink, and ML workflows | Planned |
+
+FraudTwin is being built milestone by milestone. The priority is a correct,
+readable, reproducible simulation core before adding distributed systems or
+advanced modeling.
+
+## Development
+
+Run the normal quality checks with:
+
+```bash
+poetry check --strict
+poetry run ruff check .
+poetry run ruff format --check .
+poetry run mypy src
+poetry run pytest
+poetry build
+```
+
+See [`DEVELOPMENT.md`](DEVELOPMENT.md) for contributor workflows and
+[`FEATURES.md`](FEATURES.md) for the complete specification and roadmap.
+
+## License and related work
+
+FraudTwin is released under the [Apache License 2.0](LICENSE).
+
+The project is informed by work such as
+[SantanderAI/gen-fraud-graph](https://github.com/SantanderAI/gen-fraud-graph)
+and [synthfin-core](https://github.com/afborda/synthfin-core). FraudTwin's
+focus is the reproducible system around a payment: entities, behavior,
+relationships, event timing, and the path toward realistic fraud-data
+workflows.
+
+For release history, see [`CHANGELOG.md`](CHANGELOG.md).

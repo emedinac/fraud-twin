@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.3.0 — Milestone 3
+
+- Added deterministic, customer-specific behavioral profiles covering spending level, payment hours, weekday preferences, countries, merchant categories, devices, income, online purchases, travel, and card-versus-transfer preference.
+- Added minimal typed payment, payment-event, and ledger primitives required for legitimate behavior generation.
+- Added legitimate CARD, PIX-like, and account-transfer payments with stable IDs, relationship validation, temporal timestamps, and explicit Parquet schemas.
+- Added behavior/payment counts to manifests while preserving empty fraud counts.
+- Added deterministic profile/payment tests with a lightweight 100-payment behavior smoke test.
+
 ## 0.2.0 — Milestone 2
 
 - Added deterministic synthetic entity generation for customers, institutions, accounts, cards, merchants, devices, and PIX-like keys.

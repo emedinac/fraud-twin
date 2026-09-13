@@ -48,6 +48,34 @@ def test_naive_simulation_start_is_rejected() -> None:
         SimulationRunConfig.model_validate(config)
 
 
+def test_invalid_behavior_amount_bounds_are_rejected() -> None:
+    config = load_config(CONFIG_PATH).model_dump()
+    config["behavior"]["amount_min"] = 0
+
+    with pytest.raises(ValidationError):
+        SimulationRunConfig.model_validate(config)
+
+
+def test_invalid_behavior_time_settings_are_rejected() -> None:
+    config = load_config(CONFIG_PATH).model_dump()
+    config["behavior"]["active_hours"] = [24]
+
+    with pytest.raises(ValidationError):
+        SimulationRunConfig.model_validate(config)
+
+    config["behavior"]["active_hours"] = [8, 8]
+    with pytest.raises(ValidationError):
+        SimulationRunConfig.model_validate(config)
+
+
+def test_invalid_weekday_distribution_is_rejected() -> None:
+    config = load_config(CONFIG_PATH).model_dump()
+    config["behavior"]["weekday_weights"] = [1.0, 1.0]
+
+    with pytest.raises(ValidationError):
+        SimulationRunConfig.model_validate(config)
+
+
 def test_seeded_generators_start_with_the_same_sequence() -> None:
     first = create_rng(42)
     second = create_rng(42)

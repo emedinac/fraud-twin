@@ -1,10 +1,13 @@
-"""Polars Parquet output for the Milestone 1 entity tables."""
+"""Explicitly typed Parquet output for entities, behavior, and payments."""
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 import polars as pl
+from pydantic import BaseModel
 
+from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
 
 _UTC_TIMESTAMP = pl.Datetime(time_zone="UTC")
@@ -110,6 +113,74 @@ ENTITY_SCHEMAS: dict[str, dict[str, Any]] = {
     },
 }
 
+BEHAVIOR_PROFILE_SCHEMA: dict[str, Any] = {
+    "behavior_profile_id": pl.Utf8,
+    "customer_id": pl.Utf8,
+    "spending_level": pl.Utf8,
+    "typical_payment_hours": pl.List(pl.Int64),
+    "hour_weights": pl.List(pl.Float64),
+    "weekday_weights": pl.List(pl.Float64),
+    "typical_countries": pl.List(pl.Utf8),
+    "merchant_category_preferences": pl.List(pl.Utf8),
+    "merchant_category_weights": pl.List(pl.Float64),
+    "monthly_income": pl.Float64,
+    "monthly_spending_budget": pl.Float64,
+    "card_vs_transfer_preference": pl.Float64,
+    "online_purchase_rate": pl.Float64,
+    "travel_frequency": pl.Float64,
+    "preferred_device_ids": pl.List(pl.Utf8),
+    "trusted_device_count": pl.Int64,
+}
+
+PAYMENT_SCHEMA: dict[str, Any] = {
+    "payment_id": pl.Utf8,
+    "payment_rail": pl.Utf8,
+    "payment_type": pl.Utf8,
+    "payer_account_id": pl.Utf8,
+    "payee_account_id": pl.Utf8,
+    "merchant_id": pl.Utf8,
+    "card_id": pl.Utf8,
+    "amount": pl.Float64,
+    "currency": pl.Utf8,
+    "initiated_at": _UTC_TIMESTAMP,
+    "current_status": pl.Utf8,
+}
+
+PAYMENT_EVENT_SCHEMA: dict[str, Any] = {
+    "event_id": pl.Utf8,
+    "event_type": pl.Utf8,
+    "event_version": pl.Int64,
+    "payment_id": pl.Utf8,
+    "customer_id": pl.Utf8,
+    "account_id": pl.Utf8,
+    "event_time": _UTC_TIMESTAMP,
+    "source_created_at": _UTC_TIMESTAMP,
+    "source_available_at": _UTC_TIMESTAMP,
+    "ingested_at": _UTC_TIMESTAMP,
+    "processed_at": _UTC_TIMESTAMP,
+    "producer": pl.Utf8,
+    "source_system": pl.Utf8,
+    "schema_version": pl.Utf8,
+    "correlation_id": pl.Utf8,
+    "causation_id": pl.Utf8,
+    "simulation_run_id": pl.Utf8,
+    "scenario_id": pl.Utf8,
+    "payment_rail": pl.Utf8,
+    "payment_type": pl.Utf8,
+    "payee_account_id": pl.Utf8,
+    "merchant_id": pl.Utf8,
+    "card_id": pl.Utf8,
+    "device_id": pl.Utf8,
+    "online": pl.Boolean,
+    "amount": pl.Float64,
+    "currency": pl.Utf8,
+}
+
+
+def _write_table(records: Iterable[BaseModel], schema: dict[str, Any], path: Path) -> None:
+    rows = [record.model_dump(mode="python") for record in records]
+    pl.DataFrame(rows, schema=schema, orient="row").write_parquet(path)
+
 
 def write_entity_parquet(dataset: EntityDataset, run_dir: Path) -> dict[str, Path]:
     """Write one explicitly typed Parquet file per entity and return its paths."""
@@ -119,9 +190,27 @@ def write_entity_parquet(dataset: EntityDataset, run_dir: Path) -> dict[str, Pat
     written: dict[str, Path] = {}
     for entity_name, records in dataset.tables().items():
         schema = ENTITY_SCHEMAS[entity_name]
-        rows = [record.model_dump(mode="python") for record in records]
-        frame = pl.DataFrame(rows, schema=schema, orient="row")
         path = entities_dir / f"{entity_name}.parquet"
-        frame.write_parquet(path)
+        _write_table(records, schema, path)
         written[entity_name] = path
+    return written
+
+
+def write_behavior_parquet(dataset: BehaviorDataset, run_dir: Path) -> dict[str, Path]:
+    """Write behavior profiles, payments, and payment events with stable schemas."""
+
+    behavior_dir = run_dir / "behavior"
+    payments_dir = run_dir / "payments"
+    behavior_dir.mkdir(parents=True, exist_ok=False)
+    payments_dir.mkdir(parents=True, exist_ok=False)
+    tables = {
+        "behavior_profiles": (dataset.profiles, BEHAVIOR_PROFILE_SCHEMA, behavior_dir),
+        "payments": (dataset.payments, PAYMENT_SCHEMA, payments_dir),
+        "payment_events": (dataset.payment_events, PAYMENT_EVENT_SCHEMA, payments_dir),
+    }
+    written: dict[str, Path] = {}
+    for table_name, (records, schema, directory) in tables.items():
+        path = directory / f"{table_name}.parquet"
+        _write_table(records, schema, path)
+        written[table_name] = path
     return written

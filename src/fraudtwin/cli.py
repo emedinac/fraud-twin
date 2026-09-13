@@ -6,8 +6,8 @@ import typer
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.logging_config import configure_logging
 from fraudtwin.manifest import create_manifest, write_manifest
-from fraudtwin.simulation import EntityGenerator
-from fraudtwin.simulation.parquet import write_entity_parquet
+from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
+from fraudtwin.simulation.parquet import write_behavior_parquet, write_entity_parquet
 
 app = typer.Typer(help="Synthetic financial-system and fraud digital twin.")
 config_app = typer.Typer(help="Validate simulation configuration.")
@@ -43,18 +43,30 @@ def generate(
         typer.Option("--output-dir", help="Directory in which to store run manifests."),
     ] = Path("runs"),
 ) -> None:
-    """Validate a configuration and generate its entity population."""
+    """Validate a configuration and generate entities and legitimate behavior."""
 
     configure_logging()
     config = _load_or_exit(path)
     manifest = create_manifest(config)
-    dataset = EntityGenerator(config).generate()
-    entity_counts = dataset.counts
-    write_entity_parquet(dataset, output_dir / manifest.run_id)
+    entity_dataset = EntityGenerator(config).generate()
+    behavior_dataset = BehaviorGenerator(config, entity_dataset).generate()
+    run_dir = output_dir / manifest.run_id
+    write_entity_parquet(entity_dataset, run_dir)
+    write_behavior_parquet(behavior_dataset, run_dir)
+    entity_counts = {**entity_dataset.counts, "behavior_profiles": len(behavior_dataset.profiles)}
+    event_counts = {
+        "payments": len(behavior_dataset.payments),
+        "payment_events": len(behavior_dataset.payment_events),
+    }
     manifest = manifest.model_copy(
         update={
             "entity_counts": entity_counts,
-            "schema_versions": {entity_name: "1" for entity_name in entity_counts},
+            "event_counts": event_counts,
+            "schema_versions": {
+                **{entity_name: "1" for entity_name in entity_counts},
+                "payments": "1",
+                "payment_events": "1",
+            },
         }
     )
     manifest_path = write_manifest(manifest, output_dir)
@@ -63,6 +75,9 @@ def generate(
     typer.echo("Generated entity counts:")
     for entity_name, count in entity_counts.items():
         typer.echo(f"  {entity_name}: {count}")
+    typer.echo("Generated payment counts:")
+    for event_name, count in event_counts.items():
+        typer.echo(f"  {event_name}: {count}")
 
 
 def main() -> None:
