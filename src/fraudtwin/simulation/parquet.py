@@ -144,6 +144,24 @@ PAYMENT_SCHEMA: dict[str, Any] = {
     "currency": pl.Utf8,
     "initiated_at": _UTC_TIMESTAMP,
     "current_status": pl.Utf8,
+    "payer_institution_id": pl.Utf8,
+    "payee_institution_id": pl.Utf8,
+    "payer_pix_key_id": pl.Utf8,
+    "payee_pix_key_id": pl.Utf8,
+}
+
+LEDGER_ENTRY_SCHEMA: dict[str, Any] = {
+    "ledger_entry_id": pl.Utf8,
+    "account_id": pl.Utf8,
+    "payment_id": pl.Utf8,
+    "event_id": pl.Utf8,
+    "entry_type": pl.Utf8,
+    "amount": pl.Float64,
+    "currency": pl.Utf8,
+    "occurred_at": _UTC_TIMESTAMP,
+    "effective_at": _UTC_TIMESTAMP,
+    "posted_at": _UTC_TIMESTAMP,
+    "balance_after": pl.Float64,
 }
 
 PAYMENT_EVENT_SCHEMA: dict[str, Any] = {
@@ -205,12 +223,15 @@ def write_behavior_parquet(dataset: BehaviorDataset, run_dir: Path) -> dict[str,
 
     behavior_dir = run_dir / "behavior"
     payments_dir = run_dir / "payments"
+    ledger_dir = run_dir / "ledger"
     behavior_dir.mkdir(parents=True, exist_ok=False)
     payments_dir.mkdir(parents=True, exist_ok=False)
+    ledger_dir.mkdir(parents=True, exist_ok=False)
     tables = {
         "behavior_profiles": (dataset.profiles, BEHAVIOR_PROFILE_SCHEMA, behavior_dir),
         "payments": (dataset.payments, PAYMENT_SCHEMA, payments_dir),
         "payment_events": (dataset.payment_events, PAYMENT_EVENT_SCHEMA, payments_dir),
+        "ledger_entries": (dataset.ledger_entries, LEDGER_ENTRY_SCHEMA, ledger_dir),
     }
     written: dict[str, Path] = {}
     for table_name, (records, schema, directory) in tables.items():

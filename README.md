@@ -10,9 +10,9 @@ FraudTwin creates a small, coherent financial world that behaves more like a rea
 
 The project is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and temporal patterns before introducing fraud, streaming, or production infrastructure.
 
-## Current release: 0.4.0 — Card Lifecycle
+## Current release: 0.5.0 — PIX-Like Lifecycle
 
-Milestones 3 and 4 are complete. Every generated customer receives a deterministic
+Milestones 3, 4, and 5 are complete. Every generated customer receives a deterministic
 behavior profile, and payments reflect customer-specific preferences for:
 
 - Spending level, income, and monthly budget
@@ -22,7 +22,7 @@ behavior profile, and payments reflect customer-specific preferences for:
 - Online purchases and trusted devices
 - Travel frequency
 
-The current release generates legitimate CARD, PIX-like, and account-transfer payments. Card payments produce ordered authorization, approval or decline, capture, clearing, settlement, reversal, and refund events as permitted by their configured lifecycle. PIX and account-transfer events retain their M3 behavior. Fraud, chargebacks, and fraud labels are intentionally not included.
+The current release generates legitimate CARD, PIX-like, and account-transfer payments. Card payments produce ordered authorization, approval or decline, capture, clearing, settlement, reversal, and refund events. PIX payments produce ordered initiation, validation, authorization, submission, settlement, receipt, and optional return events, or a rejection without settlement. Account-transfer events retain their M3 behavior. Fraud, chargebacks, and fraud labels are intentionally not included.
 
 ## Quick start
 
@@ -62,11 +62,13 @@ runs/<run_id>/
 └── payments/
     ├── payments.parquet
     └── payment_events.parquet
+└── ledger/
+    └── ledger_entries.parquet
 ```
 
 All Parquet files use explicit, stable schemas and column ordering. Generated payments reference existing accounts, cards, merchants, devices, and customers. Amounts are positive, timestamps stay within the configured simulation window, and no real personal data or payment credentials are used.
 
-The manifest records the seed, configuration hash, schema versions, entity counts, payment counts, and empty fraud counts for this milestone.
+The manifest records the seed, configuration hash, schema versions, entity counts, payment/lifecycle/ledger counts, and empty fraud counts for this milestone.
 
 ## Why behavior matters
 
@@ -109,6 +111,30 @@ card_lifecycle:
 
 Probabilities must be between 0 and 1, and timing values must be non-negative whole seconds. Card lifecycle choices use an isolated deterministic random stream, so adding lifecycle events does not change PIX or account-transfer choices.
 
+PIX lifecycle settings can be adjusted under `pix_lifecycle`:
+
+```yaml
+pix_lifecycle:
+  authorization_approval_probability: 0.98
+  rejection_probability: 0.02
+  return_probability: 0.05
+  validation_delay_seconds: 1
+  authorization_delay_seconds: 1
+  submission_delay_seconds: 1
+  settlement_delay_seconds: 1
+  receipt_delay_seconds: 1
+  return_request_delay_seconds: 60
+  return_delay_seconds: 60
+```
+
+PIX lifecycle choices use their own deterministic random stream. PIX
+settlements, returns, and account-transfer completions produce double-sided
+entries in `ledger/ledger_entries.parquet`. Validate a generated run with:
+
+```bash
+poetry run fraudtwin validate-ledger --run-id <run-id>
+```
+
 ## Project status
 
 | Capability | Status |
@@ -120,6 +146,7 @@ Probabilities must be between 0 and 1, and timing values must be non-negative wh
 | Reproducible manifests and seed handling | Available |
 | Fraud scenarios and labels | Planned |
 | Full card lifecycle (without chargebacks) | Available |
+| PIX-like lifecycle and transfer ledger | Available |
 | Chargebacks | Planned |
 | Kafka, PostgreSQL, Flink, and ML workflows | Planned |
 

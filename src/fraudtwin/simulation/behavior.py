@@ -6,10 +6,14 @@ from typing import Literal
 
 from fraudtwin.config import SimulationRunConfig
 from fraudtwin.domain import BehaviorProfile, Customer
-from fraudtwin.domain.payments import Payment, PaymentEvent
+from fraudtwin.domain.payments import LedgerEntry, Payment, PaymentEvent
 from fraudtwin.seed import create_stream_rng
 from fraudtwin.simulation.generator import EntityDataset
-from fraudtwin.simulation.payments import PaymentGenerator, count_card_lifecycle_events
+from fraudtwin.simulation.payments import (
+    PaymentGenerator,
+    count_card_lifecycle_events,
+    count_pix_lifecycle_events,
+)
 
 _PROFILE_ID_WIDTH = 6
 _COUNTRIES = ("BR", "US", "GB", "DE")
@@ -23,6 +27,7 @@ class BehaviorDataset:
     profiles: tuple[BehaviorProfile, ...]
     payments: tuple[Payment, ...]
     payment_events: tuple[PaymentEvent, ...]
+    ledger_entries: tuple[LedgerEntry, ...] = ()
 
     @property
     def counts(self) -> dict[str, int]:
@@ -30,6 +35,7 @@ class BehaviorDataset:
             "behavior_profiles": len(self.profiles),
             "payments": len(self.payments),
             "payment_events": len(self.payment_events),
+            "ledger_entries": len(self.ledger_entries),
         }
 
     @property
@@ -38,6 +44,12 @@ class BehaviorDataset:
 
         return count_card_lifecycle_events(self.payment_events)
 
+    @property
+    def pix_lifecycle_event_counts(self) -> dict[str, int]:
+        """Return counts for the explicit PIX event vocabulary."""
+
+        return count_pix_lifecycle_events(self.payment_events)
+
 
 class BehaviorGenerator:
     """Generate customer profiles and legitimate payments from M1 entities."""
@@ -45,6 +57,9 @@ class BehaviorGenerator:
     def __init__(self, config: SimulationRunConfig, entities: EntityDataset) -> None:
         self.config = config
         self.entities = entities
+        self.merchant_categories = tuple(
+            sorted({merchant.merchant_category_code for merchant in entities.merchants})
+        )
 
     def _profile_devices(self, rng: Random) -> tuple[str, ...]:
         limit = self.config.behavior.preferred_device_limit
@@ -53,9 +68,8 @@ class BehaviorGenerator:
         trusted = tuple(device.device_id for device in self.entities.devices if device.trusted)
         if not trusted:
             return ()
-        pool = trusted
-        count = min(len(pool), rng.randint(1, limit))
-        return tuple(sorted(rng.sample(pool, count)))
+        count = min(len(trusted), rng.randint(1, limit))
+        return tuple(sorted(rng.sample(trusted, count)))
 
     def _profile_hours(self, rng: Random) -> tuple[tuple[int, ...], tuple[float, ...]]:
         active = tuple(sorted(self.config.behavior.active_hours))
@@ -104,13 +118,10 @@ class BehaviorGenerator:
             )
             countries.append(rng.choice(travel_countries))
 
-        available_categories = tuple(
-            sorted({merchant.merchant_category_code for merchant in self.entities.merchants})
-        )
         preference_count = min(
-            self.config.behavior.merchant_preference_count, len(available_categories)
+            self.config.behavior.merchant_preference_count, len(self.merchant_categories)
         )
-        category_preferences = tuple(sorted(rng.sample(available_categories, preference_count)))
+        category_preferences = tuple(sorted(rng.sample(self.merchant_categories, preference_count)))
         category_weights = tuple(round(rng.uniform(0.5, 2.0), 4) for _ in category_preferences)
         preferred_devices = self._profile_devices(rng)
         return BehaviorProfile(
@@ -151,11 +162,13 @@ class BehaviorGenerator:
             self.entities.cards,
             self.entities.merchants,
             self.entities.devices,
+            self.entities.pix_keys,
         ).generate(profiles)
         return BehaviorDataset(
             profiles,
             payment_dataset.payments,
             payment_dataset.payment_events,
+            payment_dataset.ledger_entries,
         )
 
 

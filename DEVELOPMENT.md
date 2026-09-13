@@ -17,8 +17,7 @@ poetry run fraudtwin config validate configs/minimal.yaml
 poetry run fraudtwin generate configs/minimal.yaml
 ```
 
-The behavior smoke tests intentionally use the minimal 100-payment fixture so
-they remain fast in local development and CI:
+The behavior smoke tests intentionally use the minimal 100-payment fixture so hey remain fast in local development and CI:
 
 ```bash
 poetry run pytest tests/test_behavior.py
@@ -39,15 +38,26 @@ Card lifecycle tests can be run directly with:
 poetry run pytest tests/test_card_lifecycle.py
 ```
 
+PIX lifecycle tests can be run directly with:
+
+```bash
+poetry run pytest tests/test_pix_lifecycle.py
+```
+
+To validate the transfer ledger for a generated run:
+
+```bash
+poetry run fraudtwin validate-ledger --run-id <run-id>
+```
+
+The `pix_lifecycle` section controls PIX approval, rejection, and return probabilities plus validation, authorization, submission, settlement, receipt, and return delays. All values are validated before generation. PIX lifecycle tests use small datasets and cover ordering, rejection, returns, relationships, schemas, manifests, and ledger reconciliation.
+
 The complete suite, including lightweight lifecycle generation, is:
 
 ```bash
 poetry run pytest
 ```
 
-The `card_lifecycle` section controls approval, reversal, and refund
-probabilities plus authorization, capture, clearing, settlement, reversal, and
-refund delays in whole seconds. Use `poetry run fraudtwin config validate
-configs/minimal.yaml` to validate these settings before generation.
+The `card_lifecycle` section controls approval, reversal, and refund probabilities plus authorization, capture, clearing, settlement, reversal, and refund delays in whole seconds. Use `poetry run fraudtwin config validate configs/minimal.yaml` to validate these settings before generation.
 
 Follow the milestone order in [`FEATURES.md`](FEATURES.md). Do not add infrastructure before the simulator has correct state and temporal behavior.

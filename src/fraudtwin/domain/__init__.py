@@ -12,6 +12,7 @@ from fraudtwin.domain.entities import (
 )
 from fraudtwin.domain.payments import (
     CARD_LIFECYCLE_EVENT_TYPES,
+    PIX_LIFECYCLE_EVENT_TYPES,
     CardLifecycleEventType,
     LedgerEntry,
     Payment,
@@ -19,7 +20,11 @@ from fraudtwin.domain.payments import (
     PaymentEventType,
     PaymentRail,
     PaymentType,
+    PixLifecycleEventType,
     validate_card_lifecycle,
+    validate_ledger,
+    validate_payment_lifecycle,
+    validate_pix_lifecycle,
 )
 
 __all__ = [
@@ -35,9 +40,14 @@ __all__ = [
     "Payment",
     "PaymentEvent",
     "CARD_LIFECYCLE_EVENT_TYPES",
+    "PIX_LIFECYCLE_EVENT_TYPES",
     "CardLifecycleEventType",
+    "PixLifecycleEventType",
     "PaymentEventType",
     "PaymentRail",
     "PaymentType",
     "validate_card_lifecycle",
+    "validate_pix_lifecycle",
+    "validate_payment_lifecycle",
+    "validate_ledger",
 ]

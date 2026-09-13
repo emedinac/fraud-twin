@@ -11,6 +11,7 @@ Rail = Literal["CARD", "PIX", "ACCOUNT_TRANSFER"]
 Speed = Literal["batch", "real_time", "accelerated"]
 # Five seconds of source delay plus one second each for ingestion and processing.
 CARD_EVENT_ENVELOPE_DELAY_SECONDS = 7
+PIX_EVENT_ENVELOPE_DELAY_SECONDS = 4
 
 
 class _StrictModel(BaseModel):
@@ -149,6 +150,37 @@ class CardLifecycleConfig(_StrictModel):
         )
 
 
+class PixLifecycleConfig(_StrictModel):
+    """Deterministic probabilities and delays for PIX payment lifecycles."""
+
+    authorization_approval_probability: float = Field(default=0.98, ge=0, le=1)
+    rejection_probability: float = Field(default=0.02, ge=0, le=1)
+    return_probability: float = Field(default=0.05, ge=0, le=1)
+    validation_delay_seconds: Annotated[int, Field(ge=0)] = 1
+    authorization_delay_seconds: Annotated[int, Field(ge=0)] = 1
+    submission_delay_seconds: Annotated[int, Field(ge=0)] = 1
+    settlement_delay_seconds: Annotated[int, Field(ge=0)] = 1
+    receipt_delay_seconds: Annotated[int, Field(ge=0)] = 1
+    return_request_delay_seconds: Annotated[int, Field(ge=0)] = 60
+    return_delay_seconds: Annotated[int, Field(ge=0)] = 60
+
+    @property
+    def maximum_delay_seconds(self) -> int:
+        """Return the longest possible PIX path, including a return."""
+
+        return sum(
+            (
+                self.validation_delay_seconds,
+                self.authorization_delay_seconds,
+                self.submission_delay_seconds,
+                self.settlement_delay_seconds,
+                self.receipt_delay_seconds,
+                self.return_request_delay_seconds,
+                self.return_delay_seconds,
+            )
+        )
+
+
 class FraudConfig(_StrictModel):
     """Ground-truth fraud-rate settings."""
 
@@ -177,6 +209,7 @@ class SimulationRunConfig(_StrictModel):
     payments: PaymentsConfig
     behavior: BehaviorConfig = Field(default_factory=BehaviorConfig)
     card_lifecycle: CardLifecycleConfig = Field(default_factory=CardLifecycleConfig)
+    pix_lifecycle: PixLifecycleConfig = Field(default_factory=PixLifecycleConfig)
     fraud: FraudConfig
     quality: QualityConfig
     outputs: OutputsConfig
@@ -188,6 +221,11 @@ class SimulationRunConfig(_StrictModel):
             >= self.simulation.duration_days * 24 * 60 * 60
         ):
             raise ValueError("card lifecycle timing settings must fit the simulation window")
+        if (
+            self.pix_lifecycle.maximum_delay_seconds + PIX_EVENT_ENVELOPE_DELAY_SECONDS
+            >= self.simulation.duration_days * 24 * 60 * 60
+        ):
+            raise ValueError("PIX lifecycle timing settings must fit the simulation window")
         return self
 
 
@@ -205,24 +243,40 @@ def load_config(path: Path) -> SimulationRunConfig:
     return SimulationRunConfig.model_validate(raw_config)
 
 
-def config_hash(config: SimulationRunConfig, *, include_card_lifecycle: bool = True) -> str:
+def config_hash(
+    config: SimulationRunConfig,
+    *,
+    include_card_lifecycle: bool = True,
+    include_pix_lifecycle: bool = True,
+) -> str:
     """Return a stable SHA-256 hash of the validated configuration.
 
-    The optional compatibility mode keeps the M3 payment stream identity
-    unchanged when only card lifecycle settings differ.
+    The optional compatibility modes keep the base payment stream identity
+    unchanged when only lifecycle settings differ.
     """
 
     return hashlib.sha256(
-        _canonical_config(config, include_card_lifecycle=include_card_lifecycle).encode("utf-8")
+        _canonical_config(
+            config,
+            include_card_lifecycle=include_card_lifecycle,
+            include_pix_lifecycle=include_pix_lifecycle,
+        ).encode("utf-8")
     ).hexdigest()
 
 
-def _canonical_config(config: SimulationRunConfig, *, include_card_lifecycle: bool = True) -> str:
+def _canonical_config(
+    config: SimulationRunConfig,
+    *,
+    include_card_lifecycle: bool = True,
+    include_pix_lifecycle: bool = True,
+) -> str:
     """Serialize configuration once for hashes and deterministic stream IDs."""
 
     payload = config.model_dump(mode="json")
     if not include_card_lifecycle:
         payload.pop("card_lifecycle", None)
+    if not include_pix_lifecycle:
+        payload.pop("pix_lifecycle", None)
     canonical = json.dumps(
         payload,
         sort_keys=True,

@@ -1,9 +1,11 @@
 from pathlib import Path
 from typing import Annotated
 
+import polars as pl
 import typer
 
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
+from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
 from fraudtwin.manifest import create_manifest, write_manifest
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.parquet import write_behavior_parquet, write_entity_parquet
@@ -54,8 +56,11 @@ def generate(
     event_counts = {
         "payments": len(behavior_dataset.payments),
         "payment_events": len(behavior_dataset.payment_events),
+        "ledger_entries": len(behavior_dataset.ledger_entries),
         "card_lifecycle_events": sum(behavior_dataset.card_lifecycle_event_counts.values()),
+        "pix_lifecycle_events": sum(behavior_dataset.pix_lifecycle_event_counts.values()),
         **behavior_dataset.card_lifecycle_event_counts,
+        **behavior_dataset.pix_lifecycle_event_counts,
     }
     manifest = manifest.model_copy(
         update={
@@ -63,8 +68,9 @@ def generate(
             "event_counts": event_counts,
             "schema_versions": {
                 **{entity_name: "1" for entity_name in entity_counts},
-                "payments": "1",
-                "payment_events": "2",
+                "payments": "2",
+                "payment_events": "3",
+                "ledger_entries": "1",
             },
         }
     )
@@ -77,6 +83,41 @@ def generate(
     typer.echo("Generated payment counts:")
     for event_name, count in event_counts.items():
         typer.echo(f"  {event_name}: {count}")
+
+
+@app.command("validate-ledger")
+def validate_ledger_command(
+    run_id: Annotated[str, typer.Option("--run-id", help="Generated run identifier.")],
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Directory containing generated runs."),
+    ] = Path("runs"),
+) -> None:
+    """Validate transfer ledger entries for a generated run."""
+
+    run_dir = output_dir / run_id
+    try:
+        accounts = tuple(
+            Account.model_validate(row)
+            for row in pl.read_parquet(run_dir / "entities" / "accounts.parquet").to_dicts()
+        )
+        payments = tuple(
+            Payment.model_validate(row)
+            for row in pl.read_parquet(run_dir / "payments" / "payments.parquet").to_dicts()
+        )
+        events = tuple(
+            PaymentEvent.model_validate(row)
+            for row in pl.read_parquet(run_dir / "payments" / "payment_events.parquet").to_dicts()
+        )
+        entries = tuple(
+            LedgerEntry.model_validate(row)
+            for row in pl.read_parquet(run_dir / "ledger" / "ledger_entries.parquet").to_dicts()
+        )
+        validate_ledger(accounts, payments, events, entries)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        typer.echo(f"Ledger validation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Ledger is valid for run {run_id}.")
 
 
 def main() -> None:

@@ -1,5 +1,12 @@
 # Release notes
 
+## 0.5.0 — Milestone 5
+
+- Added deterministic PIX initiation, validation, authorization, submission, settlement, receipt, rejection, and return lifecycle events.
+- Added strict PIX lifecycle probabilities and timing configuration.
+- Added double-sided transfer ledger entries, running balances, reconciliation validation, and the `validate-ledger` CLI command.
+- Added PIX and ledger counts to manifests while retaining empty fraud counts.
+
 ## 0.4.0 — Milestone 4
 
 - Added deterministic card authorization, decline, reversal, capture, clearing, settlement, and refund lifecycle events.

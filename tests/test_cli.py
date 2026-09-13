@@ -41,7 +41,10 @@ def test_generate_command_writes_manifest(tmp_path: Path) -> None:
     assert manifest["event_counts"]["payment_events"] >= 100
     assert manifest["event_counts"]["card_lifecycle_events"] > 0
     assert manifest["event_counts"]["CARD_AUTHORIZATION_REQUESTED"] > 0
-    assert manifest["schema_versions"]["payment_events"] == "2"
+    assert manifest["event_counts"]["PIX_INITIATED"] > 0
+    assert manifest["event_counts"]["PIX_SETTLED"] > 0
+    assert manifest["event_counts"]["ledger_entries"] > 0
+    assert manifest["schema_versions"]["payment_events"] == "3"
     assert manifest["fraud_counts"] == {}
     assert sorted(path.name for path in (run_dir / "entities").glob("*.parquet")) == [
         "accounts.parquet",
@@ -59,3 +62,9 @@ def test_generate_command_writes_manifest(tmp_path: Path) -> None:
         "payment_events.parquet",
         "payments.parquet",
     ]
+    ledger_result = runner.invoke(
+        app,
+        ["validate-ledger", "--run-id", run_dir.name, "--output-dir", str(tmp_path)],
+    )
+    assert ledger_result.exit_code == 0
+    assert "Ledger is valid" in ledger_result.stdout

@@ -39,6 +39,18 @@ card_lifecycle:
   reversal_delay_seconds: 10
   refund_delay_seconds: 60
 
+pix_lifecycle:
+  authorization_approval_probability: 0.98
+  rejection_probability: 0.02
+  return_probability: 0.05
+  validation_delay_seconds: 1
+  authorization_delay_seconds: 1
+  submission_delay_seconds: 1
+  settlement_delay_seconds: 1
+  receipt_delay_seconds: 1
+  return_request_delay_seconds: 60
+  return_delay_seconds: 60
+
 fraud:
   target_rate: 0.002
 
