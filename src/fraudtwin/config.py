@@ -2,15 +2,16 @@ import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Rail = Literal["CARD", "PIX", "ACCOUNT_TRANSFER"]
 FraudScenarioId = Literal["F01", "F02", "F03", "F04", "F05"]
 FRAUD_SCENARIO_IDS: tuple[FraudScenarioId, ...] = ("F01", "F02", "F03", "F04", "F05")
 Speed = Literal["batch", "real_time", "accelerated"]
+QualityProfile = Literal["clean", "realistic", "hostile"]
 # Five seconds of source delay plus one second each for ingestion and processing.
 CARD_EVENT_ENVELOPE_DELAY_SECONDS = 7
 PIX_EVENT_ENVELOPE_DELAY_SECONDS = 4
@@ -262,9 +263,128 @@ class FraudWorkflowConfig(_StrictModel):
 
 
 class QualityConfig(_StrictModel):
-    """Data-quality profile to apply in later milestones."""
+    """Deterministic M8 data-quality fault controls.
 
-    profile: str = Field(min_length=1)
+    ``None`` values use the selected profile's defaults. Explicit values are
+    useful for testing one fault in isolation without changing the other
+    quality dimensions.
+    """
+
+    profile: QualityProfile = "clean"
+    duplicate_record_probability: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        validation_alias=AliasChoices("duplicate_record_probability", "duplicate_records"),
+    )
+    duplicate_event_probability: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        validation_alias=AliasChoices("duplicate_event_probability", "duplicate_events"),
+    )
+    missing_optional_probability: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        validation_alias=AliasChoices("missing_optional_probability", "missing_optional"),
+    )
+    invalid_value_probability: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        validation_alias=AliasChoices("invalid_value_probability", "invalid_records"),
+    )
+    late_event_probability: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        validation_alias=AliasChoices("late_event_probability", "late_events"),
+    )
+    out_of_order_probability: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        validation_alias=AliasChoices("out_of_order_probability", "out_of_order_events"),
+    )
+    fraud_spike_probability: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        validation_alias=AliasChoices("fraud_spike_probability", "fraud_spikes"),
+    )
+    traffic_spike_probability: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        validation_alias=AliasChoices("traffic_spike_probability", "traffic_spikes"),
+    )
+    late_event_delay_seconds: int = Field(
+        default=3_600,
+        ge=0,
+        validation_alias=AliasChoices("late_event_delay_seconds", "late_event_delay"),
+    )
+    source_delay_seconds: int = Field(
+        default=0,
+        ge=0,
+        validation_alias=AliasChoices("source_delay_seconds", "source_delay"),
+    )
+    fraud_spike_multiplier: int = Field(default=2, ge=1)
+    traffic_spike_multiplier: int = Field(default=2, ge=1)
+
+    @model_validator(mode="after")
+    def spike_multipliers_must_be_meaningful(self) -> "QualityConfig":
+        if self.fraud_spike_probability and self.fraud_spike_multiplier < 2:
+            raise ValueError(
+                "fraud_spike_multiplier must be at least 2 when fraud spikes are enabled"
+            )
+        if self.traffic_spike_probability and self.traffic_spike_multiplier < 2:
+            raise ValueError(
+                "traffic_spike_multiplier must be at least 2 when traffic spikes are enabled"
+            )
+        return self
+
+    def probability(self, fault_name: str) -> float:
+        """Return an explicit probability or the selected profile default."""
+
+        explicit = getattr(self, f"{fault_name}_probability")
+        if explicit is not None:
+            return cast(float, explicit)
+        return _QUALITY_PROFILE_DEFAULTS[self.profile][fault_name]
+
+
+_QUALITY_PROFILE_DEFAULTS: dict[QualityProfile, dict[str, float]] = {
+    "clean": {
+        "duplicate_record": 0.0,
+        "duplicate_event": 0.0,
+        "missing_optional": 0.0,
+        "invalid_value": 0.0,
+        "late_event": 0.0,
+        "out_of_order": 0.0,
+        "fraud_spike": 0.0,
+        "traffic_spike": 0.0,
+    },
+    "realistic": {
+        "duplicate_record": 0.001,
+        "duplicate_event": 0.002,
+        "missing_optional": 0.01,
+        "invalid_value": 0.0005,
+        "late_event": 0.03,
+        "out_of_order": 0.02,
+        "fraud_spike": 0.0,
+        "traffic_spike": 0.0,
+    },
+    "hostile": {
+        "duplicate_record": 0.03,
+        "duplicate_event": 0.03,
+        "missing_optional": 0.08,
+        "invalid_value": 0.02,
+        "late_event": 0.20,
+        "out_of_order": 0.20,
+        "fraud_spike": 0.10,
+        "traffic_spike": 0.10,
+    },
+}
 
 
 class OutputsConfig(_StrictModel):

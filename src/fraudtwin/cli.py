@@ -74,6 +74,8 @@ def generate(
             },
             "fraud_counts": behavior_dataset.fraud_counts,
             "fraud_rates": behavior_dataset.fraud_rates,
+            "quality_fault_counts": behavior_dataset.quality_fault_counts,
+            "quality_fault_rates": behavior_dataset.quality_fault_rates,
         }
     )
     manifest_path = write_manifest(manifest, output_dir)

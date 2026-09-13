@@ -1,5 +1,12 @@
 # Release notes
 
+## 0.8.0 — Milestone 8
+
+- Added a separate deterministic chaos/data-quality layer for duplicate records and events, missing optional fields, invalid values, late events, out-of-order delivery, configurable source delay, fraud spikes, and traffic spikes.
+- Added strict `clean`, `realistic`, and `hostile` quality profiles with independently configurable probabilities, delays, and spike multipliers.
+- Added measured `quality_fault_counts` and requested/realized `quality_fault_rates` to manifests while preserving existing entity, event, fraud, lifecycle, ledger, and schema fields.
+- Preserved the clean M1-M7 output path and deferred PostgreSQL, Kafka, Spark, schema registry, ML, point-in-time datasets, feature stores, and later milestones.
+
 ## 0.7.0 — Milestone 7
 
 - Added deterministic fraud alerts, fraud cases, case confirmations, customer dispute events, and delayed fraud labels derived from M6 scenario records and hard negatives.

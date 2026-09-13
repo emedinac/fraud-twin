@@ -9,6 +9,7 @@ from fraudtwin.simulation.payments import (
     PaymentGenerator,
     count_pix_lifecycle_events,
 )
+from fraudtwin.simulation.quality import QualityFaultInjector
 
 __all__ = [
     "BehaviorDataset",
@@ -22,6 +23,7 @@ __all__ = [
     "PaymentDataset",
     "PaymentGenerator",
     "count_pix_lifecycle_events",
+    "QualityFaultInjector",
     "generate_behavior",
     "generate_entities",
 ]

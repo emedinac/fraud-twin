@@ -70,7 +70,7 @@ fraud_workflow:
   label_delay_seconds: 3600
 
 quality:
-  profile: realistic
+  profile: clean
 
 outputs:
   parquet: true

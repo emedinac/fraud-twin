@@ -8,9 +8,9 @@
 
 FraudTwin creates a small, coherent financial world that behaves more like a real payment environment than a table of random transactions. It generates customers, accounts, cards, merchants, devices, customer behavior profiles, and legitimate payment events in reproducible batch runs.
 
-The project is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and temporal patterns before introducing fraud, streaming, or production infrastructure.
+The project is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and temporal patterns before introducing data-quality faults, streaming, or production infrastructure.
 
-## Current release: 0.7.0 — Fraud Cases and Delayed Labels
+## Current release: 0.8.0 — Chaos and Data Quality
 
 Milestones 3, 4, 5, and 6 are complete. Every generated customer receives a deterministic
 behavior profile, and payments reflect customer-specific preferences for:
@@ -22,7 +22,7 @@ behavior profile, and payments reflect customer-specific preferences for:
 - Online purchases and trusted devices
 - Travel frequency
 
-The current release generates legitimate CARD, PIX-like, and account-transfer payments, plus explicit F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack scenarios when fraud generation is enabled. Fraud events retain the existing event envelope and carry scenario ID, type, trigger, reason, and affected entities. The fraud record table contains scenario-linked truth records and legitimate hard negatives. M7 derives fraud alerts, cases, confirmations, customer dispute events, and delayed labels from those records; chargebacks remain deferred.
+The current release generates legitimate CARD, PIX-like, and account-transfer payments, plus explicit F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack scenarios when fraud generation is enabled. Fraud events retain the existing event envelope and carry scenario ID, type, trigger, reason, and affected entities. The fraud record table contains scenario-linked truth records and legitimate hard negatives. M7 derives fraud alerts, cases, confirmations, customer dispute events, and delayed labels from those records. M8 adds deterministic duplicates, missing optional fields, invalid values, late and out-of-order events, source delay, fraud spikes, traffic spikes, and measured quality-fault counts; chargebacks remain deferred.
 
 ## Quick start
 
@@ -75,7 +75,7 @@ runs/<run_id>/
 
 All Parquet files use explicit, stable schemas and column ordering. Generated payments reference existing accounts, cards, merchants, devices, and customers. Amounts are positive, payment timestamps stay within the configured simulation window, delayed workflow timestamps follow their causal evidence, and no real personal data or payment credentials are used.
 
-The manifest records the seed, configuration hash, schema versions, entity counts, payment/lifecycle/ledger counts, fraud event/record counts, M7 alert/case/confirmation/dispute/label counts, and per-scenario fraud rates. The default configuration keeps fraud disabled, so it produces the same legitimate CARD, PIX-like, and account-transfer behavior as the previous release.
+The manifest records the seed, configuration hash, schema versions, entity counts, payment/lifecycle/ledger counts, fraud event/record counts, M7 alert/case/confirmation/dispute/label counts, per-scenario fraud rates, and M8 quality-fault counts and requested/realized rates. The default configuration uses the clean quality profile and keeps fraud disabled, so it produces the same legitimate CARD, PIX-like, and account-transfer behavior as the previous release.
 
 ## Why behavior matters
 
@@ -85,7 +85,7 @@ FraudTwin makes that context available in the generated data through customer-sp
 
 ## Reproducibility
 
-Runs are controlled by the validated YAML configuration and simulation seed. Named, isolated random-number streams keep profile generation independent from entity generation, payment generation, lifecycle generation, and each fraud scenario campaign. With the same configuration and seed, profiles, payment records, event records, fraud records, IDs, ordering, and schemas are equivalent. Scenario generation never uses current time or global uncontrolled randomness.
+Runs are controlled by the validated YAML configuration and simulation seed. Named, isolated random-number streams keep profile generation independent from entity generation, payment generation, lifecycle generation, each fraud scenario campaign, and each M8 fault. With the same configuration and seed, profiles, payment records, event records, fraud records, quality mutations, IDs, ordering, and schemas are equivalent. Scenario and quality generation never uses current time or global uncontrolled randomness.
 
 Behavior settings can be adjusted under `behavior`:
 
@@ -181,6 +181,34 @@ between 0 and 1. A label is available only after the case evidence has been
 processed, while `fraud_occurred_at` remains the original scenario occurrence
 time.
 
+M8 quality settings live under `quality`:
+
+```yaml
+quality:
+  profile: clean  # clean, realistic, or hostile
+  duplicate_record_probability: 0.0
+  duplicate_event_probability: 0.0
+  missing_optional_probability: 0.0
+  invalid_value_probability: 0.0
+  late_event_probability: 0.0
+  out_of_order_probability: 0.0
+  fraud_spike_probability: 0.0
+  traffic_spike_probability: 0.0
+  late_event_delay_seconds: 3600
+  source_delay_seconds: 0
+  fraud_spike_multiplier: 2
+  traffic_spike_multiplier: 2
+```
+
+The clean profile disables all faults. The realistic and hostile profiles
+provide bounded defaults, while explicit probabilities override one fault at a
+time. Duplicate rows retain their original IDs and causal metadata. Missing
+values are selected only from optional payment/event fields. Invalid values,
+late transport timestamps, and delivery reordering are intentional quality
+faults; the clean run remains suitable for lifecycle and ledger validation.
+The manifest records `quality_fault_counts` plus requested and realized values
+in `quality_fault_rates`.
+
 ## Project status
 
 | Capability | Status |
@@ -194,6 +222,7 @@ time.
 | Full card lifecycle (without chargebacks) | Available |
 | PIX-like lifecycle and transfer ledger | Available |
 | Delayed labels, alerts, cases, confirmations, and disputes | Available |
+| Deterministic M8 data-quality faults and measurements | Available |
 | Kafka, PostgreSQL, Flink, and ML workflows | Planned |
 
 FraudTwin is being built milestone by milestone. The priority is a correct, readable, reproducible simulation core before adding distributed systems or advanced modeling.

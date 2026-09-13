@@ -15,6 +15,17 @@ def create_stream_rng(seed: int, stream: str) -> Random:
 
     if seed < 0:
         raise ValueError("seed must be non-negative")
-    material = f"fraudtwin:{stream}:{seed}".encode()
-    stream_seed = int.from_bytes(hashlib.sha256(material).digest()[:8], "big")
+    return _rng_from_material(f"fraudtwin:{stream}:{seed}")
+
+
+def create_legacy_entity_stream_rng(seed: int, entity_type: str) -> Random:
+    """Create the original M1 entity stream without changing its seed material."""
+
+    if seed < 0:
+        raise ValueError("seed must be non-negative")
+    return _rng_from_material(f"fraudtwin:milestone-1:{seed}:{entity_type}")
+
+
+def _rng_from_material(material: str) -> Random:
+    stream_seed = int.from_bytes(hashlib.sha256(material.encode()).digest()[:8], "big")
     return create_rng(stream_seed)

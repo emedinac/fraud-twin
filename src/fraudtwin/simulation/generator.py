@@ -1,6 +1,5 @@
 """Deterministic generation of the Milestone 1 entity population."""
 
-import hashlib
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from random import Random
@@ -8,7 +7,7 @@ from typing import Literal
 
 from fraudtwin.config import SimulationRunConfig
 from fraudtwin.domain import Account, Card, Customer, Device, Institution, Merchant, PixKey
-from fraudtwin.seed import create_rng
+from fraudtwin.seed import create_legacy_entity_stream_rng
 
 _ID_WIDTH = 6
 _CUSTOMER_HISTORY_DAYS = 3650
@@ -39,12 +38,10 @@ def _entity_id(prefix: str, number: int) -> str:
     return f"{prefix}-{number:0{_ID_WIDTH}d}"
 
 
-def _stream_rng(seed: int, entity_type: str) -> Random:
-    """Create a stable RNG stream independent of all other entity streams."""
+def _entity_stream_rng(seed: int, entity_type: str) -> Random:
+    """Return the historical, isolated RNG stream for one entity table."""
 
-    material = f"fraudtwin:milestone-1:{seed}:{entity_type}".encode()
-    stream_seed = int.from_bytes(hashlib.sha256(material).digest()[:8], "big")
-    return create_rng(stream_seed)
+    return create_legacy_entity_stream_rng(seed, entity_type)
 
 
 def _synthetic_datetime(start: datetime, rng: Random, days_back: int) -> datetime:
@@ -125,7 +122,7 @@ class EntityGenerator:
         return EntityDataset(customers, institutions, accounts, cards, merchants, devices, pix_keys)
 
     def _customers(self) -> tuple[Customer, ...]:
-        rng = _stream_rng(self.config.simulation.seed, "customers")
+        rng = _entity_stream_rng(self.config.simulation.seed, "customers")
         income_bands = ("LOW", "MIDDLE", "HIGH")
         occupations = ("ENGINEERING", "EDUCATION", "HEALTHCARE", "COMMERCE")
         channels = (("MOBILE",), ("WEB",), ("MOBILE", "WEB"))
@@ -156,7 +153,7 @@ class EntityGenerator:
         return tuple(records)
 
     def _institutions(self) -> tuple[Institution, ...]:
-        rng = _stream_rng(self.config.simulation.seed, "institutions")
+        rng = _entity_stream_rng(self.config.simulation.seed, "institutions")
         institution_types: tuple[InstitutionType, ...] = (
             "BANK",
             "PSP",
@@ -182,7 +179,7 @@ class EntityGenerator:
     def _accounts(
         self, customers: tuple[Customer, ...], institutions: tuple[Institution, ...]
     ) -> tuple[Account, ...]:
-        rng = _stream_rng(self.config.simulation.seed, "accounts")
+        rng = _entity_stream_rng(self.config.simulation.seed, "accounts")
         account_types: tuple[AccountType, ...] = (
             "CHECKING",
             "PAYMENT_ACCOUNT",
@@ -220,7 +217,7 @@ class EntityGenerator:
         return tuple(records)
 
     def _cards(self, accounts: tuple[Account, ...]) -> tuple[Card, ...]:
-        rng = _stream_rng(self.config.simulation.seed, "cards")
+        rng = _entity_stream_rng(self.config.simulation.seed, "cards")
         records: list[Card] = []
         for number in range(1, self.population.cards + 1):
             account = rng.choice(accounts)
@@ -247,7 +244,7 @@ class EntityGenerator:
         return tuple(records)
 
     def _merchants(self, institutions: tuple[Institution, ...]) -> tuple[Merchant, ...]:
-        rng = _stream_rng(self.config.simulation.seed, "merchants")
+        rng = _entity_stream_rng(self.config.simulation.seed, "merchants")
         records: list[Merchant] = []
         for number in range(1, self.population.merchants + 1):
             records.append(
@@ -266,7 +263,7 @@ class EntityGenerator:
         return tuple(records)
 
     def _devices(self) -> tuple[Device, ...]:
-        rng = _stream_rng(self.config.simulation.seed, "devices")
+        rng = _entity_stream_rng(self.config.simulation.seed, "devices")
         records: list[Device] = []
         device_types: tuple[DeviceType, ...] = (
             "MOBILE",
@@ -302,7 +299,7 @@ class EntityGenerator:
         self,
         accounts: tuple[Account, ...],
     ) -> tuple[PixKey, ...]:
-        rng = _stream_rng(self.config.simulation.seed, "pix_keys")
+        rng = _entity_stream_rng(self.config.simulation.seed, "pix_keys")
         records: list[PixKey] = []
         key_types: tuple[PixKeyType, ...] = (
             "CPF_LIKE",

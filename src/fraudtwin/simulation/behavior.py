@@ -1,6 +1,6 @@
 """Customer behavior profiles and their generated payment dataset."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from random import Random
 from typing import Literal
 
@@ -29,6 +29,7 @@ from fraudtwin.simulation.payments import (
     count_card_lifecycle_events,
     count_pix_lifecycle_events,
 )
+from fraudtwin.simulation.quality import QualityFaultInjector
 
 _PROFILE_ID_WIDTH = 6
 _COUNTRIES = ("BR", "US", "GB", "DE")
@@ -49,6 +50,8 @@ class BehaviorDataset:
     case_confirmations: tuple[FraudCaseConfirmation, ...] = ()
     customer_disputes: tuple[CustomerDispute, ...] = ()
     fraud_labels: tuple[DelayedFraudLabel, ...] = ()
+    quality_fault_counts: dict[str, int] = field(default_factory=dict)
+    quality_fault_rates: dict[str, float] = field(default_factory=dict)
 
     @property
     def counts(self) -> dict[str, int]:
@@ -275,18 +278,19 @@ class BehaviorGenerator:
         workflow_dataset = FraudWorkflowGenerator(
             self.config, self.entities, fraud_dataset
         ).generate()
-        return BehaviorDataset(
-            profiles,
-            fraud_dataset.payments,
-            fraud_dataset.payment_events,
-            fraud_dataset.ledger_entries,
-            fraud_dataset.fraud_records,
-            workflow_dataset.alerts,
-            workflow_dataset.cases,
-            workflow_dataset.confirmations,
-            workflow_dataset.disputes,
-            workflow_dataset.labels,
+        dataset = BehaviorDataset(
+            profiles=profiles,
+            payments=fraud_dataset.payments,
+            payment_events=fraud_dataset.payment_events,
+            ledger_entries=fraud_dataset.ledger_entries,
+            fraud_records=fraud_dataset.fraud_records,
+            alerts=workflow_dataset.alerts,
+            fraud_cases=workflow_dataset.cases,
+            case_confirmations=workflow_dataset.confirmations,
+            customer_disputes=workflow_dataset.disputes,
+            fraud_labels=workflow_dataset.labels,
         )
+        return QualityFaultInjector(self.config).apply(dataset)
 
 
 def generate_behavior(config: SimulationRunConfig, entities: EntityDataset) -> BehaviorDataset:

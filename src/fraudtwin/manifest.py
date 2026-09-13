@@ -2,7 +2,7 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from fraudtwin import __version__
 from fraudtwin.config import SimulationRunConfig, config_hash
@@ -26,6 +26,7 @@ class RunManifest(BaseModel):
     fraud_counts: dict[str, int]
     fraud_rates: dict[str, float]
     quality_fault_counts: dict[str, int]
+    quality_fault_rates: dict[str, float] = Field(default_factory=dict)
 
 
 def _git_commit() -> str:
@@ -64,6 +65,7 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         fraud_counts={},
         fraud_rates={},
         quality_fault_counts={},
+        quality_fault_rates={},
     )
 
 
