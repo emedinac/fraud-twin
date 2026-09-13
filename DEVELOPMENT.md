@@ -30,7 +30,7 @@ poetry run fraudtwin config validate configs/minimal.yaml
 poetry run fraudtwin generate configs/minimal.yaml --output-dir /tmp/fraudtwin-run
 ```
 
-The behavior section controls `amount_min`, `amount_max`, `active_hours`, `weekday_weights`, `merchant_preference_count`, and `preferred_device_limit`. Generated profiles and payment tables use stable schemas and deterministic IDs. M6 fraud scenarios are disabled by default; delayed labels, alerts, cases, disputes, chargebacks, streaming, and production infrastructure remain deferred.
+The behavior section controls `amount_min`, `amount_max`, `active_hours`, `weekday_weights`, `merchant_preference_count`, and `preferred_device_limit`. Generated profiles and payment tables use stable schemas and deterministic IDs. M6 fraud scenarios and the M7 fraud workflow are disabled together when `fraud.enabled` is false; M8 data-quality injection, chargebacks, streaming, and production infrastructure remain deferred.
 
 Card lifecycle tests can be run directly with:
 
@@ -78,3 +78,18 @@ poetry run pytest tests/test_fraud.py tests/test_card_lifecycle.py tests/test_pi
 ```
 
 Follow the milestone order in [`FEATURES.md`](FEATURES.md). Do not add infrastructure before the simulator has correct state and temporal behavior.
+
+Run the focused M7 workflow tests with:
+
+```bash
+poetry run pytest tests/test_cases.py
+```
+
+For a targeted M7 validation run, use:
+
+```bash
+poetry run fraudtwin config validate configs/minimal.yaml
+poetry run fraudtwin generate configs/minimal.yaml --output-dir /tmp/fraudtwin-m7
+poetry run pytest tests/test_cases.py tests/test_fraud.py tests/test_card_lifecycle.py tests/test_pix_lifecycle.py
+poetry run fraudtwin validate-ledger --run-id <run-id> --output-dir /tmp/fraudtwin-m7
+```

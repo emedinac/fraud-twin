@@ -10,7 +10,7 @@ FraudTwin creates a small, coherent financial world that behaves more like a rea
 
 The project is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and temporal patterns before introducing fraud, streaming, or production infrastructure.
 
-## Current release: 0.6.0 — First Fraud Scenarios
+## Current release: 0.7.0 — Fraud Cases and Delayed Labels
 
 Milestones 3, 4, 5, and 6 are complete. Every generated customer receives a deterministic
 behavior profile, and payments reflect customer-specific preferences for:
@@ -22,7 +22,7 @@ behavior profile, and payments reflect customer-specific preferences for:
 - Online purchases and trusted devices
 - Travel frequency
 
-The current release generates legitimate CARD, PIX-like, and account-transfer payments, plus explicit F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack scenarios when fraud generation is enabled. Fraud events retain the existing event envelope and carry scenario ID, type, trigger, reason, and affected entities. The fraud record table contains scenario-linked truth records and legitimate hard negatives. Delayed labels, alerts, cases, disputes, and chargebacks remain deferred.
+The current release generates legitimate CARD, PIX-like, and account-transfer payments, plus explicit F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack scenarios when fraud generation is enabled. Fraud events retain the existing event envelope and carry scenario ID, type, trigger, reason, and affected entities. The fraud record table contains scenario-linked truth records and legitimate hard negatives. M7 derives fraud alerts, cases, confirmations, customer dispute events, and delayed labels from those records; chargebacks remain deferred.
 
 ## Quick start
 
@@ -65,12 +65,17 @@ runs/<run_id>/
 └── ledger/
     └── ledger_entries.parquet
 └── fraud/
-    └── fraud_records.parquet
+    ├── fraud_records.parquet
+    ├── fraud_alerts.parquet
+    ├── fraud_cases.parquet
+    ├── case_confirmations.parquet
+    ├── customer_disputes.parquet
+    └── fraud_labels.parquet
 ```
 
-All Parquet files use explicit, stable schemas and column ordering. Generated payments reference existing accounts, cards, merchants, devices, and customers. Amounts are positive, timestamps stay within the configured simulation window, and no real personal data or payment credentials are used.
+All Parquet files use explicit, stable schemas and column ordering. Generated payments reference existing accounts, cards, merchants, devices, and customers. Amounts are positive, payment timestamps stay within the configured simulation window, delayed workflow timestamps follow their causal evidence, and no real personal data or payment credentials are used.
 
-The manifest records the seed, configuration hash, schema versions, entity counts, payment/lifecycle/ledger counts, fraud event/record counts, and per-scenario fraud rates. The default configuration keeps fraud disabled, so it produces the same legitimate CARD, PIX-like, and account-transfer behavior as the previous release.
+The manifest records the seed, configuration hash, schema versions, entity counts, payment/lifecycle/ledger counts, fraud event/record counts, M7 alert/case/confirmation/dispute/label counts, and per-scenario fraud rates. The default configuration keeps fraud disabled, so it produces the same legitimate CARD, PIX-like, and account-transfer behavior as the previous release.
 
 ## Why behavior matters
 
@@ -168,6 +173,14 @@ lookalike when `hard_negative_rate` is greater than zero. Unknown fields,
 invalid probabilities, counts, amounts, durations, and windows are rejected
 before generation.
 
+M7 workflow settings live under `fraud_workflow`. By default, every M6 fraud
+record and hard negative produces an automated alert, case, confirmation, and
+delayed label; true fraud records also produce a customer dispute event. The
+workflow delays are whole non-negative seconds, and probabilities are bounded
+between 0 and 1. A label is available only after the case evidence has been
+processed, while `fraud_occurred_at` remains the original scenario occurrence
+time.
+
 ## Project status
 
 | Capability | Status |
@@ -180,7 +193,7 @@ before generation.
 | Fraud scenarios and ground truth records | Available |
 | Full card lifecycle (without chargebacks) | Available |
 | PIX-like lifecycle and transfer ledger | Available |
-| Delayed labels, alerts, cases, disputes, and chargebacks | Planned |
+| Delayed labels, alerts, cases, confirmations, and disputes | Available |
 | Kafka, PostgreSQL, Flink, and ML workflows | Planned |
 
 FraudTwin is being built milestone by milestone. The priority is a correct, readable, reproducible simulation core before adding distributed systems or advanced modeling.

@@ -5,9 +5,19 @@ from random import Random
 from typing import Literal
 
 from fraudtwin.config import SimulationRunConfig
-from fraudtwin.domain import BehaviorProfile, Customer, FraudRecord
+from fraudtwin.domain import (
+    BehaviorProfile,
+    Customer,
+    CustomerDispute,
+    DelayedFraudLabel,
+    FraudAlert,
+    FraudCase,
+    FraudCaseConfirmation,
+    FraudRecord,
+)
 from fraudtwin.domain.payments import LedgerEntry, Payment, PaymentEvent
 from fraudtwin.seed import create_stream_rng
+from fraudtwin.simulation.cases import FraudWorkflowGenerator
 from fraudtwin.simulation.fraud import (
     FraudScenarioGenerator,
     count_true_fraud_records,
@@ -34,6 +44,11 @@ class BehaviorDataset:
     payment_events: tuple[PaymentEvent, ...]
     ledger_entries: tuple[LedgerEntry, ...] = ()
     fraud_records: tuple[FraudRecord, ...] = ()
+    alerts: tuple[FraudAlert, ...] = ()
+    fraud_cases: tuple[FraudCase, ...] = ()
+    case_confirmations: tuple[FraudCaseConfirmation, ...] = ()
+    customer_disputes: tuple[CustomerDispute, ...] = ()
+    fraud_labels: tuple[DelayedFraudLabel, ...] = ()
 
     @property
     def counts(self) -> dict[str, int]:
@@ -43,6 +58,11 @@ class BehaviorDataset:
             "payment_events": len(self.payment_events),
             "ledger_entries": len(self.ledger_entries),
             "fraud_records": len(self.fraud_records),
+            "fraud_alerts": len(self.alerts),
+            "fraud_cases": len(self.fraud_cases),
+            "case_confirmations": len(self.case_confirmations),
+            "customer_disputes": len(self.customer_disputes),
+            "fraud_labels": len(self.fraud_labels),
         }
 
     @property
@@ -68,6 +88,11 @@ class BehaviorDataset:
             "fraud_events": len(self.fraud_events),
             "fraud_records": sum(record.fraud_truth for record in self.fraud_records),
             "hard_negatives": sum(not record.fraud_truth for record in self.fraud_records),
+            "alerts": len(self.alerts),
+            "cases": len(self.fraud_cases),
+            "confirmations": len(self.case_confirmations),
+            "disputes": len(self.customer_disputes),
+            "delayed_labels": len(self.fraud_labels),
         }
 
     @property
@@ -107,6 +132,11 @@ class BehaviorDataset:
             "pix_lifecycle_events": sum(pix_counts.values()),
             "fraud_events": len(self.fraud_events),
             "fraud_records": len(self.fraud_records),
+            "fraud_alerts": len(self.alerts),
+            "fraud_cases": len(self.fraud_cases),
+            "case_confirmations": len(self.case_confirmations),
+            "customer_disputes": len(self.customer_disputes),
+            "fraud_labels": len(self.fraud_labels),
             **card_counts,
             **pix_counts,
         }
@@ -242,12 +272,20 @@ class BehaviorGenerator:
             payment_dataset,
             simulation_run_id=self.simulation_run_id,
         ).generate()
+        workflow_dataset = FraudWorkflowGenerator(
+            self.config, self.entities, fraud_dataset
+        ).generate()
         return BehaviorDataset(
             profiles,
             fraud_dataset.payments,
             fraud_dataset.payment_events,
             fraud_dataset.ledger_entries,
             fraud_dataset.fraud_records,
+            workflow_dataset.alerts,
+            workflow_dataset.cases,
+            workflow_dataset.confirmations,
+            workflow_dataset.disputes,
+            workflow_dataset.labels,
         )
 
 

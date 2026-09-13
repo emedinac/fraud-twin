@@ -57,6 +57,18 @@ fraud:
   scenario_count: 5
   hard_negative_rate: 1.0
 
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 1.0
+  customer_dispute_probability: 1.0
+  alert_delay_seconds: 60
+  case_open_delay_seconds: 300
+  confirmation_delay_seconds: 86400
+  customer_dispute_delay_seconds: 172800
+  label_delay_seconds: 3600
+
 quality:
   profile: realistic
 

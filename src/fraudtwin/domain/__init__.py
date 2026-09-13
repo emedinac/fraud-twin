@@ -1,6 +1,16 @@
 """Immutable domain entities used by the simulator."""
 
 from fraudtwin.domain.behavior import BehaviorProfile
+from fraudtwin.domain.cases import (
+    CustomerDispute,
+    DelayedFraudLabel,
+    FraudAlert,
+    FraudCase,
+    FraudCaseConfirmation,
+    FraudWorkflowEventType,
+    InvestigationOutcome,
+    validate_fraud_workflow,
+)
 from fraudtwin.domain.entities import (
     Account,
     Card,
@@ -41,6 +51,13 @@ __all__ = [
     "FraudRecord",
     "FraudRecordType",
     "FraudScenarioType",
+    "FraudAlert",
+    "FraudCase",
+    "FraudCaseConfirmation",
+    "CustomerDispute",
+    "DelayedFraudLabel",
+    "FraudWorkflowEventType",
+    "InvestigationOutcome",
     "LedgerEntry",
     "Payment",
     "PaymentEvent",
@@ -56,4 +73,5 @@ __all__ = [
     "validate_pix_lifecycle",
     "validate_payment_lifecycle",
     "validate_ledger",
+    "validate_fraud_workflow",
 ]

@@ -1,5 +1,12 @@
 # Release notes
 
+## 0.7.0 — Milestone 7
+
+- Added deterministic fraud alerts, fraud cases, case confirmations, customer dispute events, and delayed fraud labels derived from M6 scenario records and hard negatives.
+- Added explicit fraud occurrence, investigation, and label-availability timestamps with causal IDs and relationship validation.
+- Added strict fraud workflow probabilities and timing configuration, typed M7 Parquet schemas, and alert/case/confirmation/dispute/label manifest counts.
+- Preserved CARD, PIX-like, account-transfer, lifecycle, fraud-scenario, hard-negative, ledger, and reconciliation behavior; deferred M8 data-quality injection and all later infrastructure.
+
 ## 0.6.0 — Milestone 6
 
 - Added deterministic F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack scenario generation.

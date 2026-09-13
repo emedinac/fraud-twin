@@ -246,6 +246,21 @@ class FraudConfig(_StrictModel):
         return self
 
 
+class FraudWorkflowConfig(_StrictModel):
+    """Operational fraud alert, case, dispute, and label timing controls."""
+
+    enabled: bool = True
+    alert_probability: float = Field(default=1.0, ge=0, le=1)
+    case_open_probability: float = Field(default=1.0, ge=0, le=1)
+    confirmation_probability: float = Field(default=1.0, ge=0, le=1)
+    customer_dispute_probability: float = Field(default=1.0, ge=0, le=1)
+    alert_delay_seconds: Annotated[int, Field(ge=0)] = 60
+    case_open_delay_seconds: Annotated[int, Field(ge=0)] = 300
+    confirmation_delay_seconds: Annotated[int, Field(ge=0)] = 86_400
+    customer_dispute_delay_seconds: Annotated[int, Field(ge=0)] = 172_800
+    label_delay_seconds: Annotated[int, Field(ge=0)] = 3_600
+
+
 class QualityConfig(_StrictModel):
     """Data-quality profile to apply in later milestones."""
 
@@ -270,6 +285,7 @@ class SimulationRunConfig(_StrictModel):
     card_lifecycle: CardLifecycleConfig = Field(default_factory=CardLifecycleConfig)
     pix_lifecycle: PixLifecycleConfig = Field(default_factory=PixLifecycleConfig)
     fraud: FraudConfig
+    fraud_workflow: FraudWorkflowConfig = Field(default_factory=FraudWorkflowConfig)
     quality: QualityConfig
     outputs: OutputsConfig
 
