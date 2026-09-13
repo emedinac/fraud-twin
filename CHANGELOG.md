@@ -1,11 +1,11 @@
 # Release notes
 
-## 0.2.0 — Milestone 1
+## 0.2.0 — Milestone 2
 
 - Added deterministic synthetic entity generation for customers, institutions, accounts, cards, merchants, devices, and PIX-like keys.
 - Added typed Polars Parquet output, entity counts in manifests, relationship validation, and an opt-in 100k-customer smoke test.
 
-## 0.1.0 — Milestone 0
+## 0.1.0 — Milestone 1
 
 Initial repository foundation:
 
