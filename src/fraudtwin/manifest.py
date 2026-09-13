@@ -29,6 +29,28 @@ class RunManifest(BaseModel):
     quality_fault_rates: dict[str, float] = Field(default_factory=dict)
 
 
+class DatasetManifest(BaseModel):
+    """Deterministic lineage and reproducibility metadata for an M9 dataset."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_id: str
+    dataset_version: str
+    source_run_id: str
+    source_manifest_hash: str
+    generator_version: str
+    seed: int
+    configuration_hash: str
+    parameters: dict[str, object]
+    split_boundaries: dict[str, str]
+    feature_definitions: dict[str, dict[str, object]]
+    label_definition: dict[str, object]
+    source_run_information: dict[str, object]
+    reproducibility: dict[str, object]
+    row_counts: dict[str, int]
+    schema_version: str
+
+
 def _git_commit() -> str:
     """Return the current commit when running from a Git checkout."""
 

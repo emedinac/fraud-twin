@@ -107,3 +107,19 @@ Use a temporary YAML override to exercise a fault profile without changing the
 tracked minimal configuration. The M8 tests cover reproducibility, independent
 fault settings, optional-field handling, invalid values, source timing,
 delivery ordering, spikes, Parquet schemas, manifests, and CLI generation.
+
+The focused M9 checks are:
+
+```bash
+poetry run pytest tests/test_dataset.py
+poetry run fraudtwin config validate configs/minimal.yaml
+poetry run fraudtwin generate configs/minimal.yaml --output-dir /tmp/fraudtwin-m9
+poetry run fraudtwin ml build-dataset configs/minimal.yaml \
+  --run-id <run-id> --output-dir /tmp/fraudtwin-m9 --label-delay-aware
+```
+
+M9 dataset rows are ordered by stable payment ID. Features are computed from
+prior business events after filtering on source availability, and labels are
+filtered by label availability and configured delay. Dataset manifests make
+the source run, parameters, split boundaries, schema, and row hash explicit.
+M10 replay and rolling backtests are intentionally not part of this release.

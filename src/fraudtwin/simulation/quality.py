@@ -346,17 +346,20 @@ class QualityFaultInjector:
         *,
         key: Callable[[PaymentEvent], str | None] = lambda event: event.payment_id,
     ) -> tuple[PaymentEvent, ...]:
+        groups: dict[str | None, list[PaymentEvent]] = {}
         last_position_by_key: dict[str | None, int] = {}
         for position, event in enumerate(events):
-            last_position_by_key[key(event)] = position
+            event_key = key(event)
+            groups.setdefault(event_key, []).append(event)
+            last_position_by_key[event_key] = position
         result: list[PaymentEvent] = []
         for position, event in enumerate(events):
             result.append(event)
-            if key(event) not in selected:
+            event_key = key(event)
+            if event_key not in selected:
                 continue
-            group = tuple(candidate for candidate in events if key(candidate) == key(event))
-            if position == last_position_by_key[key(event)]:
-                result.extend(group * (multiplier - 1))
+            if position == last_position_by_key[event_key]:
+                result.extend(groups[event_key] * (multiplier - 1))
         return tuple(result)
 
     def _apply_out_of_order(

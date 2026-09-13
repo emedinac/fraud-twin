@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -7,12 +8,19 @@ import typer
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
 from fraudtwin.manifest import create_manifest, write_manifest
+from fraudtwin.ml import (
+    PointInTimeDatasetBuilder,
+    load_generated_run,
+    write_point_in_time_dataset,
+)
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.parquet import write_behavior_parquet, write_entity_parquet
 
 app = typer.Typer(help="Synthetic financial-system and fraud digital twin.")
 config_app = typer.Typer(help="Validate simulation configuration.")
+ml_app = typer.Typer(help="Build local point-in-time ML datasets.")
 app.add_typer(config_app, name="config")
+app.add_typer(ml_app, name="ml")
 
 
 def _load_or_exit(path: Path) -> SimulationRunConfig:
@@ -79,8 +87,20 @@ def generate(
         }
     )
     manifest_path = write_manifest(manifest, output_dir)
+    dataset_path: Path | None = None
+    dataset_manifest_path: Path | None = None
+    if config.dataset.enabled:
+        dataset = PointInTimeDatasetBuilder(
+            config, entity_dataset, behavior_dataset, manifest
+        ).build()
+        dataset_path, dataset_manifest_path = write_point_in_time_dataset(
+            dataset, run_dir / "ml" / "dataset.parquet"
+        )
     typer.echo(f"Run generated: {manifest.run_id}")
     typer.echo(f"Manifest: {manifest_path}")
+    if dataset_path is not None and dataset_manifest_path is not None:
+        typer.echo(f"Dataset: {dataset_path}")
+        typer.echo(f"Dataset manifest: {dataset_manifest_path}")
     typer.echo("Generated entity counts:")
     for entity_name, count in entity_counts.items():
         typer.echo(f"  {entity_name}: {count}")
@@ -122,6 +142,59 @@ def validate_ledger_command(
         typer.echo(f"Ledger validation failed: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"Ledger is valid for run {run_id}.")
+
+
+@ml_app.command("build-dataset")
+def build_dataset(
+    path: Annotated[Path, typer.Argument(help="YAML configuration file.")],
+    run_id: Annotated[str, typer.Option("--run-id", help="Existing generated run identifier.")],
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Directory containing the source run."),
+    ] = Path("runs"),
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", help="Destination Parquet file."),
+    ] = None,
+    from_time: Annotated[
+        str | None,
+        typer.Option("--from", help="Optional ISO-8601 prediction range start."),
+    ] = None,
+    to_time: Annotated[
+        str | None,
+        typer.Option("--to", help="Optional ISO-8601 prediction range end."),
+    ] = None,
+    label_delay_aware: Annotated[
+        bool,
+        typer.Option("--label-delay-aware", help="Exclude labels unavailable at prediction time."),
+    ] = False,
+) -> None:
+    """Build a deterministic point-in-time dataset from an existing run."""
+
+    config = _load_or_exit(path)
+    try:
+        start = datetime.fromisoformat(from_time) if from_time is not None else None
+        end = datetime.fromisoformat(to_time) if to_time is not None else None
+        values = config.model_dump(mode="python")
+        dataset_values = values["dataset"]
+        if start is not None:
+            dataset_values["start"] = start
+        if end is not None:
+            dataset_values["end"] = end
+        if label_delay_aware:
+            dataset_values["unresolved_labels"] = "exclude"
+        config = SimulationRunConfig.model_validate(values)
+        run_dir = output_dir / run_id
+        entities, behavior, source_manifest = load_generated_run(run_dir)
+        dataset = PointInTimeDatasetBuilder(config, entities, behavior, source_manifest).build()
+        destination = output or run_dir / "ml" / "dataset.parquet"
+        parquet_path, manifest_path = write_point_in_time_dataset(dataset, destination)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Dataset generation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Dataset generated: {parquet_path}")
+    typer.echo(f"Dataset manifest: {manifest_path}")
+    typer.echo(f"Rows: {dataset.count}")
 
 
 def main() -> None:

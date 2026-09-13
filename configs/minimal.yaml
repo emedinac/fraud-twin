@@ -72,6 +72,10 @@ fraud_workflow:
 quality:
   profile: clean
 
+dataset:
+  enabled: true
+  unresolved_labels: include
+
 outputs:
   parquet: true
   postgres: false

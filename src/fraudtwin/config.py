@@ -1,6 +1,6 @@
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
@@ -12,6 +12,29 @@ FraudScenarioId = Literal["F01", "F02", "F03", "F04", "F05"]
 FRAUD_SCENARIO_IDS: tuple[FraudScenarioId, ...] = ("F01", "F02", "F03", "F04", "F05")
 Speed = Literal["batch", "real_time", "accelerated"]
 QualityProfile = Literal["clean", "realistic", "hostile"]
+UnresolvedLabelPolicy = Literal["exclude", "include"]
+FeatureWindowName = Literal[
+    "transaction_count_1m",
+    "transaction_count_5m",
+    "transaction_count_1h",
+    "transaction_count_24h",
+    "transaction_count_7d",
+    "transaction_count_30d",
+    "transaction_amount_1h",
+    "transaction_amount_24h",
+    "transaction_amount_7d",
+    "avg_transaction_amount_30d",
+    "max_transaction_amount_7d",
+    "distinct_merchants_1d",
+    "distinct_merchants_30d",
+    "merchant_fraud_rate_historical",
+    "distinct_countries_24h",
+    "device_customer_count_30d",
+    "customers_per_device_24h",
+    "confirmed_fraud_count_90d",
+    "fraud_loss_365d",
+    "days_since_last_confirmed_fraud",
+]
 # Five seconds of source delay plus one second each for ingestion and processing.
 CARD_EVENT_ENVELOPE_DELAY_SECONDS = 7
 PIX_EVENT_ENVELOPE_DELAY_SECONDS = 4
@@ -395,6 +418,89 @@ class OutputsConfig(_StrictModel):
     kafka: bool = False
 
 
+class TemporalSplitConfig(_StrictModel):
+    """Deterministic, chronological train/validation/test split settings."""
+
+    train_fraction: float = Field(default=0.7, gt=0, lt=1)
+    validation_fraction: float = Field(default=0.15, gt=0, lt=1)
+    test_fraction: float = Field(default=0.15, gt=0, lt=1)
+    train_end: datetime | None = None
+    validation_end: datetime | None = None
+    test_end: datetime | None = None
+
+    @field_validator("train_end", "validation_end", "test_end")
+    @classmethod
+    def split_timestamps_must_include_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("temporal split timestamps must include a timezone")
+        return value
+
+    @model_validator(mode="after")
+    def split_fractions_must_form_distribution(self) -> "TemporalSplitConfig":
+        if abs(self.train_fraction + self.validation_fraction + self.test_fraction - 1.0) > 1e-9:
+            raise ValueError("temporal split fractions must sum to 1.0")
+        if self.train_end is not None and self.validation_end is not None:
+            if self.validation_end <= self.train_end:
+                raise ValueError("validation_end must be after train_end")
+        if self.validation_end is not None and self.test_end is not None:
+            if self.test_end <= self.validation_end:
+                raise ValueError("test_end must be after validation_end")
+        return self
+
+
+def _default_feature_windows() -> dict[FeatureWindowName, int]:
+    return {
+        "transaction_count_1m": 60,
+        "transaction_count_5m": 5 * 60,
+        "transaction_count_1h": 60 * 60,
+        "transaction_count_24h": 24 * 60 * 60,
+        "transaction_count_7d": 7 * 24 * 60 * 60,
+        "transaction_count_30d": 30 * 24 * 60 * 60,
+        "transaction_amount_1h": 60 * 60,
+        "transaction_amount_24h": 24 * 60 * 60,
+        "transaction_amount_7d": 7 * 24 * 60 * 60,
+        "avg_transaction_amount_30d": 30 * 24 * 60 * 60,
+        "max_transaction_amount_7d": 7 * 24 * 60 * 60,
+        "distinct_merchants_1d": 24 * 60 * 60,
+        "distinct_merchants_30d": 30 * 24 * 60 * 60,
+        "merchant_fraud_rate_historical": 365 * 24 * 60 * 60,
+        "distinct_countries_24h": 24 * 60 * 60,
+        "device_customer_count_30d": 30 * 24 * 60 * 60,
+        "customers_per_device_24h": 24 * 60 * 60,
+        "confirmed_fraud_count_90d": 90 * 24 * 60 * 60,
+        "fraud_loss_365d": 365 * 24 * 60 * 60,
+        "days_since_last_confirmed_fraud": 365 * 24 * 60 * 60,
+    }
+
+
+class PointInTimeDatasetConfig(_StrictModel):
+    """Configuration for the local M9 historical dataset builder."""
+
+    enabled: bool = True
+    start: datetime | None = None
+    end: datetime | None = None
+    prediction_delay_seconds: Annotated[int, Field(ge=0)] = 0
+    feature_windows: dict[FeatureWindowName, Annotated[int, Field(gt=0)]] = Field(
+        default_factory=_default_feature_windows
+    )
+    label_delay_seconds: Annotated[int, Field(ge=0)] | None = None
+    unresolved_labels: UnresolvedLabelPolicy = "exclude"
+    splits: TemporalSplitConfig = Field(default_factory=TemporalSplitConfig)
+
+    @field_validator("start", "end")
+    @classmethod
+    def dataset_timestamps_must_include_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("dataset timestamps must include a timezone")
+        return value
+
+    @model_validator(mode="after")
+    def dataset_range_must_be_ordered(self) -> "PointInTimeDatasetConfig":
+        if self.start is not None and self.end is not None and self.end <= self.start:
+            raise ValueError("dataset end must be after dataset start")
+        return self
+
+
 class SimulationRunConfig(_StrictModel):
     """Top-level configuration accepted by the CLI."""
 
@@ -408,6 +514,7 @@ class SimulationRunConfig(_StrictModel):
     fraud_workflow: FraudWorkflowConfig = Field(default_factory=FraudWorkflowConfig)
     quality: QualityConfig
     outputs: OutputsConfig
+    dataset: PointInTimeDatasetConfig = Field(default_factory=PointInTimeDatasetConfig)
 
     @model_validator(mode="after")
     def card_lifecycle_must_fit_simulation_window(self) -> "SimulationRunConfig":
@@ -431,6 +538,22 @@ class SimulationRunConfig(_StrictModel):
                 raise ValueError(
                     f"fraud scenario {scenario_id} window must fit the simulation window"
                 )
+        dataset_start = self.dataset.start or self.simulation.start
+        dataset_end = self.dataset.end or (
+            self.simulation.start + timedelta(days=self.simulation.duration_days)
+        )
+        simulation_end = self.simulation.start + timedelta(days=self.simulation.duration_days)
+        if dataset_start < self.simulation.start or dataset_end > simulation_end:
+            raise ValueError("dataset range must fit the simulation window")
+        for boundary_name, boundary in (
+            ("train_end", self.dataset.splits.train_end),
+            ("validation_end", self.dataset.splits.validation_end),
+            ("test_end", self.dataset.splits.test_end),
+        ):
+            if boundary is not None and not dataset_start < boundary <= dataset_end:
+                raise ValueError(f"dataset split {boundary_name} must fit the dataset range")
+        if self.dataset.splits.test_end is not None and self.dataset.splits.test_end != dataset_end:
+            raise ValueError("dataset test_end must equal the dataset end")
         return self
 
 
@@ -453,11 +576,12 @@ def config_hash(
     *,
     include_card_lifecycle: bool = True,
     include_pix_lifecycle: bool = True,
+    include_dataset: bool = False,
 ) -> str:
     """Return a stable SHA-256 hash of the validated configuration.
 
     The optional compatibility modes keep the base payment stream identity
-    unchanged when only lifecycle settings differ.
+    unchanged when only lifecycle or M9 dataset settings differ.
     """
 
     return hashlib.sha256(
@@ -465,6 +589,7 @@ def config_hash(
             config,
             include_card_lifecycle=include_card_lifecycle,
             include_pix_lifecycle=include_pix_lifecycle,
+            include_dataset=include_dataset,
         ).encode("utf-8")
     ).hexdigest()
 
@@ -474,6 +599,7 @@ def _canonical_config(
     *,
     include_card_lifecycle: bool = True,
     include_pix_lifecycle: bool = True,
+    include_dataset: bool = True,
 ) -> str:
     """Serialize configuration once for hashes and deterministic stream IDs."""
 
@@ -482,6 +608,8 @@ def _canonical_config(
         payload.pop("card_lifecycle", None)
     if not include_pix_lifecycle:
         payload.pop("pix_lifecycle", None)
+    if not include_dataset:
+        payload.pop("dataset", None)
     canonical = json.dumps(
         payload,
         sort_keys=True,

@@ -10,9 +10,9 @@ FraudTwin creates a small, coherent financial world that behaves more like a rea
 
 The project is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and temporal patterns before introducing data-quality faults, streaming, or production infrastructure.
 
-## Current release: 0.8.0 — Chaos and Data Quality
+## Current release: 0.9.0 — Point-in-Time ML Dataset
 
-Milestones 3, 4, 5, and 6 are complete. Every generated customer receives a deterministic
+Milestones 3 through 9 are complete. Every generated customer receives a deterministic
 behavior profile, and payments reflect customer-specific preferences for:
 
 - Spending level, income, and monthly budget
@@ -23,6 +23,8 @@ behavior profile, and payments reflect customer-specific preferences for:
 - Travel frequency
 
 The current release generates legitimate CARD, PIX-like, and account-transfer payments, plus explicit F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack scenarios when fraud generation is enabled. Fraud events retain the existing event envelope and carry scenario ID, type, trigger, reason, and affected entities. The fraud record table contains scenario-linked truth records and legitimate hard negatives. M7 derives fraud alerts, cases, confirmations, customer dispute events, and delayed labels from those records. M8 adds deterministic duplicates, missing optional fields, invalid values, late and out-of-order events, source delay, fraud spikes, traffic spikes, and measured quality-fault counts; chargebacks remain deferred.
+
+M9 adds a local point-in-time dataset builder over those generated records. Historical features use only source records whose `source_available_at` is no later than the row's `prediction_time`; business `event_time` remains separate from feature availability. Labels are included only after their configured `label_available_at` and label delay, or can be retained as unresolved rows for inspection. Models, feature stores, replay, backtesting, and production infrastructure remain deferred.
 
 ## Quick start
 
@@ -71,11 +73,42 @@ runs/<run_id>/
     ├── case_confirmations.parquet
     ├── customer_disputes.parquet
     └── fraud_labels.parquet
+└── ml/
+    ├── dataset.parquet
+    └── dataset_manifest.json
 ```
 
 All Parquet files use explicit, stable schemas and column ordering. Generated payments reference existing accounts, cards, merchants, devices, and customers. Amounts are positive, payment timestamps stay within the configured simulation window, delayed workflow timestamps follow their causal evidence, and no real personal data or payment credentials are used.
 
 The manifest records the seed, configuration hash, schema versions, entity counts, payment/lifecycle/ledger counts, fraud event/record counts, M7 alert/case/confirmation/dispute/label counts, per-scenario fraud rates, and M8 quality-fault counts and requested/realized rates. The default configuration uses the clean quality profile and keeps fraud disabled, so it produces the same legitimate CARD, PIX-like, and account-transfer behavior as the previous release.
+
+Build or rebuild the M9 dataset from an existing run with:
+
+```bash
+poetry run fraudtwin ml build-dataset configs/minimal.yaml \
+  --run-id <run-id> --output-dir runs
+```
+
+The dataset manifest records the source run, configuration parameters, feature and label definitions, temporal split boundaries, stable schema columns, row hash, and deterministic ordering. Use `--label-delay-aware` to exclude unresolved labels.
+
+M9 settings live under `dataset`:
+
+```yaml
+dataset:
+  enabled: true
+  prediction_delay_seconds: 0
+  label_delay_seconds: 3600
+  unresolved_labels: exclude  # exclude or include
+  splits:
+    train_fraction: 0.70
+    validation_fraction: 0.15
+    test_fraction: 0.15
+```
+
+Feature windows are explicit positive-second values keyed by the documented
+feature names. Unknown fields, naive timestamps, invalid ranges, split
+fractions, windows, and label delays are rejected during configuration
+validation.
 
 ## Why behavior matters
 
@@ -223,7 +256,8 @@ in `quality_fault_rates`.
 | PIX-like lifecycle and transfer ledger | Available |
 | Delayed labels, alerts, cases, confirmations, and disputes | Available |
 | Deterministic M8 data-quality faults and measurements | Available |
-| Kafka, PostgreSQL, Flink, and ML workflows | Planned |
+| Point-in-time historical ML dataset and delayed labels | Available |
+| Kafka, PostgreSQL, Flink, models, feature stores, and replay/backtesting | Planned |
 
 FraudTwin is being built milestone by milestone. The priority is a correct, readable, reproducible simulation core before adding distributed systems or advanced modeling.
 

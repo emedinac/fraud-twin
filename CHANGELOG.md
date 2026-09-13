@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.9.0 — Milestone 9
+
+- Added a local, deterministic point-in-time ML dataset builder over existing M1-M8 records.
+- Added historical transaction, merchant, device, account, and label-aware fraud features with separate business-event and feature-availability timestamps.
+- Added configured label-delay enforcement, unresolved-label handling, reproducible temporal train/validation/test splits, and stable Parquet schemas.
+- Added dataset manifests containing source-run lineage, configuration, split, feature, label, schema, and row-reproducibility metadata.
+- Added `fraudtwin ml build-dataset` for building a dataset from an existing generated run without regenerating source records; M10 replay and backtesting remain deferred.
+
 ## 0.8.0 — Milestone 8
 
 - Added a separate deterministic chaos/data-quality layer for duplicate records and events, missing optional fields, invalid values, late events, out-of-order delivery, configurable source delay, fraud spikes, and traffic spikes.
