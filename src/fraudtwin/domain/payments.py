@@ -18,6 +18,8 @@ CardLifecycleEventType = Literal[
     "CARD_CLEARED",
     "CARD_SETTLED",
     "CARD_REFUNDED",
+    "CARD_CHARGEBACK_CREATED",
+    "CARD_CHARGEBACK_RESOLVED",
 ]
 PixLifecycleEventType = Literal[
     "PIX_INITIATED",
@@ -50,6 +52,8 @@ CARD_LIFECYCLE_EVENT_TYPES = (
     "CARD_CLEARED",
     "CARD_SETTLED",
     "CARD_REFUNDED",
+    "CARD_CHARGEBACK_CREATED",
+    "CARD_CHARGEBACK_RESOLVED",
 )
 PIX_LIFECYCLE_EVENT_TYPES = (
     "PIX_INITIATED",
@@ -67,10 +71,12 @@ _CARD_LIFECYCLE_TRANSITIONS: dict[str, tuple[str, ...]] = {
     "CARD_AUTHORIZED": ("CARD_REVERSED", "CARD_CAPTURED"),
     "CARD_CAPTURED": ("CARD_REVERSED", "CARD_CLEARED"),
     "CARD_CLEARED": ("CARD_SETTLED",),
-    "CARD_SETTLED": ("CARD_REFUNDED",),
+    "CARD_SETTLED": ("CARD_REFUNDED", "CARD_CHARGEBACK_CREATED"),
+    "CARD_REFUNDED": ("CARD_CHARGEBACK_CREATED",),
+    "CARD_CHARGEBACK_CREATED": ("CARD_CHARGEBACK_RESOLVED",),
     "CARD_DECLINED": (),
     "CARD_REVERSED": (),
-    "CARD_REFUNDED": (),
+    "CARD_CHARGEBACK_RESOLVED": (),
 }
 
 
@@ -99,6 +105,7 @@ class Payment(_EntityModel):
         "REJECTED",
         "RECEIVED",
         "RETURNED",
+        "CHARGEBACK_RESOLVED",
     ]
     payer_institution_id: str | None = None
     payee_institution_id: str | None = None
@@ -211,6 +218,7 @@ def validate_card_lifecycle(payment: Payment, events: tuple[PaymentEvent, ...]) 
         "CARD_REVERSED": "REVERSED",
         "CARD_SETTLED": "SETTLED",
         "CARD_REFUNDED": "REFUNDED",
+        "CARD_CHARGEBACK_RESOLVED": "CHARGEBACK_RESOLVED",
     }.get(events[-1].event_type)
     if expected_status is None or payment.current_status != expected_status:
         raise ValueError("card payment status does not match its lifecycle terminal event")
@@ -324,7 +332,19 @@ def validate_ledger(
     expected_events = {
         event.event_id
         for event in events
-        if event.event_type in {"PIX_SETTLED", "PIX_RETURNED", "TRANSFER_COMPLETED"}
+        if event.event_type
+        in {
+            "PIX_SETTLED",
+            "PIX_RETURNED",
+            "TRANSFER_COMPLETED",
+            "CARD_SETTLED",
+            "CARD_REFUNDED",
+            "CARD_CHARGEBACK_RESOLVED",
+        }
+        and (
+            event.event_type not in {"CARD_SETTLED", "CARD_REFUNDED", "CARD_CHARGEBACK_RESOLVED"}
+            or payment_by_id[event.payment_id].payee_account_id is not None
+        )
     }
     if set(entries_by_event) != expected_events:
         raise ValueError("posted transfer events and ledger events do not reconcile")
@@ -338,7 +358,7 @@ def validate_ledger(
         payee = payment.payee_account_id
         expected = (
             {(payer, "DEBIT"), (payee, "CREDIT")}
-            if event.event_type in {"PIX_SETTLED", "TRANSFER_COMPLETED"}
+            if event.event_type in {"PIX_SETTLED", "TRANSFER_COMPLETED", "CARD_SETTLED"}
             else {(payer, "CREDIT"), (payee, "DEBIT")}
         )
         if {(entry.account_id, entry.entry_type) for entry in event_entries} != expected:

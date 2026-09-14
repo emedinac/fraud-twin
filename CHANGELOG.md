@@ -1,5 +1,22 @@
 # Release notes
 
+## 0.11.0 — Methodology completion for Milestones 1–8
+
+- **Milestone 1:** added optional effective-dated customer/account state history
+  with deterministic Parquet output and compatible merchant-acquirer selection.
+- **Milestone 2:** enforced active account/card eligibility and card/account
+  spend limits during payment generation.
+- **Milestone 3:** made spending-level segment weights configurable and added
+  beginning/end-of-month, payday, holiday, travel-period, and merchant-hour
+  temporal controls.
+- **Milestone 4:** added configurable card chargeback creation/resolution and
+  card lifecycle participant references.
+- **Milestone 8:** added deterministic source-outage and scheduled schema-change
+  injectors, per-fault audit metadata, and an exported pristine oracle snapshot
+  before corruption.
+- **Milestone 10:** replay now carries selected entity state-history records
+  through the immutable replay artifact.
+
 ## 0.10.0 — Milestone 10
 
 - Added deterministic historical replay from existing generated runs with half-open period selection, event-time ordering, original-delivery ordering, full domain-record preservation, and replay fingerprints.

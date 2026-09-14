@@ -81,13 +81,28 @@ def count_pix_lifecycle_events(events: Iterable[PaymentEvent]) -> dict[str, int]
     return count_lifecycle_events(events, PIX_LIFECYCLE_EVENT_TYPES)
 
 
-def _event_times(event_time: datetime, source_delay_seconds: int) -> tuple[datetime, ...]:
+def _event_times(
+    event_time: datetime, source_delay_seconds: int
+) -> tuple[datetime, datetime, datetime]:
     """Return source, ingestion, and processing times for one event."""
 
     source_available_at = event_time + timedelta(seconds=source_delay_seconds)
     ingested_at = source_available_at + timedelta(seconds=1)
     processed_at = ingested_at + timedelta(seconds=1)
     return source_available_at, ingested_at, processed_at
+
+
+def payment_event_times(
+    event_time: datetime, rail: PaymentRail
+) -> tuple[datetime, datetime, datetime]:
+    """Return source, ingestion, and processing times for a payment rail."""
+
+    source_delay_seconds = {
+        "CARD": CARD_SOURCE_DELAY_SECONDS,
+        "PIX": PIX_SOURCE_DELAY_SECONDS,
+        "ACCOUNT_TRANSFER": ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS,
+    }[rail]
+    return _event_times(event_time, source_delay_seconds)
 
 
 @dataclass(frozen=True)
@@ -115,6 +130,24 @@ class PaymentDataset:
         return count_pix_lifecycle_events(self.payment_events)
 
 
+@dataclass(frozen=True)
+class _PaymentDetails:
+    """Rail-specific fields assembled before creating shared payment records."""
+
+    amount: float
+    merchant_id: str | None
+    card_id: str | None
+    payer_account_id: str
+    payee_account_id: str | None
+    payer_institution_id: str | None
+    payee_institution_id: str | None
+    payer_pix_key_id: str | None
+    payee_pix_key_id: str | None
+    payment_type: PaymentType
+    event_type: PaymentEventType
+    online: bool
+
+
 class PaymentGenerator:
     """Generate positive, relationship-valid, legitimate payment events."""
 
@@ -135,6 +168,7 @@ class PaymentGenerator:
         self.merchants = merchants
         self.simulation_run_id = simulation_run_id or self._stable_run_id()
         self.accounts_by_customer = _group_by(accounts, lambda account: account.customer_id)
+        self.accounts_by_institution = _group_by(accounts, lambda account: account.institution_id)
         self.cards_by_customer = _group_by(cards, lambda card: card.customer_id)
         self.accounts_by_id = {account.account_id: account for account in accounts}
         self.devices_by_id = {device.device_id: device for device in devices}
@@ -143,6 +177,8 @@ class PaymentGenerator:
         self._valid_hours_by_day = self._build_valid_hours_by_day()
         self._card_max_delay_seconds = config.card_lifecycle.maximum_delay_seconds
         self._pix_max_delay_seconds = config.pix_lifecycle.maximum_delay_seconds
+        self._card_daily_spend: dict[tuple[str, date], float] = {}
+        self._account_spend: dict[str, float] = {}
 
     def _stable_run_id(self) -> str:
         # Lifecycle settings must not change the base payment stream ID.
@@ -187,11 +223,18 @@ class PaymentGenerator:
         )
         available: list[PaymentRail] = []
         for rail in configured:
-            if rail == "CARD" and profile.customer_id in self.cards_by_customer and self.merchants:
+            if (
+                rail == "CARD"
+                and any(
+                    card.status == "ACTIVE" and card.expires_at > self.start
+                    for card in self.cards_by_customer.get(profile.customer_id, ())
+                )
+                and self.merchants
+            ):
                 available.append(rail)
-            elif (
-                rail in ("PIX", "ACCOUNT_TRANSFER")
-                and profile.customer_id in self.accounts_by_customer
+            elif rail in ("PIX", "ACCOUNT_TRANSFER") and any(
+                account.status == "ACTIVE"
+                for account in self.accounts_by_customer.get(profile.customer_id, ())
             ):
                 if rail == "ACCOUNT_TRANSFER" or any(
                     account.account_id in self.pix_keys_by_account
@@ -217,14 +260,31 @@ class PaymentGenerator:
 
     def _sample_time(self, profile: BehaviorProfile, rng: Random) -> datetime:
         active_hours = tuple(hour for hour, weight in enumerate(profile.hour_weights) if weight > 0)
+        behavior = self.config.behavior
+        allowed_months = set(behavior.travel_period_months)
+        holiday_dates = set(behavior.holiday_dates)
         day_candidates = tuple(
-            current_day for current_day in self._days if self._valid_hours_by_day[current_day]
+            current_day
+            for current_day in self._days
+            if self._valid_hours_by_day[current_day] and current_day.month in allowed_months
         )
-        day_weights = [
-            profile.weekday_weights[current_day.weekday()]
-            * sum(profile.hour_weights[hour] for hour in self._valid_hours_by_day[current_day])
-            for current_day in day_candidates
-        ]
+        day_weights = []
+        for current_day in day_candidates:
+            weight = profile.weekday_weights[current_day.weekday()]
+            if current_day.day <= 3:
+                weight *= behavior.beginning_of_month_weight
+            if current_day.day >= 28:
+                weight *= behavior.end_of_month_weight
+            if current_day.day in behavior.payday_days:
+                weight *= behavior.payday_weight
+            if current_day.isoformat() in holiday_dates:
+                weight *= behavior.holiday_weight
+            weight *= sum(
+                profile.hour_weights[hour]
+                for hour in self._valid_hours_by_day[current_day]
+                if hour in behavior.merchant_active_hours
+            )
+            day_weights.append(weight)
         if not day_candidates:
             seconds = rng.randrange(max(1, int((self.end - self.start).total_seconds())))
             return self.start + timedelta(seconds=seconds)
@@ -233,8 +293,12 @@ class PaymentGenerator:
 
         current_day = _weighted_choice(rng, tuple(day_candidates), tuple(day_weights))
         valid_hours = tuple(
-            hour for hour in self._valid_hours_by_day[current_day] if hour in active_hours
+            hour
+            for hour in self._valid_hours_by_day[current_day]
+            if hour in active_hours and hour in behavior.merchant_active_hours
         )
+        if not valid_hours:
+            valid_hours = tuple(self._valid_hours_by_day[current_day])
         hour_weights = tuple(profile.hour_weights[hour] for hour in valid_hours)
         hour = _weighted_choice(rng, valid_hours, hour_weights)
         event_time = datetime.combine(current_day, time(hour), tzinfo=UTC) + timedelta(
@@ -314,129 +378,186 @@ class PaymentGenerator:
         self, payer_account_id: str, rng: Random, *, require_pix_key: bool = False
     ) -> Account:
         alternatives = tuple(
-            account for account in self.accounts if account.account_id != payer_account_id
+            account
+            for account in self.accounts
+            if account.account_id != payer_account_id and account.status == "ACTIVE"
         )
         if require_pix_key:
             keyed = tuple(
                 account
                 for account in alternatives
                 if account.account_id in self.pix_keys_by_account
+                and any(
+                    key.status == "ACTIVE" for key in self.pix_keys_by_account[account.account_id]
+                )
             )
             alternatives = keyed or tuple(
                 account
                 for account in self.accounts
-                if account.account_id in self.pix_keys_by_account
+                if account.status == "ACTIVE" and account.account_id in self.pix_keys_by_account
             )
         return rng.choice(alternatives or self.accounts)
 
-    def _generate_one(
-        self, number: int, profile: BehaviorProfile, rng: Random
-    ) -> tuple[Payment, PaymentEvent]:
-        rail = self._choose_rail(profile, rng)
-        initiated_at = (
-            self._sample_lifecycle_time(
+    def _initiated_at(self, profile: BehaviorProfile, rail: PaymentRail, rng: Random) -> datetime:
+        if rail == "CARD":
+            return self._sample_lifecycle_time(
                 profile,
                 rng,
                 self._card_max_delay_seconds,
                 CARD_EVENT_ENVELOPE_DELAY_SECONDS,
                 "card",
             )
-            if rail == "CARD"
-            else (
-                self._sample_lifecycle_time(
-                    profile,
-                    rng,
-                    self._pix_max_delay_seconds,
-                    PIX_EVENT_ENVELOPE_DELAY_SECONDS,
-                    "PIX",
-                )
-                if rail == "PIX"
-                else self._sample_time(profile, rng)
+        if rail == "PIX":
+            return self._sample_lifecycle_time(
+                profile,
+                rng,
+                self._pix_max_delay_seconds,
+                PIX_EVENT_ENVELOPE_DELAY_SECONDS,
+                "PIX",
             )
+        return self._sample_time(profile, rng)
+
+    def _card_details(
+        self,
+        profile: BehaviorProfile,
+        initiated_at: datetime,
+        amount: float,
+        rng: Random,
+    ) -> _PaymentDetails:
+        cards = tuple(
+            card
+            for card in self.cards_by_customer[profile.customer_id]
+            if card.status == "ACTIVE" and card.expires_at > initiated_at
         )
+        if not cards:
+            raise ValueError("card payment requires an active, unexpired card")
+        card = rng.choice(cards)
+        payer_account_id = card.account_id
+        payer_institution_id = self.accounts_by_id[payer_account_id].institution_id
+        merchant = self._merchant(profile, rng)
+        settlement_accounts = tuple(
+            account
+            for account in self.accounts_by_institution.get(merchant.acquirer_id, ())
+            if account.status == "ACTIVE" and account.account_id != payer_account_id
+        )
+        payee_account_id = (
+            settlement_accounts[0].account_id if settlement_accounts else payer_account_id
+        )
+        amount = min(amount, card.transaction_limit)
+        spent = self._card_daily_spend.get((card.card_id, initiated_at.date()), 0.0)
+        remaining = max(0.0, card.daily_limit - spent)
+        if remaining < self.config.behavior.amount_min:
+            raise ValueError("card daily limit exhausted")
+        amount = min(amount, remaining)
+        account = self.accounts_by_id[payer_account_id]
+        account_spend = self._account_spend.get(account.account_id, 0.0)
+        available = max(
+            account.available_balance - account_spend,
+            account.ledger_balance + account.credit_limit + account.overdraft_limit - account_spend,
+        )
+        if available < self.config.behavior.amount_min:
+            raise ValueError("account spendable balance exhausted")
+        amount = min(amount, available)
+        self._card_daily_spend[(card.card_id, initiated_at.date())] = round(spent + amount, 2)
+        self._account_spend[account.account_id] = round(account_spend + amount, 2)
+        return _PaymentDetails(
+            amount=amount,
+            merchant_id=merchant.merchant_id,
+            card_id=card.card_id,
+            payer_account_id=payer_account_id,
+            payee_account_id=payee_account_id,
+            payer_institution_id=payer_institution_id,
+            payee_institution_id=merchant.acquirer_id,
+            payer_pix_key_id=None,
+            payee_pix_key_id=None,
+            payment_type="PURCHASE",
+            event_type="CARD_AUTHORIZATION_REQUESTED",
+            online=merchant.online_only or rng.random() < profile.online_purchase_rate,
+        )
+
+    def _transfer_details(
+        self,
+        profile: BehaviorProfile,
+        rail: PaymentRail,
+        amount: float,
+        rng: Random,
+    ) -> _PaymentDetails:
+        payer_candidates = tuple(
+            account
+            for account in self.accounts_by_customer[profile.customer_id]
+            if account.status == "ACTIVE"
+        )
+        if rail == "PIX":
+            keyed_payers = tuple(
+                account
+                for account in payer_candidates
+                if any(
+                    key.status == "ACTIVE"
+                    for key in self.pix_keys_by_account.get(account.account_id, ())
+                )
+            )
+            payer_candidates = keyed_payers or payer_candidates
+        payer_account = rng.choice(payer_candidates)
+        payee_account = self._payee_account(
+            payer_account.account_id, rng, require_pix_key=rail == "PIX"
+        )
+        payer_keys = self.pix_keys_by_account.get(payer_account.account_id, ())
+        payee_keys = self.pix_keys_by_account.get(payee_account.account_id, ())
+        return _PaymentDetails(
+            amount=amount,
+            merchant_id=None,
+            card_id=None,
+            payer_account_id=payer_account.account_id,
+            payee_account_id=payee_account.account_id,
+            payer_institution_id=payer_account.institution_id,
+            payee_institution_id=payee_account.institution_id,
+            payer_pix_key_id=(payer_keys[0].pix_key_id if rail == "PIX" and payer_keys else None),
+            payee_pix_key_id=(payee_keys[0].pix_key_id if rail == "PIX" and payee_keys else None),
+            payment_type="TRANSFER",
+            event_type="PIX_INITIATED" if rail == "PIX" else "TRANSFER_COMPLETED",
+            online=False,
+        )
+
+    def _generate_one(
+        self, number: int, profile: BehaviorProfile, rng: Random
+    ) -> tuple[Payment, PaymentEvent]:
+        rail = self._choose_rail(profile, rng)
+        initiated_at = self._initiated_at(profile, rail, rng)
         amount = self._sample_amount(profile, rng)
         device_id = self._device_id(profile, rng)
-        merchant_id: str | None = None
-        card_id: str | None = None
-        payee_account_id: str | None = None
-        payer_institution_id: str | None = None
-        payee_institution_id: str | None = None
-        payer_pix_key_id: str | None = None
-        payee_pix_key_id: str | None = None
-        payment_type: PaymentType
-        event_type: PaymentEventType
-
-        if rail == "CARD":
-            card = rng.choice(self.cards_by_customer[profile.customer_id])
-            card_id = card.card_id
-            payer_account_id = card.account_id
-            merchant = self._merchant(profile, rng)
-            merchant_id = merchant.merchant_id
-            payment_type = "PURCHASE"
-            online = merchant.online_only or rng.random() < profile.online_purchase_rate
-            event_type = "CARD_AUTHORIZATION_REQUESTED"
-        else:
-            payer_candidates = self.accounts_by_customer[profile.customer_id]
-            if rail == "PIX":
-                keyed_payers = tuple(
-                    account
-                    for account in payer_candidates
-                    if account.account_id in self.pix_keys_by_account
-                )
-                payer_candidates = keyed_payers or payer_candidates
-            payer_account = rng.choice(payer_candidates)
-            payer_account_id = payer_account.account_id
-            payee_account = self._payee_account(
-                payer_account_id, rng, require_pix_key=rail == "PIX"
-            )
-            payee_account_id = payee_account.account_id
-            payer_institution_id = payer_account.institution_id
-            payee_institution_id = payee_account.institution_id
-            if rail == "PIX":
-                payer_keys = self.pix_keys_by_account.get(payer_account_id, ())
-                payee_keys = self.pix_keys_by_account.get(payee_account_id, ())
-                payer_pix_key_id = payer_keys[0].pix_key_id if payer_keys else None
-                payee_pix_key_id = payee_keys[0].pix_key_id if payee_keys else None
-            payment_type = "TRANSFER"
-            online = False
-            event_type = "PIX_INITIATED" if rail == "PIX" else "TRANSFER_COMPLETED"
+        details = (
+            self._card_details(profile, initiated_at, amount, rng)
+            if rail == "CARD"
+            else self._transfer_details(profile, rail, amount, rng)
+        )
 
         payment_id = f"PAY-{number:0{_ID_WIDTH}d}"
         event_id = f"EVT-{number:0{_ID_WIDTH}d}"
         payment = Payment(
             payment_id=payment_id,
             payment_rail=rail,
-            payment_type=payment_type,
-            payer_account_id=payer_account_id,
-            payee_account_id=payee_account_id,
-            merchant_id=merchant_id,
-            card_id=card_id,
-            amount=amount,
-            currency=self.accounts_by_id[payer_account_id].currency,
+            payment_type=details.payment_type,
+            payer_account_id=details.payer_account_id,
+            payee_account_id=details.payee_account_id,
+            merchant_id=details.merchant_id,
+            card_id=details.card_id,
+            amount=details.amount,
+            currency=self.accounts_by_id[details.payer_account_id].currency,
             initiated_at=initiated_at,
             current_status="SETTLED" if rail == "PIX" else "COMPLETED",
-            payer_institution_id=payer_institution_id,
-            payee_institution_id=payee_institution_id,
-            payer_pix_key_id=payer_pix_key_id,
-            payee_pix_key_id=payee_pix_key_id,
+            payer_institution_id=details.payer_institution_id,
+            payee_institution_id=details.payee_institution_id,
+            payer_pix_key_id=details.payer_pix_key_id,
+            payee_pix_key_id=details.payee_pix_key_id,
         )
-        source_delay_seconds = (
-            PIX_SOURCE_DELAY_SECONDS
-            if rail == "PIX"
-            else ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS
-            if rail == "ACCOUNT_TRANSFER"
-            else CARD_SOURCE_DELAY_SECONDS
-        )
-        source_available_at, ingested_at, processed_at = _event_times(
-            initiated_at, source_delay_seconds
-        )
+        source_available_at, ingested_at, processed_at = payment_event_times(initiated_at, rail)
         event = PaymentEvent(
             event_id=event_id,
-            event_type=event_type,
+            event_type=details.event_type,
             event_version=1,
             payment_id=payment_id,
             customer_id=profile.customer_id,
-            account_id=payer_account_id,
+            account_id=details.payer_account_id,
             event_time=initiated_at,
             source_created_at=initiated_at,
             source_available_at=source_available_at,
@@ -450,13 +571,13 @@ class PaymentGenerator:
             simulation_run_id=self.simulation_run_id,
             scenario_id=None,
             payment_rail=rail,
-            payment_type=payment_type,
-            payee_account_id=payee_account_id,
-            merchant_id=merchant_id,
-            card_id=card_id,
+            payment_type=details.payment_type,
+            payee_account_id=details.payee_account_id,
+            merchant_id=details.merchant_id,
+            card_id=details.card_id,
             device_id=device_id,
-            online=online,
-            amount=amount,
+            online=details.online,
+            amount=details.amount,
             currency=payment.currency,
         )
         return payment, event
@@ -567,6 +688,13 @@ class PaymentGenerator:
                     final_status = "REFUNDED"
                 else:
                     final_status = "SETTLED"
+                if rng.random() < settings.chargeback_probability:
+                    append("CARD_CHARGEBACK_CREATED", settings.chargeback_delay_seconds)
+                    append(
+                        "CARD_CHARGEBACK_RESOLVED",
+                        settings.chargeback_resolution_delay_seconds,
+                    )
+                    final_status = "CHARGEBACK_RESOLVED"
 
         result = payment.model_copy(update={"current_status": final_status})
         event_tuple = tuple(events)
@@ -637,9 +765,13 @@ class PaymentGenerator:
             return []
         specs: list[tuple[PaymentEvent, str, str]] = []
         for event in events:
-            if event.event_type in {"PIX_SETTLED", "TRANSFER_COMPLETED"}:
+            if event.event_type in {"PIX_SETTLED", "TRANSFER_COMPLETED", "CARD_SETTLED"}:
                 specs.extend(((event, payer, "DEBIT"), (event, payee, "CREDIT")))
-            elif event.event_type == "PIX_RETURNED":
+            elif event.event_type in {
+                "PIX_RETURNED",
+                "CARD_REFUNDED",
+                "CARD_CHARGEBACK_RESOLVED",
+            }:
                 specs.extend(((event, payer, "CREDIT"), (event, payee, "DEBIT")))
         return specs
 
@@ -727,6 +859,7 @@ class PaymentGenerator:
             if payment.payment_rail == "CARD":
                 payment, payment_events = self._card_lifecycle(payment, event, lifecycle_rng)
                 events.extend(payment_events)
+                ledger_specs.extend(self._ledger_specs(payment, payment_events))
             elif payment.payment_rail == "PIX":
                 payment, payment_events = self._pix_lifecycle(payment, event, pix_lifecycle_rng)
                 events.extend(payment_events)

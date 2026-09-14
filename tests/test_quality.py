@@ -1,5 +1,5 @@
 import json
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from functools import cache
 from pathlib import Path
 
@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from fraudtwin.cli import app
-from fraudtwin.config import SimulationRunConfig, load_config
+from fraudtwin.config import OutageConfig, SchemaChangeConfig, SimulationRunConfig, load_config
 from fraudtwin.domain import validate_ledger
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator, QualityFaultInjector
 from fraudtwin.simulation.parquet import (
@@ -91,6 +91,33 @@ def test_clean_quality_is_a_m1_to_m7_regression_baseline() -> None:
         "traffic_spikes": 0,
     }
     validate_ledger(entities.accounts, first.payments, first.payment_events, first.ledger_entries)
+
+
+def test_outages_schema_changes_and_oracle_are_recorded(tmp_path: Path) -> None:
+    base = load_config(CONFIG_PATH)
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    quality = base.quality.model_copy(
+        update={
+            "outages": (
+                OutageConfig(
+                    source="payment_events",
+                    **{"from": start, "to": start + timedelta(days=1)},
+                    behavior="DELAY",
+                    delay_seconds=3,
+                ),
+            ),
+            "schema_changes": (SchemaChangeConfig(at=start, event="payment_events", version="9"),),
+        }
+    )
+    config = base.model_copy(update={"quality": quality})
+    entities = EntityGenerator(config).generate()
+    dataset = BehaviorGenerator(config, entities).generate()
+    assert dataset.quality_fault_counts["outage_events"] == len(dataset.payment_events)
+    assert dataset.quality_fault_counts["schema_changes"] == len(dataset.payment_events)
+    assert all(event.schema_version == "9" for event in dataset.payment_events)
+    assert dataset.oracle_tables["payment_events"]
+    write_behavior_parquet(dataset, tmp_path / "run")
+    assert (tmp_path / "run" / "oracle" / "payments" / "payment_events.parquet").is_file()
 
 
 @pytest.mark.parametrize(

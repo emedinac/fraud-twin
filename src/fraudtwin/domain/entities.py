@@ -151,3 +151,15 @@ class Device(_EntityModel):
     trusted: bool
     device_fingerprint: str
     risk_score: float = Field(ge=0, le=1)
+
+
+class EntityStateChange(_EntityModel):
+    """Effective-dated state history for reconstructing entity status."""
+
+    entity_id: str
+    entity_type: Literal["CUSTOMER", "ACCOUNT"]
+    from_status: str
+    to_status: str
+    effective_at: datetime
+    system_from: datetime
+    system_to: datetime | None

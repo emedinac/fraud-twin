@@ -110,3 +110,16 @@ def test_entity_parquet_files_have_stable_schemas(tmp_path: Path) -> None:
         assert frame.columns == list(schema)
         assert frame.schema == schema
         assert frame.height == dataset.counts[entity_name]
+
+
+def test_optional_entity_state_history_is_effective_dated(tmp_path: Path) -> None:
+    base = load_config(Path("configs/minimal.yaml"))
+    config = base.model_copy(
+        update={"behavior": base.behavior.model_copy(update={"state_change_probability": 1.0})}
+    )
+    dataset = EntityGenerator(config).generate()
+    assert dataset.state_history
+    assert all(item.effective_at >= config.simulation.start for item in dataset.state_history)
+    paths = write_entity_parquet(dataset, tmp_path / "run")
+    assert (tmp_path / "run" / "entities" / "state_history.parquet").is_file()
+    assert paths["state_history"] == tmp_path / "run" / "entities" / "state_history.parquet"

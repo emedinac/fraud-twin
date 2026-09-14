@@ -8,12 +8,9 @@ from random import Random
 
 from fraudtwin.config import (
     ACCOUNT_TRANSFER_EVENT_ENVELOPE_DELAY_SECONDS,
-    ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS,
     CARD_EVENT_ENVELOPE_DELAY_SECONDS,
-    CARD_SOURCE_DELAY_SECONDS,
     FRAUD_SCENARIO_IDS,
     PIX_EVENT_ENVELOPE_DELAY_SECONDS,
-    PIX_SOURCE_DELAY_SECONDS,
     FraudRegimeConfig,
     FraudScenarioId,
     FraudScenarioSettings,
@@ -36,7 +33,7 @@ from fraudtwin.domain import (
     validate_card_lifecycle,
 )
 from fraudtwin.seed import create_stream_rng
-from fraudtwin.simulation.payments import PaymentDataset, PaymentGenerator
+from fraudtwin.simulation.payments import PaymentDataset, PaymentGenerator, payment_event_times
 
 _ID_WIDTH = 6
 
@@ -543,18 +540,18 @@ class FraudScenarioGenerator:
         previous_id: str | None = None
         for index, event_type in enumerate(signal_types, start=1):
             event_time = self._start_time(settings, rail="ACCOUNT_TRANSFER", offset=index - 1)
+            source_available_at, ingested_at, processed_at = payment_event_times(
+                event_time, "ACCOUNT_TRANSFER"
+            )
             signal = first_event.model_copy(
                 update={
                     "event_id": f"EVT-{scenario_id}-SIGNAL-{index:02d}",
                     "event_type": event_type,
                     "event_time": event_time,
                     "source_created_at": event_time,
-                    "source_available_at": event_time
-                    + timedelta(seconds=ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS),
-                    "ingested_at": event_time
-                    + timedelta(seconds=ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS + 1),
-                    "processed_at": event_time
-                    + timedelta(seconds=ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS + 2),
+                    "source_available_at": source_available_at,
+                    "ingested_at": ingested_at,
+                    "processed_at": processed_at,
                     "causation_id": previous_id,
                     "scenario_id": scenario_id,
                     "scenario_type": scenario_type,
@@ -751,11 +748,7 @@ class FraudScenarioGenerator:
             payer_pix_key_id=payer_pix_key_id,
             payee_pix_key_id=payee_pix_key_id,
         )
-        source_delay = {
-            "CARD": CARD_SOURCE_DELAY_SECONDS,
-            "PIX": PIX_SOURCE_DELAY_SECONDS,
-            "ACCOUNT_TRANSFER": ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS,
-        }[rail]
+        source_available_at, ingested_at, processed_at = payment_event_times(initiated_at, rail)
         event = PaymentEvent(
             event_id=event_id,
             event_type=event_type,
@@ -765,9 +758,9 @@ class FraudScenarioGenerator:
             account_id=account_id,
             event_time=initiated_at,
             source_created_at=initiated_at,
-            source_available_at=initiated_at + timedelta(seconds=source_delay),
-            ingested_at=initiated_at + timedelta(seconds=source_delay + 1),
-            processed_at=initiated_at + timedelta(seconds=source_delay + 2),
+            source_available_at=source_available_at,
+            ingested_at=ingested_at,
+            processed_at=processed_at,
             producer="fraudtwin.fraud",
             source_system="synthetic_fraud_source",
             schema_version="2" if rail == "CARD" else "3" if rail == "PIX" else "1",
@@ -926,6 +919,9 @@ class FraudScenarioGenerator:
             start=1,
         ):
             event_time = self._start_time(settings, rail="ACCOUNT_TRANSFER", offset=index - 1)
+            source_available_at, ingested_at, processed_at = payment_event_times(
+                event_time, "ACCOUNT_TRANSFER"
+            )
             signals.append(
                 first_event.model_copy(
                     update={
@@ -933,12 +929,9 @@ class FraudScenarioGenerator:
                         "event_type": event_type,
                         "event_time": event_time,
                         "source_created_at": event_time,
-                        "source_available_at": event_time
-                        + timedelta(seconds=ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS),
-                        "ingested_at": event_time
-                        + timedelta(seconds=ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS + 1),
-                        "processed_at": event_time
-                        + timedelta(seconds=ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS + 2),
+                        "source_available_at": source_available_at,
+                        "ingested_at": ingested_at,
+                        "processed_at": processed_at,
                         "causation_id": previous_id,
                         "scenario_id": None,
                         "scenario_type": scenario_type,

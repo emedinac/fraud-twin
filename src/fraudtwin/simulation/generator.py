@@ -3,10 +3,19 @@
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from random import Random
-from typing import Literal
+from typing import Literal, cast
 
 from fraudtwin.config import SimulationRunConfig
-from fraudtwin.domain import Account, Card, Customer, Device, Institution, Merchant, PixKey
+from fraudtwin.domain import (
+    Account,
+    Card,
+    Customer,
+    Device,
+    EntityStateChange,
+    Institution,
+    Merchant,
+    PixKey,
+)
 from fraudtwin.seed import create_legacy_entity_stream_rng
 
 _ID_WIDTH = 6
@@ -18,7 +27,7 @@ _CARD_VALIDITY_DAYS = 3 * 365
 _COUNTRIES = ("BR", "US", "GB", "DE")
 _CITIES = ("Aurora", "Boreal", "Cascata", "Dourado")
 _RISK_SEGMENTS = ("LOW", "MEDIUM", "HIGH")
-Entity = Account | Card | Customer | Device | Institution | Merchant | PixKey
+Entity = Account | Card | Customer | Device | EntityStateChange | Institution | Merchant | PixKey
 InstitutionType = Literal[
     "BANK", "PSP", "ISSUER", "ACQUIRER", "DIGITAL_BANK", "PAYMENT_INSTITUTION"
 ]
@@ -72,6 +81,7 @@ class EntityDataset:
     merchants: tuple[Merchant, ...]
     devices: tuple[Device, ...]
     pix_keys: tuple[PixKey, ...]
+    state_history: tuple[EntityStateChange, ...] = ()
 
     @property
     def counts(self) -> dict[str, int]:
@@ -124,6 +134,11 @@ class EntityDataset:
             "pix_keys": self.pix_keys,
         }
 
+    def all_tables(self) -> dict[str, tuple[Entity, ...]]:
+        """Return base entity tables plus optional effective-dated history."""
+
+        return {**self.tables(), "state_history": self.state_history}
+
 
 class EntityGenerator:
     """Generate a reproducible population from a validated configuration."""
@@ -143,7 +158,44 @@ class EntityGenerator:
         merchants = self._merchants(institutions)
         devices = self._devices()
         pix_keys = self._pix_keys(accounts)
-        return EntityDataset(customers, institutions, accounts, cards, merchants, devices, pix_keys)
+        history: list[EntityStateChange] = []
+        rng = _entity_stream_rng(self.config.simulation.seed, "state-history")
+        simulation_end = self.start + timedelta(days=self.config.simulation.duration_days)
+        transition_at = self.start + (simulation_end - self.start) / 2
+        for entity_type, records, identifier in (
+            ("CUSTOMER", customers, "customer_id"),
+            ("ACCOUNT", accounts, "account_id"),
+        ):
+            for record in records:
+                if rng.random() >= self.config.behavior.state_change_probability:
+                    continue
+                entity_id = getattr(record, identifier)
+                typed_entity_type = cast(Literal["CUSTOMER", "ACCOUNT"], entity_type)
+                history.extend(
+                    (
+                        EntityStateChange(
+                            entity_id=entity_id,
+                            entity_type=typed_entity_type,
+                            from_status="ACTIVE",
+                            to_status="RESTRICTED",
+                            effective_at=transition_at,
+                            system_from=transition_at,
+                            system_to=transition_at + timedelta(microseconds=1),
+                        ),
+                        EntityStateChange(
+                            entity_id=entity_id,
+                            entity_type=typed_entity_type,
+                            from_status="RESTRICTED",
+                            to_status="ACTIVE",
+                            effective_at=transition_at + timedelta(microseconds=1),
+                            system_from=transition_at + timedelta(microseconds=1),
+                            system_to=None,
+                        ),
+                    )
+                )
+        return EntityDataset(
+            customers, institutions, accounts, cards, merchants, devices, pix_keys, tuple(history)
+        )
 
     def _customers(self) -> tuple[Customer, ...]:
         rng = _entity_stream_rng(self.config.simulation.seed, "customers")
@@ -269,6 +321,14 @@ class EntityGenerator:
 
     def _merchants(self, institutions: tuple[Institution, ...]) -> tuple[Merchant, ...]:
         rng = _entity_stream_rng(self.config.simulation.seed, "merchants")
+        acquirers = (
+            tuple(
+                institution
+                for institution in institutions
+                if institution.institution_type in {"ACQUIRER", "BANK", "PSP"}
+            )
+            or institutions
+        )
         records: list[Merchant] = []
         for number in range(1, self.population.merchants + 1):
             records.append(
@@ -279,7 +339,7 @@ class EntityGenerator:
                     country="BR",
                     city=rng.choice(_CITIES),
                     risk_segment=rng.choice(_RISK_SEGMENTS),
-                    acquirer_id=rng.choice(institutions).institution_id,
+                    acquirer_id=rng.choice(acquirers).institution_id,
                     online_only=rng.choice((True, False)),
                     created_at=_synthetic_datetime(self.start, rng, _ACCOUNT_HISTORY_DAYS),
                 )

@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 import polars as pl
 
+from fraudtwin import __version__
 from fraudtwin.manifest import ReplayManifest
 from fraudtwin.ml.dataset import load_generated_run
 from fraudtwin.reproducibility import sha256_json
@@ -195,6 +196,7 @@ def _referenced_entities(source: EntityDataset, behavior: BehaviorDataset) -> En
             if entity_kind is not None:
                 referenced_ids[entity_kind].add(value)
 
+    referenced_entity_ids = set().union(*referenced_ids.values())
     selected_cards = tuple(card for card in source.cards if card.card_id in referenced_ids["cards"])
     for card in selected_cards:
         add(card.account_id, "accounts")
@@ -234,6 +236,9 @@ def _referenced_entities(source: EntityDataset, behavior: BehaviorDataset) -> En
             item for item in source.devices if item.device_id in referenced_ids["devices"]
         ),
         pix_keys=selected_pix_keys,
+        state_history=tuple(
+            item for item in source.state_history if item.entity_id in referenced_entity_ids
+        ),
     )
 
 
@@ -378,7 +383,7 @@ def replay_run(
             "envelopes": envelopes,
             "entities": {
                 name: [item.model_dump(mode="json") for item in records]
-                for name, records in selected_entities.tables().items()
+                for name, records in selected_entities.all_tables().items()
             },
             "records": {
                 name: [item.model_dump(mode="json") for item in records]
@@ -389,7 +394,7 @@ def replay_run(
     replay_id = "RPL-" + sha256_json({"source": source_hash, "parameters": parameters})[:16]
     manifest = ReplayManifest(
         replay_id=replay_id,
-        replay_version="0.10.0",
+        replay_version=__version__,
         source_run_id=source_manifest.run_id,
         source_manifest_hash=source_hash,
         parameters=parameters,

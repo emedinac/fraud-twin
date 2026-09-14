@@ -117,6 +117,16 @@ ENTITY_SCHEMAS: dict[str, dict[str, Any]] = {
     },
 }
 
+ENTITY_STATE_HISTORY_SCHEMA: dict[str, Any] = {
+    "entity_id": pl.Utf8,
+    "entity_type": pl.Utf8,
+    "from_status": pl.Utf8,
+    "to_status": pl.Utf8,
+    "effective_at": _UTC_TIMESTAMP,
+    "system_from": _UTC_TIMESTAMP,
+    "system_to": _UTC_TIMESTAMP,
+}
+
 BEHAVIOR_PROFILE_SCHEMA: dict[str, Any] = {
     "behavior_profile_id": pl.Utf8,
     "customer_id": pl.Utf8,
@@ -407,7 +417,36 @@ def write_entity_parquet(dataset: EntityDataset, run_dir: Path) -> dict[str, Pat
         path = entities_dir / f"{entity_name}.parquet"
         _write_table(records, schema, path)
         written[entity_name] = path
+    if dataset.state_history:
+        path = entities_dir / "state_history.parquet"
+        _write_table(
+            dataset.state_history,
+            ENTITY_STATE_HISTORY_SCHEMA,
+            path,
+        )
+        written["state_history"] = path
     return written
+
+
+def _behavior_table_directories(root: Path) -> dict[str, Path]:
+    """Map behavior table names to their output directories below ``root``."""
+
+    behavior_dir = root / "behavior"
+    payments_dir = root / "payments"
+    ledger_dir = root / "ledger"
+    fraud_dir = root / "fraud"
+    return {
+        "behavior_profiles": behavior_dir,
+        "payments": payments_dir,
+        "payment_events": payments_dir,
+        "ledger_entries": ledger_dir,
+        "fraud_records": fraud_dir,
+        "fraud_alerts": fraud_dir,
+        "fraud_cases": fraud_dir,
+        "case_confirmations": fraud_dir,
+        "customer_disputes": fraud_dir,
+        "fraud_labels": fraud_dir,
+    }
 
 
 def write_behavior_parquet(
@@ -423,26 +462,9 @@ def write_behavior_parquet(
     immutable research artifact, not an operational label feed.
     """
 
-    behavior_dir = run_dir / "behavior"
-    payments_dir = run_dir / "payments"
-    ledger_dir = run_dir / "ledger"
-    fraud_dir = run_dir / "fraud"
-    behavior_dir.mkdir(parents=True, exist_ok=False)
-    payments_dir.mkdir(parents=True, exist_ok=False)
-    ledger_dir.mkdir(parents=True, exist_ok=False)
-    fraud_dir.mkdir(parents=True, exist_ok=False)
-    table_directories = {
-        "behavior_profiles": behavior_dir,
-        "payments": payments_dir,
-        "payment_events": payments_dir,
-        "ledger_entries": ledger_dir,
-        "fraud_records": fraud_dir,
-        "fraud_alerts": fraud_dir,
-        "fraud_cases": fraud_dir,
-        "case_confirmations": fraud_dir,
-        "customer_disputes": fraud_dir,
-        "fraud_labels": fraud_dir,
-    }
+    table_directories = _behavior_table_directories(run_dir)
+    for directory in dict.fromkeys(table_directories.values()):
+        directory.mkdir(parents=True, exist_ok=False)
     masked_fields = (
         {
             "fraud_cases": ("fraud_truth",),
@@ -459,4 +481,17 @@ def write_behavior_parquet(
         path = directory / f"{table_name}.parquet"
         _write_table(records, schema, path, masked_fields=masked_fields.get(table_name, ()))
         written[table_name] = path
+    if dataset.oracle_tables:
+        oracle_dir = run_dir / "oracle"
+        oracle_dir.mkdir(parents=True, exist_ok=True)
+        oracle_directories = _behavior_table_directories(oracle_dir)
+        for directory in set(oracle_directories.values()):
+            directory.mkdir(parents=True, exist_ok=True)
+        for table_name, records in dataset.oracle_tables.items():
+            if table_name in BEHAVIOR_SCHEMAS:
+                _write_table(
+                    records,
+                    BEHAVIOR_SCHEMAS[table_name],
+                    oracle_directories[table_name] / f"{table_name}.parquet",
+                )
     return written

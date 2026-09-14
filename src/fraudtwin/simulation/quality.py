@@ -28,6 +28,7 @@ from fraudtwin.domain import (
     Payment,
     PaymentEvent,
 )
+from fraudtwin.reproducibility import sha256_json
 from fraudtwin.seed import create_stream_rng
 from fraudtwin.simulation.quality_diagnostics import build_quality_diagnostics
 
@@ -123,6 +124,12 @@ class QualityFaultInjector:
         """Return a quality-mutated dataset and measured fault metadata."""
 
         counts = _zero_counts()
+        if self.quality.outages:
+            counts["outage_events"] = 0
+        if self.quality.schema_changes:
+            counts["schema_changes"] = 0
+        audit: list[dict[str, object]] = []
+        oracle_tables = dataset.oracle_tables or dataset.tables()
         payments = dataset.payments
         events = dataset.payment_events
         fraud_records = dataset.fraud_records
@@ -146,6 +153,12 @@ class QualityFaultInjector:
 
         events, source_delay_count = self._apply_source_delay(events)
         counts["source_delay_events"] = source_delay_count
+        events, outage_count = self._apply_outages(events, audit)
+        if self.quality.outages:
+            counts["outage_events"] = outage_count
+        events, schema_count = self._apply_schema_changes(events, audit)
+        if self.quality.schema_changes:
+            counts["schema_changes"] = schema_count
         events, late_count = self._apply_late_events(events)
         counts["late_events"] = late_count
 
@@ -199,8 +212,84 @@ class QualityFaultInjector:
             fraud_labels=labels,
             quality_fault_counts=counts,
             quality_fault_rates=rates,
+            oracle_tables=oracle_tables,
         )
-        return replace(result, quality_diagnostics=build_quality_diagnostics(dataset, result))
+        diagnostics = build_quality_diagnostics(dataset, result)
+        diagnostics["oracle_fingerprint"] = sha256_json(
+            {
+                name: [record.model_dump(mode="json") for record in records]
+                for name, records in oracle_tables.items()
+            }
+        )
+        diagnostics["fault_audit"] = audit
+        return replace(result, quality_diagnostics=diagnostics)
+
+    def _apply_outages(
+        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
+    ) -> tuple[tuple[PaymentEvent, ...], int]:
+        result: list[PaymentEvent] = []
+        count = 0
+        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:outages")
+        for event in events:
+            current = event
+            dropped = False
+            for outage in self.quality.outages:
+                if not outage.from_time <= event.event_time < outage.to_time:
+                    continue
+                if outage.source not in {
+                    "*",
+                    "payment_events",
+                    event.event_type,
+                    event.source_system,
+                }:
+                    continue
+                action = outage.behavior
+                if action in {"DROP", "UNAVAILABLE"} or (
+                    action == "PARTIAL_REJECT" and rng.random() < outage.reject_probability
+                ):
+                    dropped = True
+                elif action == "BUFFER_AND_FLUSH":
+                    current = self._shift_envelope(current, outage.to_time - event.event_time)
+                elif action == "DELAY":
+                    current = self._shift_envelope(current, timedelta(seconds=outage.delay_seconds))
+                count += 1
+                audit.append(
+                    {
+                        "fault": "outage",
+                        "event_id": event.event_id,
+                        "source": outage.source,
+                        "behavior": action,
+                        "dropped": dropped,
+                    }
+                )
+            if not dropped:
+                result.append(current)
+        return tuple(result), count
+
+    def _apply_schema_changes(
+        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
+    ) -> tuple[tuple[PaymentEvent, ...], int]:
+        result: list[PaymentEvent] = []
+        count = 0
+        for event in events:
+            current = event
+            for change in self.quality.schema_changes:
+                if event.event_time < change.at:
+                    continue
+                if change.event not in {"*", "payment_events", event.event_type}:
+                    continue
+                current = current.model_copy(update={"schema_version": change.version})
+                count += 1
+                audit.append(
+                    {
+                        "fault": "schema_change",
+                        "event_id": event.event_id,
+                        "event": change.event,
+                        "version": change.version,
+                    }
+                )
+            result.append(current)
+        return tuple(result), count
 
     def _missing_payment_fields(
         self, payments: tuple[Payment, ...]
@@ -548,4 +637,8 @@ class QualityFaultInjector:
             rates[f"{name}_realized"] = counts[name] / max(1, denominators[name])
         rates["source_delay_seconds"] = float(self.quality.source_delay_seconds)
         rates["late_event_delay_seconds"] = float(self.quality.late_event_delay_seconds)
+        if "outage_events" in counts:
+            rates["outage_events_realized"] = counts["outage_events"] / max(1, event_count)
+        if "schema_changes" in counts:
+            rates["schema_changes_realized"] = counts["schema_changes"] / max(1, event_count)
         return rates

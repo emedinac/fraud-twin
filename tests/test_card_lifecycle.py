@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from fraudtwin.config import SimulationRunConfig, load_config
-from fraudtwin.domain import validate_card_lifecycle
+from fraudtwin.domain import validate_card_lifecycle, validate_ledger
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.parquet import (
     PAYMENT_EVENT_SCHEMA,
@@ -67,7 +67,7 @@ def test_declined_authorizations_have_no_downstream_events() -> None:
 
 
 def test_approved_authorizations_follow_valid_order_and_can_refund() -> None:
-    _, _, dataset = _dataset(
+    _, entities, dataset = _dataset(
         authorization_approval_probability=1.0,
         reversal_probability=0.0,
         refund_probability=1.0,
@@ -119,6 +119,38 @@ def test_reversals_only_follow_authorized_or_captured_states() -> None:
             ],
         )
         validate_card_lifecycle(payments[payment_id], tuple(events))
+
+
+def test_chargebacks_follow_settlement_and_resolve() -> None:
+    _, entities, dataset = _dataset(
+        authorization_approval_probability=1.0,
+        reversal_probability=0.0,
+        refund_probability=0.0,
+        chargeback_probability=1.0,
+        chargeback_delay_seconds=1,
+        chargeback_resolution_delay_seconds=1,
+    )
+    payments = {payment.payment_id: payment for payment in dataset.payments}
+    for payment_id, events in _events_by_payment(dataset).items():
+        if payments[payment_id].payment_rail != "CARD":
+            continue
+        assert [event.event_type for event in events] == [
+            "CARD_AUTHORIZATION_REQUESTED",
+            "CARD_AUTHORIZED",
+            "CARD_CAPTURED",
+            "CARD_CLEARED",
+            "CARD_SETTLED",
+            "CARD_CHARGEBACK_CREATED",
+            "CARD_CHARGEBACK_RESOLVED",
+        ]
+        assert payments[payment_id].current_status == "CHARGEBACK_RESOLVED"
+        validate_card_lifecycle(payments[payment_id], tuple(events))
+    validate_ledger(
+        entities.accounts,
+        dataset.payments,
+        dataset.payment_events,
+        dataset.ledger_entries,
+    )
 
 
 def test_non_card_records_are_independent_of_lifecycle_settings() -> None:

@@ -55,6 +55,8 @@ class BehaviorDataset:
     quality_fault_counts: dict[str, int] = field(default_factory=dict)
     quality_fault_rates: dict[str, float] = field(default_factory=dict)
     quality_diagnostics: dict[str, object] = field(default_factory=dict)
+    # M8 keeps an immutable in-memory oracle before intentional corruption.
+    oracle_tables: dict[str, tuple[BaseModel, ...]] = field(default_factory=dict, repr=False)
 
     def tables(self) -> dict[str, tuple[BaseModel, ...]]:
         """Return all behavior tables in their stable export order."""
@@ -208,7 +210,9 @@ class BehaviorGenerator:
 
     def _profile(self, customer: Customer, number: int, rng: Random) -> BehaviorProfile:
         spending_level: SpendingLevel = rng.choices(
-            ("LOW", "MEDIUM", "HIGH"), weights=(0.3, 0.5, 0.2), k=1
+            ("LOW", "MEDIUM", "HIGH"),
+            weights=self.config.behavior.spending_level_weights,
+            k=1,
         )[0]
         income_ranges = {
             "LOW": (1_500.0, 3_500.0),

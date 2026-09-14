@@ -15,6 +15,7 @@ import polars as pl
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from fraudtwin import __version__
 from fraudtwin.config import (
     BacktestConfig,
     FraudRegimeConfig,
@@ -73,7 +74,7 @@ def _utc(value: datetime) -> datetime:
 def _source_snapshots(entities: EntityDataset, behavior: BehaviorDataset) -> dict[str, object]:
     """Fingerprint every source table used by the historical reconstruction."""
 
-    tables: dict[str, Iterable[Any]] = {**entities.tables(), **behavior.tables()}
+    tables: dict[str, Iterable[Any]] = {**entities.all_tables(), **behavior.tables()}
     snapshots: dict[str, object] = {}
     for name, records in tables.items():
         materialized = tuple(records)
@@ -739,7 +740,7 @@ def run_backtest(
     backtest_id = "BT-" + sha256_json({"source": source_hash, "parameters": parameters})[:16]
     manifest = BacktestManifest(
         backtest_id=backtest_id,
-        backtest_version="0.10.0",
+        backtest_version=__version__,
         source_run_id=source_manifest.run_id,
         source_manifest_hash=source_hash,
         configuration_hash=source_manifest.scenario_config_hash,

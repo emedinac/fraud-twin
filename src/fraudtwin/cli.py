@@ -68,6 +68,8 @@ def generate(
     write_entity_parquet(entity_dataset, run_dir)
     write_behavior_parquet(behavior_dataset, run_dir)
     entity_counts = {**entity_dataset.counts, "behavior_profiles": len(behavior_dataset.profiles)}
+    if entity_dataset.state_history:
+        entity_counts["state_history"] = len(entity_dataset.state_history)
     event_counts = behavior_dataset.event_counts
     manifest = base_manifest.model_copy(
         update={

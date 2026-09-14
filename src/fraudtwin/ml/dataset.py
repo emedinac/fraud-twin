@@ -14,6 +14,7 @@ from typing import Any, TypeVar
 
 import polars as pl
 
+from fraudtwin import __version__
 from fraudtwin.config import SimulationRunConfig, _default_feature_windows, config_hash
 from fraudtwin.domain import (
     Account,
@@ -23,6 +24,7 @@ from fraudtwin.domain import (
     CustomerDispute,
     DelayedFraudLabel,
     Device,
+    EntityStateChange,
     FraudAlert,
     FraudCase,
     FraudCaseConfirmation,
@@ -287,6 +289,16 @@ def load_generated_run(
         merchants=_read_run_table(run_dir, "entities", "merchants", Merchant),
         devices=_read_run_table(run_dir, "entities", "devices", Device),
         pix_keys=_read_run_table(run_dir, "entities", "pix_keys", PixKey),
+        state_history=(
+            tuple(
+                EntityStateChange.model_validate(row)
+                for row in pl.read_parquet(
+                    run_dir / "entities" / "state_history.parquet"
+                ).to_dicts()
+            )
+            if (run_dir / "entities" / "state_history.parquet").is_file()
+            else ()
+        ),
     )
     behavior = BehaviorDataset(
         profiles=_read_run_table(run_dir, "behavior", "behavior_profiles", BehaviorProfile),
@@ -1025,7 +1037,9 @@ class PointInTimeDatasetBuilder:
         source_manifest_hash = self._source_manifest_hash()
         configuration_hash = config_hash(self.config, include_dataset=True)
         generator_version = (
-            self.source_manifest.generator_version if self.source_manifest is not None else "0.9.0"
+            self.source_manifest.generator_version
+            if self.source_manifest is not None
+            else __version__
         )
         row_counts = {
             "total": len(rows),

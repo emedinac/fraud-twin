@@ -126,6 +126,16 @@ class BehaviorConfig(_StrictModel):
     )
     merchant_preference_count: Annotated[int, Field(ge=1)] = 3
     preferred_device_limit: Annotated[int, Field(ge=0)] = 3
+    spending_level_weights: tuple[float, float, float] = (0.3, 0.5, 0.2)
+    payday_days: tuple[int, ...] = (1, 15)
+    payday_weight: float = Field(default=1.25, ge=0)
+    beginning_of_month_weight: float = Field(default=1.0, ge=0)
+    end_of_month_weight: float = Field(default=1.0, ge=0)
+    holiday_dates: tuple[str, ...] = ()
+    holiday_weight: float = Field(default=1.0, ge=0)
+    travel_period_months: tuple[int, ...] = tuple(range(1, 13))
+    merchant_active_hours: tuple[int, ...] = tuple(range(24))
+    state_change_probability: float = Field(default=0.0, ge=0, le=1)
 
     @field_validator("active_hours")
     @classmethod
@@ -147,6 +157,38 @@ class BehaviorConfig(_StrictModel):
             raise ValueError("weekday_weights must contain non-negative values with a positive sum")
         return value
 
+    @field_validator("spending_level_weights")
+    @classmethod
+    def spending_weights_must_be_valid(
+        cls, value: tuple[float, float, float]
+    ) -> tuple[float, float, float]:
+        if any(weight < 0 for weight in value) or sum(value) <= 0:
+            raise ValueError(
+                "spending_level_weights must contain non-negative values with a positive sum"
+            )
+        return value
+
+    @field_validator("payday_days")
+    @classmethod
+    def payday_days_must_be_valid(cls, value: tuple[int, ...]) -> tuple[int, ...]:
+        if any(day < 1 or day > 31 for day in value):
+            raise ValueError("payday_days must contain calendar days from 1 through 31")
+        return value
+
+    @field_validator("merchant_active_hours")
+    @classmethod
+    def merchant_hours_must_be_valid(cls, value: tuple[int, ...]) -> tuple[int, ...]:
+        if len(set(value)) != len(value) or any(hour < 0 or hour > 23 for hour in value):
+            raise ValueError("merchant_active_hours must contain unique hours from 0 through 23")
+        return value
+
+    @field_validator("travel_period_months")
+    @classmethod
+    def travel_months_must_be_valid(cls, value: tuple[int, ...]) -> tuple[int, ...]:
+        if len(set(value)) != len(value) or any(month < 1 or month > 12 for month in value):
+            raise ValueError("travel_period_months must contain unique months from 1 through 12")
+        return value
+
     @model_validator(mode="after")
     def amount_bounds_must_be_ordered(self) -> "BehaviorConfig":
         if self.amount_max < self.amount_min:
@@ -160,12 +202,15 @@ class CardLifecycleConfig(_StrictModel):
     authorization_approval_probability: float = Field(default=0.9, ge=0, le=1)
     reversal_probability: float = Field(default=0.05, ge=0, le=1)
     refund_probability: float = Field(default=0.1, ge=0, le=1)
+    chargeback_probability: float = Field(default=0.0, ge=0, le=1)
     authorization_delay_seconds: Annotated[int, Field(ge=0)] = 1
     capture_delay_seconds: Annotated[int, Field(ge=0)] = 5
     clearing_delay_seconds: Annotated[int, Field(ge=0)] = 30
     settlement_delay_seconds: Annotated[int, Field(ge=0)] = 60
     reversal_delay_seconds: Annotated[int, Field(ge=0)] = 10
     refund_delay_seconds: Annotated[int, Field(ge=0)] = 60
+    chargeback_delay_seconds: Annotated[int, Field(ge=0)] = 86_400
+    chargeback_resolution_delay_seconds: Annotated[int, Field(ge=0)] = 86_400
 
     @property
     def maximum_delay_seconds(self) -> int:
@@ -179,6 +224,9 @@ class CardLifecycleConfig(_StrictModel):
                 self.settlement_delay_seconds,
                 self.reversal_delay_seconds,
                 self.refund_delay_seconds,
+                self.chargeback_delay_seconds + self.chargeback_resolution_delay_seconds
+                if self.chargeback_probability > 0
+                else 0,
             )
         )
 
@@ -292,6 +340,45 @@ class FraudWorkflowConfig(_StrictModel):
     label_delay_seconds: Annotated[int, Field(ge=0)] = 3_600
 
 
+class OutageConfig(_StrictModel):
+    """A deterministic source-boundary outage used by M8."""
+
+    source: str = Field(min_length=1)
+    from_time: datetime = Field(validation_alias=AliasChoices("from", "from_time"))
+    to_time: datetime = Field(validation_alias=AliasChoices("to", "to_time"))
+    behavior: Literal["DROP", "BUFFER_AND_FLUSH", "DELAY", "PARTIAL_REJECT", "UNAVAILABLE"]
+    delay_seconds: Annotated[int, Field(ge=0)] = 0
+    reject_probability: float = Field(default=0.5, ge=0, le=1)
+
+    @field_validator("from_time", "to_time")
+    @classmethod
+    def outage_timestamps_must_include_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("outage timestamps must include a timezone")
+        return value
+
+    @model_validator(mode="after")
+    def outage_bounds_must_be_ordered(self) -> "OutageConfig":
+        if self.to_time <= self.from_time:
+            raise ValueError("outage to must be after outage from")
+        return self
+
+
+class SchemaChangeConfig(_StrictModel):
+    """A scheduled, additive event-schema version change."""
+
+    at: datetime
+    event: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+
+    @field_validator("at")
+    @classmethod
+    def schema_change_timestamp_must_include_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("schema change timestamp must include a timezone")
+        return value
+
+
 class QualityConfig(_StrictModel):
     """Deterministic M8 data-quality fault controls.
 
@@ -361,6 +448,8 @@ class QualityConfig(_StrictModel):
     )
     fraud_spike_multiplier: int = Field(default=2, ge=1)
     traffic_spike_multiplier: int = Field(default=2, ge=1)
+    outages: tuple[OutageConfig, ...] = ()
+    schema_changes: tuple[SchemaChangeConfig, ...] = ()
 
     @model_validator(mode="after")
     def spike_multipliers_must_be_meaningful(self) -> "QualityConfig":
@@ -753,6 +842,34 @@ def _canonical_config(
         payload.pop("pix_lifecycle", None)
     if not include_dataset:
         payload.pop("dataset", None)
+    # Keep run identities backward-compatible when newly optional methodology
+    # controls remain at their neutral defaults.
+    neutral_defaults: dict[str, dict[str, object]] = {
+        "behavior": {
+            "spending_level_weights": [0.3, 0.5, 0.2],
+            "payday_days": [1, 15],
+            "payday_weight": 1.25,
+            "beginning_of_month_weight": 1.0,
+            "end_of_month_weight": 1.0,
+            "holiday_dates": [],
+            "holiday_weight": 1.0,
+            "travel_period_months": list(range(1, 13)),
+            "merchant_active_hours": list(range(24)),
+            "state_change_probability": 0.0,
+        },
+        "card_lifecycle": {
+            "chargeback_probability": 0.0,
+            "chargeback_delay_seconds": 86_400,
+            "chargeback_resolution_delay_seconds": 86_400,
+        },
+        "quality": {"outages": [], "schema_changes": []},
+    }
+    for section, defaults in neutral_defaults.items():
+        section_payload = payload.get(section)
+        if isinstance(section_payload, dict):
+            for key, default in defaults.items():
+                if section_payload.get(key) == default:
+                    section_payload.pop(key, None)
     # Rolling-window settings describe read-only analysis and must not alter
     # the logical stream.  Declared regimes are different: they are generator
     # inputs, so they must participate in the source-run identity.
