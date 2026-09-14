@@ -1,5 +1,6 @@
 import json
 from datetime import timedelta
+from functools import cache
 from pathlib import Path
 
 import polars as pl
@@ -24,6 +25,7 @@ CONFIG_PATH = Path("configs/minimal.yaml")
 runner = CliRunner()
 
 
+@cache
 def _config(**quality_updates):
     base = load_config(CONFIG_PATH)
     quality = base.quality.model_copy(update={"profile": "clean", **quality_updates})
@@ -31,7 +33,16 @@ def _config(**quality_updates):
 
 
 def _dataset(config=None):
+    if config is None:
+        return _clean_dataset()
     config = config or _config()
+    entities = EntityGenerator(config).generate()
+    return config, entities, BehaviorGenerator(config, entities).generate()
+
+
+@cache
+def _clean_dataset():
+    config = _config()
     entities = EntityGenerator(config).generate()
     return config, entities, BehaviorGenerator(config, entities).generate()
 

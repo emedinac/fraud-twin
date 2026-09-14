@@ -1,4 +1,5 @@
 from datetime import UTC, timedelta
+from functools import cache
 from pathlib import Path
 
 import polars as pl
@@ -15,6 +16,7 @@ from fraudtwin.simulation.parquet import (
 CONFIG_PATH = Path("configs/minimal.yaml")
 
 
+@cache
 def _dataset():
     config = load_config(CONFIG_PATH)
     entities = EntityGenerator(config).generate()

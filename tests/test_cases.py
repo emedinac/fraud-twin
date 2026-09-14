@@ -1,4 +1,5 @@
 import json
+from functools import cache
 from pathlib import Path
 
 import polars as pl
@@ -25,6 +26,7 @@ CONFIG_PATH = Path("configs/minimal.yaml")
 runner = CliRunner()
 
 
+@cache
 def _dataset():
     base = load_config(CONFIG_PATH)
     scenario_settings = {

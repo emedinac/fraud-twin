@@ -1,6 +1,7 @@
 import json
 from dataclasses import replace
 from datetime import timedelta
+from functools import cache
 from pathlib import Path
 
 import polars as pl
@@ -21,6 +22,7 @@ CONFIG_PATH = Path("configs/minimal.yaml")
 runner = CliRunner()
 
 
+@cache
 def _source(fraud: bool = False):
     raw = load_config(CONFIG_PATH).model_dump(mode="python")
     raw["dataset"]["unresolved_labels"] = "include"

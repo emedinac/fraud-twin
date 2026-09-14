@@ -1,5 +1,6 @@
 import json
 from datetime import timedelta
+from functools import cache
 from pathlib import Path
 
 import polars as pl
@@ -22,6 +23,7 @@ CONFIG_PATH = Path("configs/minimal.yaml")
 runner = CliRunner()
 
 
+@cache
 def _fraud_config():
     base = load_config(CONFIG_PATH)
     scenario_settings = {
@@ -41,6 +43,7 @@ def _fraud_config():
     return base.model_copy(update={"fraud": fraud})
 
 
+@cache
 def _dataset():
     config = _fraud_config()
     entities = EntityGenerator(config).generate()
