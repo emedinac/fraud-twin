@@ -1,0 +1,504 @@
+import json
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Annotated, Literal, cast
+
+import polars as pl
+import typer
+
+from fraudtwin.config import SimulationRunConfig, config_hash, load_config
+from fraudtwin.difficulty import difficulty_metadata
+from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
+from fraudtwin.graph import GraphDataset, build_graph, validate_graph, write_graph
+from fraudtwin.manifest import RunManifest, create_manifest, write_manifest
+from fraudtwin.ml import (
+    BenchmarkPack,
+    PointInTimeDatasetBuilder,
+    load_benchmark_pack,
+    load_generated_run,
+    run_backtest,
+    write_backtest,
+    write_point_in_time_dataset,
+)
+from fraudtwin.replay import ReplayOrder, replay_run, write_replay
+from fraudtwin.reproducibility import sha256_json
+from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
+from fraudtwin.simulation.behavior import BehaviorDataset
+from fraudtwin.simulation.generator import EntityDataset
+from fraudtwin.simulation.parquet import (
+    write_behavior_parquet,
+    write_entity_parquet,
+    write_graph_truth,
+)
+
+app = typer.Typer(help="Synthetic financial-system and fraud digital twin.")
+config_app = typer.Typer(help="Validate simulation configuration.")
+ml_app = typer.Typer(help="Build local point-in-time ML datasets.")
+app.add_typer(config_app, name="config")
+app.add_typer(ml_app, name="ml")
+graph_app = typer.Typer(help="Build deterministic temporal graph views.")
+app.add_typer(graph_app, name="graph")
+
+
+def _load_or_exit(path: Path) -> SimulationRunConfig:
+    try:
+        return load_config(path)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"Configuration error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
+def _graph_metadata(
+    config: SimulationRunConfig,
+    entities: EntityDataset,
+    behavior: BehaviorDataset,
+    manifest: RunManifest,
+) -> dict[str, object]:
+    """Build optional source-manifest metadata for an enabled graph run."""
+
+    if not config.graph.enabled:
+        return {}
+    metadata: dict[str, object] = {
+        "enabled": True,
+        "configuration_hash": config_hash(config),
+        "schema_version": "2",
+        "node_count": sum(entities.counts.values()),
+        "edge_count": 0,
+        "pattern_count": len(behavior.graph_patterns),
+        "campaign_membership_count": len(behavior.graph_memberships),
+        "campaign_count": len(behavior.graph_campaigns),
+        "evidence_count": len(behavior.graph_evidence),
+        "hyperedge_count": len(behavior.graph_hyperedges),
+        "hyperedge_membership_count": len(behavior.graph_hyperedge_memberships),
+        "source_snapshot": {
+            "start": config.simulation.start.isoformat(),
+            "end": (
+                config.simulation.start + timedelta(days=config.simulation.duration_days)
+            ).isoformat(),
+        },
+    }
+    source_graph = build_graph(config, entities, behavior, manifest, view="oracle")
+    metadata.update(
+        {
+            "node_count": len(source_graph.nodes),
+            "edge_count": len(source_graph.edges),
+            "pattern_count": len(source_graph.patterns),
+            "output_fingerprint": source_graph.output_fingerprint,
+            "schema_fingerprint": sha256_json(
+                {
+                    "graph_schema_version": "2",
+                    "source_tables": entities.counts,
+                    "events": behavior.event_counts,
+                }
+            ),
+            "oracle_artifact_fingerprint": sha256_json(
+                {
+                    name: [item.model_dump(mode="json") for item in records]
+                    for name, records in (
+                        ("campaigns", behavior.graph_campaigns),
+                        ("patterns", behavior.graph_patterns),
+                        ("campaign_memberships", behavior.graph_memberships),
+                        ("evidence", behavior.graph_evidence),
+                        ("hyperedges", behavior.graph_hyperedges),
+                        ("hyperedge_memberships", behavior.graph_hyperedge_memberships),
+                    )
+                }
+            ),
+        }
+    )
+    return metadata
+
+
+def _parse_optional_timestamp(value: str | None) -> datetime | None:
+    """Parse an optional CLI timestamp, preserving ``None`` for omitted filters."""
+
+    return datetime.fromisoformat(value) if value is not None else None
+
+
+@config_app.command("validate")
+def validate_config(
+    path: Annotated[Path, typer.Argument(help="YAML configuration file.")],
+) -> None:
+    """Validate a simulation configuration without running it."""
+
+    config = _load_or_exit(path)
+    typer.echo("Configuration is valid.")
+    typer.echo(f"Seed: {config.simulation.seed}")
+    typer.echo(f"Configuration hash: {config_hash(config)}")
+
+
+@app.command()
+def generate(
+    path: Annotated[Path, typer.Argument(help="YAML configuration file.")],
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Directory in which to store run manifests."),
+    ] = Path("runs"),
+) -> None:
+    """Validate a configuration and generate a reproducible batch dataset."""
+
+    config = _load_or_exit(path)
+    base_manifest = create_manifest(config)
+    entity_dataset = EntityGenerator(config).generate()
+    behavior_dataset = BehaviorGenerator(
+        config, entity_dataset, simulation_run_id=base_manifest.run_id
+    ).generate()
+    run_dir = output_dir / base_manifest.run_id
+    write_entity_parquet(entity_dataset, run_dir)
+    write_behavior_parquet(behavior_dataset, run_dir)
+    write_graph_truth(
+        behavior_dataset.graph_memberships,
+        behavior_dataset.graph_patterns,
+        run_dir,
+        campaigns=behavior_dataset.graph_campaigns,
+        evidence=behavior_dataset.graph_evidence,
+        hyperedges=behavior_dataset.graph_hyperedges,
+        hyperedge_memberships=behavior_dataset.graph_hyperedge_memberships,
+    )
+    entity_counts = {**entity_dataset.counts, "behavior_profiles": len(behavior_dataset.profiles)}
+    if entity_dataset.state_history:
+        entity_counts["state_history"] = len(entity_dataset.state_history)
+    event_counts = behavior_dataset.event_counts
+    graph_metadata = _graph_metadata(config, entity_dataset, behavior_dataset, base_manifest)
+    manifest = base_manifest.model_copy(
+        update={
+            "entity_counts": entity_counts,
+            "event_counts": event_counts,
+            "schema_versions": {
+                **{entity_name: "1" for entity_name in entity_counts},
+                "payments": "2",
+                "payment_events": "4",
+                "ledger_entries": "1",
+                "fraud_records": "1",
+                "fraud_alerts": "1",
+                "fraud_cases": "1",
+                "case_confirmations": "1",
+                "customer_disputes": "1",
+                "fraud_labels": "1",
+            },
+            "fraud_counts": behavior_dataset.fraud_counts,
+            "fraud_rates": behavior_dataset.fraud_rates,
+            "quality_fault_counts": behavior_dataset.quality_fault_counts,
+            "quality_fault_rates": behavior_dataset.quality_fault_rates,
+            "quality_diagnostics": behavior_dataset.quality_diagnostics,
+            "graph": graph_metadata,
+            "difficulty": difficulty_metadata(
+                config,
+                entity_dataset,
+                behavior_dataset,
+                base_manifest.run_id,
+            )
+            or None,
+        }
+    )
+    dataset_path: Path | None = None
+    dataset_manifest_path: Path | None = None
+    if config.dataset.enabled:
+        dataset = PointInTimeDatasetBuilder(
+            config, entity_dataset, behavior_dataset, manifest
+        ).build()
+        dataset_path, dataset_manifest_path = write_point_in_time_dataset(
+            dataset, run_dir / "ml" / "dataset.parquet"
+        )
+    manifest_path = write_manifest(manifest, output_dir)
+    typer.echo(f"Run generated: {manifest.run_id}")
+    typer.echo(f"Manifest: {manifest_path}")
+    if dataset_path is not None and dataset_manifest_path is not None:
+        typer.echo(f"Dataset: {dataset_path}")
+        typer.echo(f"Dataset manifest: {dataset_manifest_path}")
+    typer.echo("Generated entity counts:")
+    for entity_name, count in entity_counts.items():
+        typer.echo(f"  {entity_name}: {count}")
+    typer.echo("Generated payment counts:")
+    for event_name, count in event_counts.items():
+        typer.echo(f"  {event_name}: {count}")
+
+
+@app.command("validate-ledger")
+def validate_ledger_command(
+    run_id: Annotated[str, typer.Option("--run-id", help="Generated run identifier.")],
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Directory containing generated runs."),
+    ] = Path("runs"),
+) -> None:
+    """Validate transfer ledger entries for a generated run."""
+
+    run_dir = output_dir / run_id
+    try:
+        accounts = tuple(
+            Account.model_validate(row)
+            for row in pl.read_parquet(run_dir / "entities" / "accounts.parquet").to_dicts()
+        )
+        payments = tuple(
+            Payment.model_validate(row)
+            for row in pl.read_parquet(run_dir / "payments" / "payments.parquet").to_dicts()
+        )
+        events = tuple(
+            PaymentEvent.model_validate(row)
+            for row in pl.read_parquet(run_dir / "payments" / "payment_events.parquet").to_dicts()
+        )
+        entries = tuple(
+            LedgerEntry.model_validate(row)
+            for row in pl.read_parquet(run_dir / "ledger" / "ledger_entries.parquet").to_dicts()
+        )
+        validate_ledger(accounts, payments, events, entries)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        typer.echo(f"Ledger validation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Ledger is valid for run {run_id}.")
+
+
+@graph_app.command("export")
+def export_graph_command(
+    run_id: Annotated[str, typer.Option("--run-id", help="Existing generated run identifier.")],
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory containing generated runs.")
+    ] = Path("runs"),
+    as_of: Annotated[
+        str | None, typer.Option("--as-of", help="Optional point-in-time ISO-8601 snapshot.")
+    ] = None,
+    from_time: Annotated[
+        str | None, typer.Option("--from", help="Inclusive ISO-8601 event range start.")
+    ] = None,
+    to_time: Annotated[
+        str | None, typer.Option("--to", help="Exclusive ISO-8601 event range end.")
+    ] = None,
+    view: Annotated[str, typer.Option("--view", help="observable, oracle, or both.")] = "both",
+    formats: Annotated[
+        str, typer.Option("--format", help="Comma-separated formats: parquet,neo4j,pyg.")
+    ] = "parquet,neo4j",
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Emit machine-readable JSON.")
+    ] = False,
+) -> None:
+    """Export observable and/or oracle graph views from one immutable run."""
+
+    run_dir = output_dir / run_id
+    try:
+        entities, behavior, source_manifest = load_generated_run(run_dir)
+        config = SimulationRunConfig.model_validate(source_manifest.resolved_configuration)
+        selected_view = view.lower()
+        if selected_view not in {"observable", "oracle", "both"}:
+            raise ValueError("--view must be observable, oracle, or both")
+        format_values = tuple(
+            dict.fromkeys(item.strip().lower() for item in formats.split(",") if item.strip())
+        )
+        if not format_values or any(
+            item not in {"parquet", "neo4j", "pyg"} for item in format_values
+        ):
+            raise ValueError("--format must contain only parquet, neo4j, or pyg")
+
+        start = _parse_optional_timestamp(from_time)
+        end = _parse_optional_timestamp(to_time)
+        snapshot = _parse_optional_timestamp(as_of)
+        views: tuple[Literal["observable", "oracle"], ...] = (
+            ("observable", "oracle")
+            if selected_view == "both"
+            else (cast(Literal["observable", "oracle"], selected_view),)
+        )
+        datasets: dict[Literal["observable", "oracle"], GraphDataset] = {
+            item: build_graph(
+                config,
+                entities,
+                behavior,
+                source_manifest,
+                view=item,
+                as_of=snapshot,
+                from_time=start,
+                to_time=end,
+                memberships=behavior.graph_memberships,
+            )
+            for item in views
+        }
+        destination, manifest = write_graph(
+            datasets,
+            run_dir / "graphs",
+            source_manifest=source_manifest,
+            config=config,
+            formats=format_values,
+        )
+    except ValueError as exc:
+        typer.echo(f"Graph export failed: {exc}", err=True)
+        raise typer.Exit(
+            code=3 if "graph" in str(exc).lower() or "pattern" in str(exc).lower() else 2
+        ) from exc
+    except (FileNotFoundError, OSError, RuntimeError) as exc:
+        typer.echo(f"Graph export failed: {exc}", err=True)
+        raise typer.Exit(code=4) from exc
+    if json_output:
+        typer.echo(
+            json.dumps(
+                {
+                    "graph_id": manifest.graph_id,
+                    "output": str(destination),
+                    "manifest": str(destination / "graph_manifest.json"),
+                },
+                sort_keys=True,
+            )
+        )
+        return
+    typer.echo(f"Graph exported: {manifest.graph_id}")
+    typer.echo(f"Output: {destination}")
+    typer.echo(f"Manifest: {destination / 'graph_manifest.json'}")
+
+
+@graph_app.command("validate")
+def validate_graph_command(
+    run_id: Annotated[str, typer.Option("--run-id")],
+    output_dir: Annotated[Path, typer.Option("--output-dir")] = Path("runs"),
+) -> None:
+    """Validate observable and oracle graph projections for a run."""
+    try:
+        entities, behavior, manifest = load_generated_run(output_dir / run_id)
+        config = SimulationRunConfig.model_validate(manifest.resolved_configuration)
+        for view in ("observable", "oracle"):
+            validate_graph(build_graph(config, entities, behavior, manifest, view=view))
+    except ValueError as exc:
+        typer.echo(f"Graph validation failed: {exc}", err=True)
+        raise typer.Exit(code=3) from exc
+    except (FileNotFoundError, OSError) as exc:
+        typer.echo(f"Graph validation failed: {exc}", err=True)
+        raise typer.Exit(code=4) from exc
+    typer.echo(f"Graph is valid for run {run_id}.")
+
+
+@ml_app.command("build-dataset")
+def build_dataset(
+    path: Annotated[Path, typer.Argument(help="YAML configuration file.")],
+    run_id: Annotated[str, typer.Option("--run-id", help="Existing generated run identifier.")],
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Directory containing the source run."),
+    ] = Path("runs"),
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", help="Destination Parquet file."),
+    ] = None,
+    from_time: Annotated[
+        str | None,
+        typer.Option("--from", help="Optional ISO-8601 prediction range start."),
+    ] = None,
+    to_time: Annotated[
+        str | None,
+        typer.Option("--to", help="Optional ISO-8601 prediction range end."),
+    ] = None,
+    label_delay_aware: Annotated[
+        bool,
+        typer.Option("--label-delay-aware", help="Exclude labels unavailable at prediction time."),
+    ] = False,
+) -> None:
+    """Build a deterministic point-in-time dataset from an existing run."""
+
+    config = _load_or_exit(path)
+    try:
+        start = datetime.fromisoformat(from_time) if from_time is not None else None
+        end = datetime.fromisoformat(to_time) if to_time is not None else None
+        values = config.model_dump(mode="python")
+        dataset_values = values["dataset"]
+        if start is not None:
+            dataset_values["start"] = start
+        if end is not None:
+            dataset_values["end"] = end
+        if label_delay_aware:
+            dataset_values["unresolved_labels"] = "exclude"
+        config = SimulationRunConfig.model_validate(values)
+        run_dir = output_dir / run_id
+        entities, behavior, source_manifest = load_generated_run(run_dir)
+        dataset = PointInTimeDatasetBuilder(config, entities, behavior, source_manifest).build()
+        destination = output or run_dir / "ml" / "dataset.parquet"
+        parquet_path, manifest_path = write_point_in_time_dataset(dataset, destination)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Dataset generation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Dataset generated: {parquet_path}")
+    typer.echo(f"Dataset manifest: {manifest_path}")
+    typer.echo(f"Rows: {dataset.count}")
+
+
+@app.command("replay")
+def replay_command(
+    run_id: Annotated[str, typer.Option("--run-id", help="Existing generated run identifier.")],
+    from_time: Annotated[str, typer.Option("--from", help="Inclusive ISO-8601 period start.")],
+    to_time: Annotated[str, typer.Option("--to", help="Exclusive ISO-8601 period end.")],
+    order: Annotated[
+        str,
+        typer.Option(
+            "--order",
+            help="Replay ordering: event_time_order or original_delivery.",
+        ),
+    ] = "event_time_order",
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Directory containing generated runs."),
+    ] = Path("runs"),
+) -> None:
+    """Replay a selected period from one immutable generated run."""
+
+    try:
+        result = replay_run(
+            output_dir / run_id,
+            datetime.fromisoformat(from_time),
+            datetime.fromisoformat(to_time),
+            order=cast(ReplayOrder, order),
+        )
+        envelope_path, manifest_path = write_replay(result, output_dir / run_id / "replays")
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Replay generation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Replay generated: {result.manifest.replay_id}")
+    typer.echo(f"Events: {result.count}")
+    typer.echo(f"Output: {envelope_path.parent}")
+    typer.echo(f"Manifest: {manifest_path}")
+
+
+@ml_app.command("backtest")
+def backtest_command(
+    path: Annotated[Path, typer.Argument(help="YAML configuration file.")],
+    run_id: Annotated[str, typer.Option("--run-id", help="Existing generated run identifier.")],
+    benchmark_pack: Annotated[
+        Path | None,
+        typer.Option("--benchmark-pack", help="Optional versioned benchmark-pack YAML."),
+    ] = None,
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Directory containing generated runs."),
+    ] = Path("runs"),
+) -> None:
+    """Build deterministic rolling PIT backtest folds from an existing run."""
+
+    config = _load_or_exit(path)
+    try:
+        pack: BenchmarkPack | None = (
+            load_benchmark_pack(benchmark_pack) if benchmark_pack is not None else None
+        )
+        run_dir = output_dir / run_id
+        entities, behavior, source_manifest = load_generated_run(run_dir)
+        result = run_backtest(
+            config,
+            entities,
+            behavior,
+            source_manifest,
+            benchmark_pack=pack,
+        )
+        rows_path, metrics_path, manifest_path = write_backtest(
+            result, run_dir / "ml" / "backtests"
+        )
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Backtest generation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Backtest generated: {result.manifest.backtest_id}")
+    typer.echo(f"Rows: {len(result.fold_rows)}")
+    typer.echo(f"Fold metrics: {metrics_path}")
+    typer.echo(f"Rows artifact: {rows_path}")
+    typer.echo(f"Manifest: {manifest_path}")
+
+
+def main() -> None:
+    """Run the command-line application."""
+
+    app()
+
+
+if __name__ == "__main__":
+    main()

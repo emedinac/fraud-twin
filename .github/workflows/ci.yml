@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install
+      - name: Ruff lint
+        run: poetry run ruff check .
+      - name: Poetry validation
+        run: poetry check --strict
+      - name: Ruff format
+        run: poetry run ruff format --check .
+      - name: Mypy
+        run: poetry run mypy src
+      - name: Tests
+        run: poetry run pytest
+      - name: Build
+        run: poetry build
+      - name: Diff check
+        run: git diff --check

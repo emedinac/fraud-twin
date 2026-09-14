@@ -1,0 +1,55 @@
+[project]
+name = "fraudtwin"
+version = "0.13.0"
+description = "Fraud emulator for real-world ML and data pipelines"
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "polars>=1.0,<2.0",
+    "pydantic>=2.7,<3.0",
+    "PyYAML>=6.0,<7.0",
+    "typer>=0.12,<1.0",
+    "pandera[polars] (>=0.26,<1.0)",
+]
+
+[project.scripts]
+fraudtwin = "fraudtwin.cli:main"
+
+[project.optional-dependencies]
+graph = ["torch>=2.2,<3.0", "torch-geometric>=2.5,<3.0"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [{ include = "fraudtwin", from = "src" }]
+
+[tool.poetry.group.dev.dependencies]
+    hypothesis = "^6.100"
+    mypy = "^1.11"
+pytest = "^8.0"
+pytest-cov = "^5.0"
+ruff = "^0.6"
+types-PyYAML = "^6.0"
+sdmetrics = {version = ">=0.30,<0.32", python = ">=3.12,<3.15"}
+
+[tool.pytest.ini_options]
+addopts = "--cov=fraudtwin --cov-report=term-missing"
+testpaths = ["tests"]
+
+[tool.coverage.report]
+fail_under = 50
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
