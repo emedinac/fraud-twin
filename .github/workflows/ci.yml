@@ -1,11 +1,20 @@
 name: CI
 
 on:
-  push:
   pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   quality:
+    if: github.base_ref == 'main' && github.head_ref == 'feature/dev'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
