@@ -20,6 +20,7 @@ from fraudtwin.config import (
     FraudRegimeConfig,
     MinimumLabelMaturityPolicy,
     SimulationRunConfig,
+    _parse_duration_seconds,
 )
 from fraudtwin.manifest import BacktestManifest, RunManifest
 from fraudtwin.ml.dataset import PointInTimeDatasetBuilder
@@ -115,13 +116,17 @@ class BenchmarkPackWindows(BaseModel):
 
     @model_validator(mode="after")
     def windows_must_not_overlap(self) -> BenchmarkPackWindows:
-        ordered = [
+        ordered = tuple(
             window for window in (self.train, self.validation, self.test, self.stress) if window
-        ]
-        ordered.sort(key=lambda window: window.from_time)
+        )
         if any(
-            left.to_time > right.from_time
-            for left, right in zip(ordered, ordered[1:], strict=False)
+            current.from_time < previous.from_time
+            for previous, current in zip(ordered, ordered[1:], strict=False)
+        ):
+            raise ValueError("benchmark windows must be chronological")
+        if any(
+            previous.to_time > current.from_time
+            for previous, current in zip(ordered, ordered[1:], strict=False)
         ):
             raise ValueError("benchmark windows must not overlap")
         return self
@@ -141,6 +146,12 @@ class BenchmarkPack(BaseModel):
     label_policy: MinimumLabelMaturityPolicy = "exclude"
     scenario_parameters: dict[str, object] = Field(default_factory=dict)
     metric_definitions: list[str] = Field(default_factory=lambda: list(METRIC_NAMES))
+    label_maturity_gap_seconds: int = Field(default=14 * 86_400, ge=1)
+
+    @field_validator("label_maturity_gap_seconds", mode="before")
+    @classmethod
+    def maturity_gap_must_be_positive(cls, value: Any) -> int:
+        return _parse_duration_seconds(value)
 
     @field_validator("version")
     @classmethod
@@ -155,6 +166,17 @@ class BenchmarkPack(BaseModel):
             metric not in METRIC_NAMES for metric in self.metric_definitions
         ):
             raise ValueError(f"metric_definitions must use supported metrics: {METRIC_NAMES}")
+        transitions = (
+            (
+                (self.windows.train, self.windows.validation),
+                (self.windows.validation, self.windows.test),
+            )
+            if self.windows.validation is not None
+            else ((self.windows.train, self.windows.test),)
+        )
+        gap = timedelta(seconds=self.label_maturity_gap_seconds)
+        if any(right.from_time < left.to_time + gap for left, right in transitions):
+            raise ValueError("benchmark windows must include the label-maturity gap")
         return self
 
     @property
@@ -734,6 +756,11 @@ def run_backtest(
             "source_available_at_le_prediction_time": True,
             "feature_available_at_le_prediction_time": True,
             "label_policy": label_policy,
+            "label_maturity_gap_seconds": (
+                benchmark_pack.label_maturity_gap_seconds
+                if benchmark_pack is not None
+                else config.backtest.label_maturity_gap_seconds
+            ),
             "future_fold_mutation": False,
             "future_fold_isolation_checks": len(folds),
         },

@@ -64,6 +64,17 @@ def _write_run(tmp_path: Path, config: SimulationRunConfig) -> tuple[Path, objec
     return run_dir, entities, behavior, manifest
 
 
+def _benchmark_pack_payload(pack: BenchmarkPack) -> dict[str, object]:
+    """Return model data in the shape accepted by the strict pack validator."""
+
+    raw = pack.model_dump(mode="python")
+    for window in raw["windows"].values():
+        if window is not None:
+            window["from"] = window.pop("from_time")
+            window["to"] = window.pop("to_time")
+    return raw
+
+
 def test_replay_is_deterministic_half_open_and_preserves_source_records(tmp_path: Path) -> None:
     run_dir, _, behavior, _ = _write_run(tmp_path, _config(days=1))
     start = datetime(2026, 1, 1, tzinfo=UTC)
@@ -80,6 +91,10 @@ def test_replay_is_deterministic_half_open_and_preserves_source_records(tmp_path
     envelope_path, manifest_path = write_replay(first, tmp_path / "replays")
     assert pl.read_parquet(envelope_path).schema == REPLAY_EVENT_SCHEMA
     assert json.loads(manifest_path.read_text(encoding="utf-8"))["source_run_id"]
+
+    boundary = min(event.event_time for event in behavior.payment_events)
+    before_boundary = replay_run(run_dir, start, boundary)
+    assert all(row["event_time"] < boundary for row in before_boundary.envelopes)
 
 
 def test_replay_order_modes_use_declared_stable_keys(tmp_path: Path) -> None:
@@ -144,6 +159,30 @@ def test_replay_restores_latent_truth_in_the_immutable_artifact(tmp_path: Path) 
     )
     assert pl.read_parquet(replay_case_path)["fraud_truth"].null_count() == 0
     assert json.loads(replay_manifest.read_text(encoding="utf-8"))["schema_fingerprint"]
+
+
+def test_replay_copies_only_referenced_entity_closure(tmp_path: Path) -> None:
+    run_dir, entities, behavior, _ = _write_run(tmp_path, _config(days=1))
+    start = min(event.event_time for event in behavior.payment_events)
+    result = replay_run(run_dir, start, start + timedelta(microseconds=1))
+
+    assert len(result.entities.customers) <= len(entities.customers)
+    assert len(result.entities.accounts) <= len(entities.accounts)
+    assert all(
+        payment.payer_account_id in {account.account_id for account in result.entities.accounts}
+        for payment in result.behavior.payments
+    )
+
+
+def test_replay_output_is_append_only(tmp_path: Path) -> None:
+    run_dir, _, _, _ = _write_run(tmp_path, _config(days=1))
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    result = replay_run(run_dir, start, start + timedelta(days=1))
+    output_dir = tmp_path / "replays"
+    write_replay(result, output_dir)
+
+    with pytest.raises(FileExistsError):
+        write_replay(result, output_dir)
 
 
 def test_backtest_builds_reproducible_fixed_and_expanding_folds(tmp_path: Path) -> None:
@@ -243,6 +282,47 @@ def test_benchmark_pack_rejects_non_semver_versions() -> None:
     pack = load_benchmark_pack(Path("configs/benchmarks/m10-minimal-v1.yaml"))
     with pytest.raises(ValidationError, match="semantic"):
         BenchmarkPack.model_validate(pack.model_dump(mode="python") | {"version": "v1"})
+
+
+def test_backtest_rejects_overlapping_steps_and_invalid_benchmark_windows() -> None:
+    with pytest.raises(ValidationError, match="step must be at least"):
+        BacktestConfig(
+            train_mode="fixed",
+            train_window_seconds="1d",
+            test_window_seconds="2d",
+            step_seconds="1d",
+        )
+
+    pack = load_benchmark_pack(Path("configs/benchmarks/m10-minimal-v1.yaml"))
+    raw = _benchmark_pack_payload(pack)
+    raw["windows"]["train"]["to"] = datetime(2026, 1, 1, 5, 30, tzinfo=UTC)
+    with pytest.raises(ValidationError, match="label-maturity gap"):
+        BenchmarkPack.model_validate(raw)
+
+    raw = _benchmark_pack_payload(pack)
+    raw["windows"]["validation"]["from"] = datetime(2025, 12, 31, tzinfo=UTC)
+    with pytest.raises(ValidationError, match="chronological"):
+        BenchmarkPack.model_validate(raw)
+
+
+def test_regime_label_policy_can_withhold_observed_labels() -> None:
+    base = _config(days=1, fraud=True)
+    raw = base.model_dump(mode="python")
+    raw["backtest"]["regimes"] = [
+        {
+            "id": "unobserved",
+            "from": "2026-01-01T00:00:00Z",
+            "to": "2026-01-02T00:00:00Z",
+            "label_observation_policy": "unobserved",
+        }
+    ]
+    config = SimulationRunConfig.model_validate(raw)
+    entities = EntityGenerator(config).generate()
+    behavior = BehaviorGenerator(config, entities).generate()
+
+    assert behavior.fraud_records
+    assert behavior.fraud_cases
+    assert not behavior.fraud_labels
 
 
 def test_benchmark_pack_is_versioned_and_cli_generates_results(tmp_path: Path) -> None:

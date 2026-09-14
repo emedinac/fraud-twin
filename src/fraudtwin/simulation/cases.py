@@ -45,6 +45,7 @@ class FraudWorkflowGenerator:
     ) -> None:
         self.seed = config.simulation.seed
         self.workflow = config.fraud_workflow
+        self.regimes = tuple(sorted(config.backtest.regimes, key=lambda item: item.from_time))
         self.entities = entities
         self.fraud_dataset = fraud_dataset
         self.payments_by_id = {payment.payment_id: payment for payment in fraud_dataset.payments}
@@ -119,7 +120,7 @@ class FraudWorkflowGenerator:
                 }
             )
             cases.append(case)
-            if label_available_at is not None:
+            if label_available_at is not None and self._label_is_observed(record.occurred_at):
                 labels.append(
                     self._label(
                         len(labels) + 1,
@@ -137,6 +138,14 @@ class FraudWorkflowGenerator:
         )
         self._validate(result)
         return result
+
+    def _label_is_observed(self, occurred_at: datetime) -> bool:
+        """Apply the source-history label policy for the record's regime."""
+
+        for regime in self.regimes:
+            if regime.from_time <= occurred_at < regime.to_time:
+                return regime.label_observation_policy == "original"
+        return True
 
     def _realized_loss(self, payment: Payment) -> float:
         """Return the confirmed fraud amount that remained debited after settlement."""

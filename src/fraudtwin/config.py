@@ -15,7 +15,7 @@ QualityProfile = Literal["clean", "realistic", "hostile"]
 UnresolvedLabelPolicy = Literal["exclude", "include"]
 MinimumLabelMaturityPolicy = Literal["exclude", "include_unresolved"]
 TrainWindowMode = Literal["fixed", "expanding"]
-RegimeLabelPolicy = Literal["original"]
+RegimeLabelPolicy = Literal["original", "unobserved"]
 FeatureWindowName = Literal[
     "transaction_count_1m",
     "transaction_count_5m",
@@ -607,6 +607,8 @@ class BacktestConfig(_StrictModel):
             raise ValueError("fixed backtests require train_window_seconds")
         if self.train_mode == "expanding" and self.train_window_seconds is not None:
             raise ValueError("expanding backtests must not set train_window_seconds")
+        if self.step_seconds < self.test_window_seconds:
+            raise ValueError("backtest step must be at least the test window")
         return self
 
 

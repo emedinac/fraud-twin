@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +22,23 @@ from fraudtwin.simulation.parquet import (
 )
 
 ReplayOrder = Literal["event_time_order", "original_delivery"]
+
+_ENTITY_ID_FIELDS = {
+    "customers": "customer_id",
+    "institutions": "institution_id",
+    "accounts": "account_id",
+    "cards": "card_id",
+    "merchants": "merchant_id",
+    "devices": "device_id",
+    "pix_keys": "pix_key_id",
+}
+_WORKFLOW_ENTITY_ID_FIELDS = {
+    "customers": "customer_id",
+    "accounts": "account_id",
+    "cards": "card_id",
+    "merchants": "merchant_id",
+    "devices": "device_id",
+}
 
 REPLAY_EVENT_SCHEMA: dict[str, Any] = {
     "replay_sequence": pl.Int64,
@@ -51,10 +67,6 @@ def _utc(value: datetime) -> datetime:
 
 def _in_period(value: datetime, start: datetime, end: datetime) -> bool:
     return start <= _utc(value) < end
-
-
-def _manifest_hash(manifest: Any) -> str:
-    return hashlib.sha256(manifest.model_dump_json().encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -94,6 +106,17 @@ def _envelope(event: Any, source_table: str, source_row_number: int) -> dict[str
     }
 
 
+def _restore_latent_truth(
+    records: tuple[Any, ...], truth_by_record: dict[str, bool]
+) -> tuple[Any, ...]:
+    """Restore truth masked in source workflow records before replay export."""
+
+    return tuple(
+        record.model_copy(update={"fraud_truth": truth_by_record.get(record.fraud_record_id)})
+        for record in records
+    )
+
+
 def _schema_description() -> dict[str, object]:
     """Describe every typed replay table, not only the ordered envelope."""
 
@@ -119,6 +142,99 @@ def _delivery_columns_missing(run_dir: Path) -> bool:
         run_dir / "fraud" / "customer_disputes.parquet",
     )
     return any(required - set(pl.read_parquet(path, n_rows=0).columns) for path in paths)
+
+
+def _referenced_entities(source: EntityDataset, behavior: BehaviorDataset) -> EntityDataset:
+    """Keep only entities referenced by the selected payment/workflow closure."""
+
+    referenced_ids = {kind: set[str]() for kind in _ENTITY_ID_FIELDS}
+
+    def add(value: str | None, kind: str) -> None:
+        if value is not None:
+            referenced_ids[kind].add(value)
+
+    for payment in behavior.payments:
+        add(payment.payer_account_id, "accounts")
+        add(payment.payee_account_id, "accounts")
+        add(payment.payer_institution_id, "institutions")
+        add(payment.payee_institution_id, "institutions")
+        add(payment.merchant_id, "merchants")
+        add(payment.card_id, "cards")
+        add(payment.payer_pix_key_id, "pix_keys")
+        add(payment.payee_pix_key_id, "pix_keys")
+    for event in behavior.payment_events:
+        add(event.customer_id, "customers")
+        add(event.account_id, "accounts")
+        add(event.payee_account_id, "accounts")
+        add(event.merchant_id, "merchants")
+        add(event.card_id, "cards")
+        add(event.device_id, "devices")
+    for entry in behavior.ledger_entries:
+        add(entry.account_id, "accounts")
+
+    workflow_records = (
+        *behavior.fraud_records,
+        *behavior.alerts,
+        *behavior.fraud_cases,
+        *behavior.case_confirmations,
+        *behavior.customer_disputes,
+        *behavior.fraud_labels,
+    )
+    entity_ids = {
+        value: kind
+        for kind, records in source.tables().items()
+        for record in records
+        for value in (getattr(record, _ENTITY_ID_FIELDS[kind], None),)
+        if isinstance(value, str)
+    }
+    for record in workflow_records:
+        for kind in ("customers", "accounts", "cards", "merchants", "devices"):
+            add(getattr(record, _WORKFLOW_ENTITY_ID_FIELDS[kind], None), kind)
+        for value in getattr(record, "affected_entity_ids", ()):
+            entity_kind = entity_ids.get(value)
+            if entity_kind is not None:
+                referenced_ids[entity_kind].add(value)
+
+    selected_cards = tuple(card for card in source.cards if card.card_id in referenced_ids["cards"])
+    for card in selected_cards:
+        add(card.account_id, "accounts")
+        add(card.customer_id, "customers")
+    selected_pix_keys = tuple(
+        key for key in source.pix_keys if key.pix_key_id in referenced_ids["pix_keys"]
+    )
+    for key in selected_pix_keys:
+        add(key.account_id, "accounts")
+        add(key.customer_id, "customers")
+        add(key.institution_id, "institutions")
+    selected_accounts = tuple(
+        account for account in source.accounts if account.account_id in referenced_ids["accounts"]
+    )
+    for account in selected_accounts:
+        add(account.customer_id, "customers")
+        add(account.institution_id, "institutions")
+    for merchant in source.merchants:
+        if merchant.merchant_id in referenced_ids["merchants"]:
+            add(merchant.acquirer_id, "institutions")
+
+    return EntityDataset(
+        customers=tuple(
+            item for item in source.customers if item.customer_id in referenced_ids["customers"]
+        ),
+        institutions=tuple(
+            item
+            for item in source.institutions
+            if item.institution_id in referenced_ids["institutions"]
+        ),
+        accounts=selected_accounts,
+        cards=selected_cards,
+        merchants=tuple(
+            item for item in source.merchants if item.merchant_id in referenced_ids["merchants"]
+        ),
+        devices=tuple(
+            item for item in source.devices if item.device_id in referenced_ids["devices"]
+        ),
+        pix_keys=selected_pix_keys,
+    )
 
 
 def replay_run(
@@ -169,26 +285,33 @@ def replay_run(
     truth_by_record = {
         record.fraud_record_id: record.fraud_truth for record in source.fraud_records
     }
-    behavior = BehaviorDataset(
+    selected_source = BehaviorDataset(
         profiles=source.profiles,
         payments=payments,
         payment_events=events,
         ledger_entries=ledger_entries,
         fraud_records=fraud_records,
         alerts=alerts,
-        fraud_cases=tuple(
-            item.model_copy(update={"fraud_truth": truth_by_record.get(item.fraud_record_id)})
-            for item in cases
-        ),
-        case_confirmations=tuple(
-            item.model_copy(update={"fraud_truth": truth_by_record.get(item.fraud_record_id)})
-            for item in confirmations
-        ),
+        fraud_cases=cases,
+        case_confirmations=confirmations,
         customer_disputes=disputes,
-        fraud_labels=tuple(
-            item.model_copy(update={"fraud_truth": truth_by_record.get(item.fraud_record_id)})
-            for item in labels
+        fraud_labels=labels,
+    )
+    selected_entities = _referenced_entities(entities, selected_source)
+    selected_customer_ids = {item.customer_id for item in selected_entities.customers}
+    behavior = BehaviorDataset(
+        profiles=tuple(
+            profile for profile in source.profiles if profile.customer_id in selected_customer_ids
         ),
+        payments=payments,
+        payment_events=events,
+        ledger_entries=ledger_entries,
+        fraud_records=fraud_records,
+        alerts=alerts,
+        fraud_cases=_restore_latent_truth(cases, truth_by_record),
+        case_confirmations=_restore_latent_truth(confirmations, truth_by_record),
+        customer_disputes=disputes,
+        fraud_labels=_restore_latent_truth(labels, truth_by_record),
     )
 
     candidates = [
@@ -241,7 +364,7 @@ def replay_run(
     envelopes = tuple(
         {**row, "replay_sequence": sequence} for sequence, row in enumerate(candidates, start=1)
     )
-    source_hash = _manifest_hash(source_manifest)
+    source_hash = sha256_json(source_manifest.model_dump(mode="json"))
     parameters: dict[str, object] = {
         "from": start.isoformat(),
         "to": end.isoformat(),
@@ -255,7 +378,7 @@ def replay_run(
             "envelopes": envelopes,
             "entities": {
                 name: [item.model_dump(mode="json") for item in records]
-                for name, records in entities.tables().items()
+                for name, records in selected_entities.tables().items()
             },
             "records": {
                 name: [item.model_dump(mode="json") for item in records]
@@ -294,7 +417,7 @@ def replay_run(
         schema_fingerprint=schema_fingerprint,
         output_fingerprint=output_fingerprint,
     )
-    return ReplayResult(entities, behavior, envelopes, manifest)
+    return ReplayResult(selected_entities, behavior, envelopes, manifest)
 
 
 def write_replay(result: ReplayResult, output_dir: Path) -> tuple[Path, Path]:

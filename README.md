@@ -138,6 +138,13 @@ backtest:
   minimum_label_maturity_policy: exclude
 ```
 
+Rolling test windows must not overlap, so `step_seconds` must be at least the
+test-window duration. Versioned benchmark packs carry their own immutable
+label-maturity gap; their train, validation, test, and stress windows must be
+chronological, and the train/validation and validation/test boundaries must
+include that gap. A regime can use `label_observation_policy: unobserved` to
+withhold its generated labels while retaining the case and latent truth history.
+
 Run the folds over an existing source run with `poetry run fraudtwin ml backtest config.yaml --run-id <run-id> --output-dir runs`. Versioned fixed-window definitions are available under `configs/benchmarks/` and can be supplied with `--benchmark-pack`.
 
 ## Why behavior matters

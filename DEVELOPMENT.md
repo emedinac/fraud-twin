@@ -143,3 +143,9 @@ label policy, deterministic baseline metrics, aggregate dispersion, and
 degradation from the first test fold. Benchmark-pack definitions are hashed
 and immutable: changing a window, regime, seed/configuration, label policy,
 scenario parameter, or metric definition creates a new pack identity.
+Rolling test windows are required to be non-overlapping (`step_seconds` must
+be at least `test_window_seconds`). Benchmark packs freeze their own positive
+label-maturity gap, enforce train/validation/test/stress order, and apply the
+gap at the train/validation and validation/test transitions. Regimes may use
+`label_observation_policy: unobserved` to retain latent fraud and workflow
+history without emitting an observed label.
