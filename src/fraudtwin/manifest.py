@@ -28,6 +28,10 @@ class RunManifest(BaseModel):
     quality_fault_counts: dict[str, int]
     quality_fault_rates: dict[str, float] = Field(default_factory=dict)
     quality_diagnostics: dict[str, object] = Field(default_factory=dict)
+    config_version: str = "1"
+    resolved_configuration: dict[str, object] = Field(default_factory=dict)
+    regime_definitions: list[dict[str, object]] = Field(default_factory=list)
+    output_artifacts: dict[str, object] = Field(default_factory=dict)
 
 
 class DatasetManifest(BaseModel):
@@ -54,6 +58,50 @@ class DatasetManifest(BaseModel):
     prediction_entity: str
     date_range: dict[str, str]
     schema_fingerprint: str
+    output_fingerprint: str
+
+
+class ReplayManifest(BaseModel):
+    """Lineage and fingerprints for one immutable replay selection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    replay_id: str
+    replay_version: str
+    source_run_id: str
+    source_manifest_hash: str
+    parameters: dict[str, object]
+    source_run_information: dict[str, object]
+    row_counts: dict[str, int]
+    schema_versions: dict[str, str]
+    regime_definitions: list[dict[str, object]]
+    ordering: dict[str, object]
+    closure: dict[str, object]
+    schema_fingerprint: str
+    output_fingerprint: str
+
+
+class BacktestManifest(BaseModel):
+    """Lineage, fold, PIT, regime, and metric metadata for M10."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    backtest_id: str
+    backtest_version: str
+    source_run_id: str
+    source_manifest_hash: str
+    configuration_hash: str
+    parameters: dict[str, object]
+    source_snapshots: dict[str, object]
+    feature_version: str
+    folds: list[dict[str, object]]
+    pit_validation: dict[str, object]
+    regime_definitions: list[dict[str, object]]
+    resolved_regimes: list[dict[str, object]]
+    metric_definitions: list[str]
+    per_fold_metrics: list[dict[str, object]]
+    aggregate_metrics: dict[str, object]
+    benchmark_pack: dict[str, object] | None = None
     output_fingerprint: str
 
 
@@ -95,6 +143,8 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         quality_fault_counts={},
         quality_fault_rates={},
         quality_diagnostics={},
+        resolved_configuration=config.model_dump(mode="json"),
+        regime_definitions=[regime.model_dump(mode="json") for regime in config.backtest.regimes],
     )
 
 

@@ -14,6 +14,7 @@ from fraudtwin.config import (
     FRAUD_SCENARIO_IDS,
     PIX_EVENT_ENVELOPE_DELAY_SECONDS,
     PIX_SOURCE_DELAY_SECONDS,
+    FraudRegimeConfig,
     FraudScenarioId,
     FraudScenarioSettings,
     SimulationRunConfig,
@@ -118,17 +119,20 @@ class FraudScenarioGenerator:
                     event.amount
                 )
         self.untrusted_devices = tuple(device for device in devices if not device.trusted)
+        self._campaign_anchor: datetime | None = None
+        self._active_camouflage = 0.0
 
     def generate(self) -> FraudDataset:
         """Generate deterministic campaigns and preserve baseline output when disabled."""
 
+        baseline_result = FraudDataset(
+            self.baseline.payments,
+            self.baseline.payment_events,
+            self.baseline.ledger_entries,
+            (),
+        )
         if not self.config.fraud.enabled or self.config.fraud.target_rate <= 0:
-            return FraudDataset(
-                self.baseline.payments,
-                self.baseline.payment_events,
-                self.baseline.ledger_entries,
-                (),
-            )
+            return baseline_result
 
         settings_by_id = self.config.fraud.scenarios
         candidates = tuple(
@@ -147,21 +151,19 @@ class FraudScenarioGenerator:
             sum(settings_by_id[scenario_id].count for scenario_id in candidates),
         )
         if not candidates or campaign_count == 0:
-            return FraudDataset(
-                self.baseline.payments,
-                self.baseline.payment_events,
-                self.baseline.ledger_entries,
-                (),
-            )
+            return baseline_result
 
         selected = self._select_scenarios(campaign_count, candidates, settings_by_id)
+        campaign_plan = self._campaign_plan(campaign_count, candidates, settings_by_id, selected)
 
         payments = list(self.baseline.payments)
         events = list(self.baseline.payment_events)
         records: list[FraudRecord] = []
-        for campaign_number, scenario_type in enumerate(selected, start=1):
+        for campaign_number, (scenario_type, regime) in enumerate(campaign_plan, start=1):
             scenario_id = f"{scenario_type}-{campaign_number:0{_ID_WIDTH}d}"
-            settings = settings_by_id[scenario_type]
+            settings = self._settings_for_regime(settings_by_id[scenario_type], regime)
+            self._campaign_anchor = self._campaign_anchor_time(regime, campaign_number)
+            self._active_camouflage = regime.camouflage if regime is not None else 0.0
             rng = create_stream_rng(
                 self.config.simulation.seed, f"milestone-6:{scenario_type}:{campaign_number}"
             )
@@ -185,6 +187,116 @@ class FraudScenarioGenerator:
         event_tuple = tuple(events)
         ledger = self.payment_generator.materialize_ledger(payment_tuple, event_tuple)
         return FraudDataset(payment_tuple, event_tuple, ledger, tuple(records))
+
+    def _campaign_plan(
+        self,
+        campaign_count: int,
+        candidates: tuple[FraudScenarioId, ...],
+        settings_by_id: Mapping[FraudScenarioId, FraudScenarioSettings],
+        selected: tuple[FraudScenarioType, ...],
+    ) -> tuple[tuple[FraudScenarioType, FraudRegimeConfig | None], ...]:
+        """Assign campaigns to declared regimes without changing legacy output."""
+
+        regimes = tuple(sorted(self.config.backtest.regimes, key=lambda item: item.from_time))
+        if not regimes:
+            return tuple((scenario, None) for scenario in selected)
+
+        total_seconds = sum(
+            max(1.0, (regime.to_time - regime.from_time).total_seconds())
+            * regime.prevalence_multiplier
+            for regime in regimes
+        )
+        history_seconds = max(1.0, (self.end - self.start).total_seconds())
+        average_prevalence = total_seconds / history_seconds
+        maximum_campaigns = sum(settings_by_id[scenario].count for scenario in candidates)
+        regime_count = min(
+            maximum_campaigns,
+            max(0, round(campaign_count * average_prevalence)),
+        )
+        if regime_count == 0:
+            return ()
+
+        rng = create_stream_rng(self.config.simulation.seed, "milestone-10:regime-selection")
+        selected_counts: dict[FraudScenarioId, int] = dict.fromkeys(candidates, 0)
+        plan: list[tuple[FraudScenarioType, FraudRegimeConfig]] = []
+        for _ in range(regime_count):
+            available_regimes = tuple(
+                regime for regime in regimes if regime.prevalence_multiplier > 0
+            )
+            if not available_regimes:
+                break
+            regime_weights = tuple(
+                max(1.0, (regime.to_time - regime.from_time).total_seconds())
+                * regime.prevalence_multiplier
+                for regime in available_regimes
+            )
+            regime = rng.choices(available_regimes, weights=regime_weights, k=1)[0]
+            available = tuple(
+                scenario
+                for scenario in candidates
+                if selected_counts[scenario] < settings_by_id[scenario].count
+            )
+            if not available:
+                break
+            scenario_weights = tuple(
+                settings_by_id[scenario].weight
+                * (regime.scenario_mix.get(scenario, 0.0) if regime.scenario_mix else 1.0)
+                * self._rail_weight(scenario, regime)
+                for scenario in available
+            )
+            if not any(scenario_weights):
+                scenario_weights = tuple(settings_by_id[scenario].weight for scenario in available)
+            scenario = rng.choices(available, weights=scenario_weights, k=1)[0]
+            selected_counts[scenario] += 1
+            plan.append((scenario, regime))
+        return tuple(plan)
+
+    @staticmethod
+    def _rail_weight(scenario: FraudScenarioId, regime: FraudRegimeConfig) -> float:
+        if not regime.payment_rail_mix:
+            return 1.0
+        rail_by_scenario: dict[FraudScenarioId, PaymentRail] = {
+            "F01": "CARD",
+            "F02": "CARD",
+            "F03": "ACCOUNT_TRANSFER",
+            "F04": "PIX",
+            "F05": "CARD",
+        }
+        rail = rail_by_scenario[scenario]
+        return regime.payment_rail_mix.get(rail, 0.0)
+
+    def _settings_for_regime(
+        self,
+        settings: FraudScenarioSettings,
+        regime: FraudRegimeConfig | None,
+    ) -> FraudScenarioSettings:
+        if regime is None:
+            return settings
+        amount_multiplier = regime.amount_multiplier
+        minimum = settings.amount_min or self.config.behavior.amount_min
+        maximum = settings.amount_max or self.config.behavior.amount_max
+        return settings.model_copy(
+            update={
+                "amount_min": round(minimum * amount_multiplier, 2),
+                "amount_max": round(maximum * amount_multiplier, 2),
+                "duration_seconds": max(
+                    0, round(settings.duration_seconds * regime.timing_multiplier)
+                ),
+                "window_seconds": max(1, round(settings.window_seconds * regime.timing_multiplier)),
+                "attempt_count": max(1, round(settings.attempt_count * regime.campaign_intensity)),
+            }
+        )
+
+    def _campaign_anchor_time(
+        self, regime: FraudRegimeConfig | None, campaign_number: int
+    ) -> datetime:
+        if regime is None:
+            return self.start
+        span = max(0.0, (regime.to_time - regime.from_time).total_seconds())
+        rng = create_stream_rng(
+            self.config.simulation.seed, f"milestone-10:regime-anchor:{campaign_number}"
+        )
+        return regime.from_time + timedelta(seconds=rng.random() * span)
 
     def _select_scenarios(
         self,
@@ -952,15 +1064,20 @@ class FraudScenarioGenerator:
             else ACCOUNT_TRANSFER_EVENT_ENVELOPE_DELAY_SECONDS
         )
         latest = self.end - timedelta(seconds=lifecycle + settings.duration_seconds, microseconds=1)
-        base = self.start + timedelta(seconds=offset)
+        base = (self._campaign_anchor or self.start) + timedelta(seconds=offset)
         if latest <= self.start:
             return self.start
         return min(base, latest)
 
-    @staticmethod
-    def _reason(scenario_type: FraudScenarioType, trigger: str, device_id: str | None) -> str:
+    def _reason(self, scenario_type: FraudScenarioType, trigger: str, device_id: str | None) -> str:
         device_part = f" using device {device_id}" if device_id else ""
-        return f"{scenario_type} trigger {trigger}{device_part}; coordinated scenario behavior"
+        camouflage_part = (
+            f"; camouflage={self._active_camouflage:.4f}" if self._active_camouflage else ""
+        )
+        return (
+            f"{scenario_type} trigger {trigger}{device_part}; "
+            f"coordinated scenario behavior{camouflage_part}"
+        )
 
     @staticmethod
     def _annotate_events(

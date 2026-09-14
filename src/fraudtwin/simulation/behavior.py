@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from random import Random
 from typing import Literal
 
+from pydantic import BaseModel
+
 from fraudtwin.config import SimulationRunConfig
 from fraudtwin.domain import (
     BehaviorProfile,
@@ -54,20 +56,25 @@ class BehaviorDataset:
     quality_fault_rates: dict[str, float] = field(default_factory=dict)
     quality_diagnostics: dict[str, object] = field(default_factory=dict)
 
+    def tables(self) -> dict[str, tuple[BaseModel, ...]]:
+        """Return all behavior tables in their stable export order."""
+
+        return {
+            "behavior_profiles": self.profiles,
+            "payments": self.payments,
+            "payment_events": self.payment_events,
+            "ledger_entries": self.ledger_entries,
+            "fraud_records": self.fraud_records,
+            "fraud_alerts": self.alerts,
+            "fraud_cases": self.fraud_cases,
+            "case_confirmations": self.case_confirmations,
+            "customer_disputes": self.customer_disputes,
+            "fraud_labels": self.fraud_labels,
+        }
+
     @property
     def counts(self) -> dict[str, int]:
-        return {
-            "behavior_profiles": len(self.profiles),
-            "payments": len(self.payments),
-            "payment_events": len(self.payment_events),
-            "ledger_entries": len(self.ledger_entries),
-            "fraud_records": len(self.fraud_records),
-            "fraud_alerts": len(self.alerts),
-            "fraud_cases": len(self.fraud_cases),
-            "case_confirmations": len(self.case_confirmations),
-            "customer_disputes": len(self.customer_disputes),
-            "fraud_labels": len(self.fraud_labels),
-        }
+        return {name: len(records) for name, records in self.tables().items()}
 
     @property
     def fraud_events(self) -> tuple[PaymentEvent, ...]:

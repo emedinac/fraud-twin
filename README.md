@@ -10,9 +10,9 @@ FraudTwin creates a small, coherent financial world that behaves more like a rea
 
 The project is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and temporal patterns before introducing data-quality faults, streaming, or production infrastructure.
 
-## Current release: 0.9.0 — Point-in-Time ML Dataset
+## Current release: 0.10.0 — Replay and Rolling Backtesting
 
-Milestones 3 through 9 are complete. Every generated customer receives a deterministic
+Milestones 3 through 10 are complete. Every generated customer receives a deterministic
 behavior profile, and payments reflect customer-specific preferences for:
 
 - Spending level, income, and monthly budget
@@ -24,7 +24,7 @@ behavior profile, and payments reflect customer-specific preferences for:
 
 The current release generates legitimate CARD, PIX-like, and account-transfer payments, plus explicit F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack scenarios when fraud generation is enabled. Fraud events retain the existing event envelope and carry scenario ID, type, trigger, reason, and affected entities. The fraud record table contains scenario-linked truth records and legitimate hard negatives. M7 derives fraud alerts, cases, confirmations, customer dispute events, and delayed labels from those records. Confirmed-case losses reflect realized settled payment or net ledger activity; declined, reversed, and refunded attempts contribute no loss. Latent truth remains in the oracle `fraud_records.parquet` table; operational M7 projections write copied truth fields as null, and unresolved cases do not produce labels. M8 adds deterministic duplicates, missing optional fields, invalid values, late and out-of-order events, source delay, fraud spikes, traffic spikes, and measured quality-fault counts; chargebacks remain deferred.
 
-M9 adds a local point-in-time dataset builder over those generated records. Historical features use only source records whose `source_available_at` is no later than the row's `prediction_time`; business `event_time` remains separate from feature availability. Labels are included only after their configured `label_available_at` and label delay, or can be retained as unresolved rows for inspection. Models, feature stores, replay, backtesting, and production infrastructure remain deferred.
+M9 adds a local point-in-time dataset builder over those generated records. Historical features use only source records whose `source_available_at` is no later than the row's `prediction_time`; business `event_time` remains separate from feature availability. Labels are included only after their configured `label_available_at` and label delay, or can be retained as unresolved rows for inspection. M10 adds deterministic replay from an existing run, rolling PIT backtests, source-history fraud regimes, and versioned benchmark packs without regenerating the financial world during replay or analysis.
 
 ## Quick start
 
@@ -75,7 +75,12 @@ runs/<run_id>/
     └── fraud_labels.parquet
 └── ml/
     ├── dataset.parquet
-    └── dataset_manifest.json
+    ├── dataset_manifest.json
+    └── backtests/
+        └── <backtest_id>/
+            ├── fold_rows.parquet
+            ├── fold_metrics.parquet
+            └── backtest_manifest.json
 ```
 
 All Parquet files use explicit, stable schemas and column ordering. Generated payments reference existing accounts, cards, merchants, devices, and customers. Amounts are positive, payment timestamps stay within the configured simulation window, delayed workflow timestamps follow their causal evidence, and no real personal data or payment credentials are used.
@@ -110,6 +115,30 @@ Feature windows are explicit positive-second values keyed by the documented
 feature names. Unknown fields, naive timestamps, invalid ranges, split
 fractions, windows, and label delays are rejected during configuration
 validation.
+
+Replay an existing run over a half-open historical period with either business-time or recorded-delivery ordering:
+
+```bash
+poetry run fraudtwin replay --run-id <run-id> \
+  --from 2026-01-01T00:00:00Z --to 2026-01-02T00:00:00Z \
+  --order event_time_order --output-dir runs
+```
+
+The replay artifact copies the selected domain records and referenced entities without regeneration. Original event and source timestamps remain unchanged; `replay_sequence` is replay-only metadata. Use `original_delivery` to order by recorded ingestion and processing timestamps.
+
+Rolling backtests use the optional `backtest` section of the simulation YAML. Durations accept seconds or compact values such as `3d`, `12h`, and `30m`:
+
+```yaml
+backtest:
+  train_mode: expanding
+  validation_window_seconds: 1d
+  test_window_seconds: 1d
+  label_maturity_gap_seconds: 1d
+  step_seconds: 1d
+  minimum_label_maturity_policy: exclude
+```
+
+Run the folds over an existing source run with `poetry run fraudtwin ml backtest config.yaml --run-id <run-id> --output-dir runs`. Versioned fixed-window definitions are available under `configs/benchmarks/` and can be supplied with `--benchmark-pack`.
 
 ## Why behavior matters
 
@@ -258,7 +287,8 @@ in `quality_fault_rates`.
 | Delayed labels, alerts, cases, confirmations, and disputes | Available |
 | Deterministic M8 data-quality faults and measurements | Available |
 | Point-in-time historical ML dataset and delayed labels | Available |
-| Kafka, PostgreSQL, Flink, models, feature stores, and replay/backtesting | Planned |
+| Deterministic replay, rolling PIT backtesting, regimes, and benchmark packs | Available |
+| Kafka, PostgreSQL, Flink, feature stores, and advanced models | Planned |
 
 FraudTwin is being built milestone by milestone. The priority is a correct, readable, reproducible simulation core before adding distributed systems or advanced modeling.
 

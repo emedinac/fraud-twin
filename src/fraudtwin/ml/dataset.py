@@ -6,7 +6,6 @@ feature-store or model-serving dependency.
 """
 
 import hashlib
-import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -37,6 +36,7 @@ from fraudtwin.domain import (
     validate_fraud_workflow,
 )
 from fraudtwin.manifest import DatasetManifest, RunManifest
+from fraudtwin.reproducibility import canonical_json, sha256_json
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
 
@@ -170,17 +170,13 @@ def _utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
-def _canonical(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
-
-
 def _record_key(record: Any) -> str:
-    return _canonical(record.model_dump(mode="json"))
+    return canonical_json(record.model_dump(mode="json"))
 
 
 def _schema_fingerprint() -> str:
     schema = {"columns": [[name, str(dtype)] for name, dtype in PIT_DATASET_SCHEMA.items()]}
-    return hashlib.sha256(_canonical(schema).encode()).hexdigest()
+    return sha256_json(schema)
 
 
 def _in_window(reference_time: datetime, candidate_time: datetime, window_seconds: int) -> bool:
@@ -207,19 +203,40 @@ def _deduplicate(records: Iterable[T], identifier: str) -> tuple[T, ...]:
     return tuple(by_id.values())
 
 
-def _read_models(path: Path, model: type[T]) -> tuple[T, ...]:
+def _read_models(
+    path: Path,
+    model: type[T],
+    *,
+    fallback_delivery: bool = False,
+) -> tuple[T, ...]:
     try:
         rows = pl.read_parquet(path).to_dicts()
     except (FileNotFoundError, OSError) as exc:
         raise ValueError(f"required generated source is missing: {path}") from exc
     try:
+        if fallback_delivery:
+            for row in rows:
+                if "source_available_at" in row:
+                    row.setdefault("ingested_at", row["source_available_at"])
+                    row.setdefault("processed_at", row["ingested_at"])
         return tuple(model.model_validate(row) for row in rows)  # type: ignore[attr-defined]
     except ValueError as exc:
         raise ValueError(f"invalid generated source {path}: {exc}") from exc
 
 
-def _read_run_table(run_dir: Path, group: str, table: str, model: type[T]) -> tuple[T, ...]:
-    return _read_models(run_dir / group / f"{table}.parquet", model)
+def _read_run_table(
+    run_dir: Path,
+    group: str,
+    table: str,
+    model: type[T],
+    *,
+    fallback_delivery: bool = False,
+) -> tuple[T, ...]:
+    return _read_models(
+        run_dir / group / f"{table}.parquet",
+        model,
+        fallback_delivery=fallback_delivery,
+    )
 
 
 def _validate_behavior_workflow(entities: EntityDataset, behavior: BehaviorDataset) -> None:
@@ -248,7 +265,11 @@ def _validate_behavior_workflow(entities: EntityDataset, behavior: BehaviorDatas
     )
 
 
-def load_generated_run(run_dir: Path) -> tuple[EntityDataset, BehaviorDataset, RunManifest]:
+def load_generated_run(
+    run_dir: Path,
+    *,
+    allow_missing_delivery: bool = False,
+) -> tuple[EntityDataset, BehaviorDataset, RunManifest]:
     """Load one existing generated run without regenerating unrelated records."""
 
     try:
@@ -270,7 +291,13 @@ def load_generated_run(run_dir: Path) -> tuple[EntityDataset, BehaviorDataset, R
     behavior = BehaviorDataset(
         profiles=_read_run_table(run_dir, "behavior", "behavior_profiles", BehaviorProfile),
         payments=_read_run_table(run_dir, "payments", "payments", Payment),
-        payment_events=_read_run_table(run_dir, "payments", "payment_events", PaymentEvent),
+        payment_events=_read_run_table(
+            run_dir,
+            "payments",
+            "payment_events",
+            PaymentEvent,
+            fallback_delivery=allow_missing_delivery,
+        ),
         ledger_entries=_read_run_table(run_dir, "ledger", "ledger_entries", LedgerEntry),
         fraud_records=_read_run_table(run_dir, "fraud", "fraud_records", FraudRecord),
         alerts=_read_run_table(run_dir, "fraud", "fraud_alerts", FraudAlert),
@@ -278,7 +305,13 @@ def load_generated_run(run_dir: Path) -> tuple[EntityDataset, BehaviorDataset, R
         case_confirmations=_read_run_table(
             run_dir, "fraud", "case_confirmations", FraudCaseConfirmation
         ),
-        customer_disputes=_read_run_table(run_dir, "fraud", "customer_disputes", CustomerDispute),
+        customer_disputes=_read_run_table(
+            run_dir,
+            "fraud",
+            "customer_disputes",
+            CustomerDispute,
+            fallback_delivery=allow_missing_delivery,
+        ),
         fraud_labels=_read_run_table(run_dir, "fraud", "fraud_labels", DelayedFraudLabel),
     )
     _validate_behavior_workflow(entities, behavior)
@@ -547,15 +580,15 @@ class PointInTimeDatasetBuilder:
             return None
         raise ValueError("prediction timestamp is outside the configured split range")
 
-    def build(self, prediction_times: Mapping[str, datetime] | None = None) -> PointInTimeDataset:
-        """Build rows in stable payment-ID order.
+    def build_rows(
+        self, prediction_times: Mapping[str, datetime] | None = None
+    ) -> tuple[dict[str, Any], ...]:
+        """Build every eligible PIT row without applying M9 split boundaries.
 
-        By default each payment is scored when its initial source event becomes
-        available.  Callers may provide a deterministic payment-to-prediction
-        mapping for snapshot or delayed-prediction use cases.
+        M10 uses this shared row construction to assign several independent
+        rolling folds while retaining the exact M9 availability logic.
         """
 
-        boundaries = self._split_boundaries()
         times = self._prediction_times(prediction_times)
         rows: list[dict[str, Any]] = []
         for payment in sorted(self.payments, key=lambda item: item.payment_id):
@@ -577,9 +610,23 @@ class PointInTimeDatasetBuilder:
             mature = label is not None and label.label_available_at <= prediction_time
             if not mature and self.settings.unresolved_labels == "exclude":
                 continue
-            split = self._split(prediction_time, boundaries)
-            if split is not None:
-                rows.append(self._row(payment, event, prediction_time, label, mature, split))
+            rows.append(self._row(payment, event, prediction_time, label, mature, "all"))
+        return tuple(rows)
+
+    def build(self, prediction_times: Mapping[str, datetime] | None = None) -> PointInTimeDataset:
+        """Build rows in stable payment-ID order.
+
+        By default each payment is scored when its initial source event becomes
+        available.  Callers may provide a deterministic payment-to-prediction
+        mapping for snapshot or delayed-prediction use cases.
+        """
+
+        boundaries = self._split_boundaries()
+        rows = [
+            row | {"split": split}
+            for row in self.build_rows(prediction_times)
+            if (split := self._split(row["prediction_time"], boundaries)) is not None
+        ]
         manifest = self._manifest(rows, boundaries)
         return PointInTimeDataset(tuple(rows), manifest)
 
@@ -1050,16 +1097,14 @@ class PointInTimeDatasetBuilder:
             "split_gap_seconds": self._label_delay_gap_seconds(),
             "unresolved_policy": self.settings.unresolved_labels,
         }
-        row_hash = hashlib.sha256(_canonical(rows).encode()).hexdigest()
+        row_hash = sha256_json(rows)
         schema_fingerprint = _schema_fingerprint()
-        output_fingerprint = hashlib.sha256(
-            _canonical(
-                {
-                    "schema_fingerprint": schema_fingerprint,
-                    "rows": rows,
-                }
-            ).encode()
-        ).hexdigest()
+        output_fingerprint = sha256_json(
+            {
+                "schema_fingerprint": schema_fingerprint,
+                "rows": rows,
+            }
+        )
         row_grain = "one row per initial payment event prediction opportunity"
         prediction_entity = "payment_id"
         date_range = {"start": self.start.isoformat(), "end": self.end.isoformat()}
@@ -1081,7 +1126,7 @@ class PointInTimeDatasetBuilder:
             "schema_fingerprint": schema_fingerprint,
             "output_fingerprint": output_fingerprint,
         }
-        dataset_id = "DS-" + hashlib.sha256(_canonical(payload).encode()).hexdigest()[:16]
+        dataset_id = "DS-" + sha256_json(payload)[:16]
         source_information: dict[str, object] = {
             "run_id": source_run_id,
             "manifest_hash": source_manifest_hash,

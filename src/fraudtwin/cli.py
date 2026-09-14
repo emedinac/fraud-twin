@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import polars as pl
 import typer
@@ -9,10 +9,15 @@ from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
 from fraudtwin.manifest import create_manifest, write_manifest
 from fraudtwin.ml import (
+    BenchmarkPack,
     PointInTimeDatasetBuilder,
+    load_benchmark_pack,
     load_generated_run,
+    run_backtest,
+    write_backtest,
     write_point_in_time_dataset,
 )
+from fraudtwin.replay import ReplayOrder, replay_run, write_replay
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.parquet import write_behavior_parquet, write_entity_parquet
 
@@ -87,7 +92,6 @@ def generate(
             "quality_diagnostics": behavior_dataset.quality_diagnostics,
         }
     )
-    manifest_path = write_manifest(manifest, output_dir)
     dataset_path: Path | None = None
     dataset_manifest_path: Path | None = None
     if config.dataset.enabled:
@@ -97,6 +101,7 @@ def generate(
         dataset_path, dataset_manifest_path = write_point_in_time_dataset(
             dataset, run_dir / "ml" / "dataset.parquet"
         )
+    manifest_path = write_manifest(manifest, output_dir)
     typer.echo(f"Run generated: {manifest.run_id}")
     typer.echo(f"Manifest: {manifest_path}")
     if dataset_path is not None and dataset_manifest_path is not None:
@@ -196,6 +201,84 @@ def build_dataset(
     typer.echo(f"Dataset generated: {parquet_path}")
     typer.echo(f"Dataset manifest: {manifest_path}")
     typer.echo(f"Rows: {dataset.count}")
+
+
+@app.command("replay")
+def replay_command(
+    run_id: Annotated[str, typer.Option("--run-id", help="Existing generated run identifier.")],
+    from_time: Annotated[str, typer.Option("--from", help="Inclusive ISO-8601 period start.")],
+    to_time: Annotated[str, typer.Option("--to", help="Exclusive ISO-8601 period end.")],
+    order: Annotated[
+        str,
+        typer.Option(
+            "--order",
+            help="Replay ordering: event_time_order or original_delivery.",
+        ),
+    ] = "event_time_order",
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Directory containing generated runs."),
+    ] = Path("runs"),
+) -> None:
+    """Replay a selected period from one immutable generated run."""
+
+    try:
+        result = replay_run(
+            output_dir / run_id,
+            datetime.fromisoformat(from_time),
+            datetime.fromisoformat(to_time),
+            order=cast(ReplayOrder, order),
+        )
+        envelope_path, manifest_path = write_replay(result, output_dir / run_id / "replays")
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Replay generation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Replay generated: {result.manifest.replay_id}")
+    typer.echo(f"Events: {result.count}")
+    typer.echo(f"Output: {envelope_path.parent}")
+    typer.echo(f"Manifest: {manifest_path}")
+
+
+@ml_app.command("backtest")
+def backtest_command(
+    path: Annotated[Path, typer.Argument(help="YAML configuration file.")],
+    run_id: Annotated[str, typer.Option("--run-id", help="Existing generated run identifier.")],
+    benchmark_pack: Annotated[
+        Path | None,
+        typer.Option("--benchmark-pack", help="Optional versioned benchmark-pack YAML."),
+    ] = None,
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Directory containing generated runs."),
+    ] = Path("runs"),
+) -> None:
+    """Build deterministic rolling PIT backtest folds from an existing run."""
+
+    config = _load_or_exit(path)
+    try:
+        pack: BenchmarkPack | None = (
+            load_benchmark_pack(benchmark_pack) if benchmark_pack is not None else None
+        )
+        run_dir = output_dir / run_id
+        entities, behavior, source_manifest = load_generated_run(run_dir)
+        result = run_backtest(
+            config,
+            entities,
+            behavior,
+            source_manifest,
+            benchmark_pack=pack,
+        )
+        rows_path, metrics_path, manifest_path = write_backtest(
+            result, run_dir / "ml" / "backtests"
+        )
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Backtest generation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Backtest generated: {result.manifest.backtest_id}")
+    typer.echo(f"Rows: {len(result.fold_rows)}")
+    typer.echo(f"Fold metrics: {metrics_path}")
+    typer.echo(f"Rows artifact: {rows_path}")
+    typer.echo(f"Manifest: {manifest_path}")
 
 
 def main() -> None:

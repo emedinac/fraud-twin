@@ -1,0 +1,26 @@
+id: fraudtwin-m10-minimal
+version: 1.0.0
+source_seed: 42
+source_config_hash: 9b476d4295d00b3c50fef7e02d788266aa2494472db5aaa5302743441486ba00
+windows:
+  train:
+    from: 2026-01-01T00:00:00Z
+    to: 2026-01-01T06:00:00Z
+  validation:
+    from: 2026-01-01T06:00:00Z
+    to: 2026-01-01T12:00:00Z
+  test:
+    from: 2026-01-01T12:00:00Z
+    to: 2026-01-01T18:00:00Z
+  stress:
+    from: 2026-01-01T18:00:00Z
+    to: 2026-01-02T00:00:00Z
+label_policy: exclude
+scenario_parameters: {}
+metric_definitions:
+  - roc_auc
+  - pr_auc
+  - precision
+  - recall
+  - f1
+  - brier_score

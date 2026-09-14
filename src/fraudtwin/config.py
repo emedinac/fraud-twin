@@ -13,6 +13,9 @@ FRAUD_SCENARIO_IDS: tuple[FraudScenarioId, ...] = ("F01", "F02", "F03", "F04", "
 Speed = Literal["batch", "real_time", "accelerated"]
 QualityProfile = Literal["clean", "realistic", "hostile"]
 UnresolvedLabelPolicy = Literal["exclude", "include"]
+MinimumLabelMaturityPolicy = Literal["exclude", "include_unresolved"]
+TrainWindowMode = Literal["fixed", "expanding"]
+RegimeLabelPolicy = Literal["original"]
 FeatureWindowName = Literal[
     "transaction_count_1m",
     "transaction_count_5m",
@@ -506,6 +509,107 @@ class PointInTimeDatasetConfig(_StrictModel):
         return self
 
 
+def _parse_duration_seconds(value: Any) -> int:
+    """Parse a positive duration expressed as seconds or a compact unit string."""
+
+    if isinstance(value, bool):
+        raise ValueError("duration must be a positive number of seconds")
+    if isinstance(value, int):
+        seconds = value
+    elif isinstance(value, float) and value.is_integer():
+        seconds = int(value)
+    elif isinstance(value, str):
+        text = value.strip().lower()
+        units = (("d", 86_400), ("h", 3_600), ("m", 60), ("s", 1))
+        seconds = 0
+        for suffix, multiplier in units:
+            if text.endswith(suffix):
+                try:
+                    amount = float(text[: -len(suffix)])
+                except ValueError as exc:
+                    raise ValueError(f"invalid duration: {value}") from exc
+                if amount <= 0 or not amount.is_integer():
+                    raise ValueError("duration must be a positive whole-unit value")
+                seconds = int(amount * multiplier)
+                break
+        else:
+            try:
+                seconds = int(text)
+            except ValueError as exc:
+                raise ValueError(f"invalid duration: {value}") from exc
+    else:
+        raise ValueError("duration must be a positive number of seconds")
+    if seconds <= 0:
+        raise ValueError("duration must be positive")
+    return seconds
+
+
+class FraudRegimeConfig(_StrictModel):
+    """A declared fraud regime applied only while generating source history."""
+
+    id: str = Field(min_length=1)
+    from_time: datetime = Field(validation_alias=AliasChoices("from", "from_time"))
+    to_time: datetime = Field(validation_alias=AliasChoices("to", "to_time"))
+    prevalence_multiplier: float = Field(default=1.0, ge=0)
+    scenario_mix: dict[FraudScenarioId, Annotated[float, Field(ge=0)]] = Field(default_factory=dict)
+    amount_multiplier: float = Field(default=1.0, gt=0)
+    timing_multiplier: float = Field(default=1.0, gt=0)
+    camouflage: float = Field(default=0.0, ge=0, le=1)
+    campaign_intensity: float = Field(default=1.0, ge=0)
+    payment_rail_mix: dict[Rail, Annotated[float, Field(ge=0)]] | None = None
+    label_observation_policy: RegimeLabelPolicy = "original"
+
+    @field_validator("from_time", "to_time")
+    @classmethod
+    def regime_timestamps_must_include_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("regime timestamps must include a timezone")
+        return value
+
+    @model_validator(mode="after")
+    def regime_bounds_and_mixes_must_be_valid(self) -> "FraudRegimeConfig":
+        if self.to_time <= self.from_time:
+            raise ValueError("regime to must be after regime from")
+        if self.scenario_mix and abs(sum(self.scenario_mix.values()) - 1.0) > 1e-9:
+            raise ValueError("regime scenario_mix must sum to 1.0")
+        if self.payment_rail_mix and abs(sum(self.payment_rail_mix.values()) - 1.0) > 1e-9:
+            raise ValueError("regime payment_rail_mix must sum to 1.0")
+        return self
+
+
+class BacktestConfig(_StrictModel):
+    """Rolling PIT backtest and source-history regime settings."""
+
+    train_mode: TrainWindowMode = "expanding"
+    train_window_seconds: int | None = None
+    validation_window_seconds: int | None = None
+    test_window_seconds: int = 30 * 86_400
+    label_maturity_gap_seconds: int = 14 * 86_400
+    step_seconds: int = 30 * 86_400
+    minimum_label_maturity_policy: MinimumLabelMaturityPolicy = "exclude"
+    regimes: tuple[FraudRegimeConfig, ...] = ()
+
+    @field_validator(
+        "train_window_seconds",
+        "validation_window_seconds",
+        "test_window_seconds",
+        "label_maturity_gap_seconds",
+        "step_seconds",
+        mode="before",
+    )
+    @classmethod
+    def durations_must_be_positive_seconds(cls, value: Any) -> int | None:
+        return None if value is None else _parse_duration_seconds(value)
+
+    @model_validator(mode="after")
+    def train_window_must_match_mode(self) -> "BacktestConfig":
+        if self.train_mode == "fixed" and self.train_window_seconds is None:
+            raise ValueError("fixed backtests require train_window_seconds")
+        if self.train_mode == "expanding" and self.train_window_seconds is not None:
+            raise ValueError("expanding backtests must not set train_window_seconds")
+        return self
+
+
 class SimulationRunConfig(_StrictModel):
     """Top-level configuration accepted by the CLI."""
 
@@ -520,6 +624,7 @@ class SimulationRunConfig(_StrictModel):
     quality: QualityConfig
     outputs: OutputsConfig
     dataset: PointInTimeDatasetConfig = Field(default_factory=PointInTimeDatasetConfig)
+    backtest: BacktestConfig = Field(default_factory=BacktestConfig)
 
     def effective_label_delay_seconds(self) -> int:
         """Return the dataset label delay, falling back to workflow settings."""
@@ -566,6 +671,13 @@ class SimulationRunConfig(_StrictModel):
         ):
             if boundary is not None and not dataset_start < boundary <= dataset_end:
                 raise ValueError(f"dataset split {boundary_name} must fit the dataset range")
+        previous_regime_end: datetime | None = None
+        for regime in sorted(self.backtest.regimes, key=lambda item: item.from_time):
+            if regime.from_time < self.simulation.start or regime.to_time > simulation_end:
+                raise ValueError("fraud regime must fit the simulation window")
+            if previous_regime_end is not None and regime.from_time < previous_regime_end:
+                raise ValueError("fraud regimes must not overlap")
+            previous_regime_end = regime.to_time
         if self.dataset.splits.test_end is not None and self.dataset.splits.test_end != dataset_end:
             raise ValueError("dataset test_end must equal the dataset end")
         label_delay_gap = self.dataset.splits.label_delay_gap_seconds
@@ -639,6 +751,13 @@ def _canonical_config(
         payload.pop("pix_lifecycle", None)
     if not include_dataset:
         payload.pop("dataset", None)
+    # Rolling-window settings describe read-only analysis and must not alter
+    # the logical stream.  Declared regimes are different: they are generator
+    # inputs, so they must participate in the source-run identity.
+    if config.backtest.regimes:
+        payload["backtest"] = {"regimes": payload["backtest"]["regimes"]}
+    else:
+        payload.pop("backtest", None)
     canonical = json.dumps(
         payload,
         sort_keys=True,

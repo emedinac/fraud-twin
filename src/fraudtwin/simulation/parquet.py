@@ -366,6 +366,19 @@ FRAUD_LABEL_SCHEMA: dict[str, Any] = {
     "affected_entity_ids": pl.List(pl.Utf8),
 }
 
+BEHAVIOR_SCHEMAS: dict[str, dict[str, Any]] = {
+    "behavior_profiles": BEHAVIOR_PROFILE_SCHEMA,
+    "payments": PAYMENT_SCHEMA,
+    "payment_events": PAYMENT_EVENT_SCHEMA,
+    "ledger_entries": LEDGER_ENTRY_SCHEMA,
+    "fraud_records": FRAUD_RECORD_SCHEMA,
+    "fraud_alerts": FRAUD_ALERT_SCHEMA,
+    "fraud_cases": FRAUD_CASE_SCHEMA,
+    "case_confirmations": CASE_CONFIRMATION_SCHEMA,
+    "customer_disputes": CUSTOMER_DISPUTE_SCHEMA,
+    "fraud_labels": FRAUD_LABEL_SCHEMA,
+}
+
 
 def _write_table(
     records: Iterable[BaseModel],
@@ -397,8 +410,18 @@ def write_entity_parquet(dataset: EntityDataset, run_dir: Path) -> dict[str, Pat
     return written
 
 
-def write_behavior_parquet(dataset: BehaviorDataset, run_dir: Path) -> dict[str, Path]:
-    """Write behavior profiles, payments, and payment events with stable schemas."""
+def write_behavior_parquet(
+    dataset: BehaviorDataset,
+    run_dir: Path,
+    *,
+    mask_fraud_truth: bool = True,
+) -> dict[str, Path]:
+    """Write behavior records with stable schemas.
+
+    Operational M7 exports mask oracle truth by default. Replay exports can
+    opt into the complete historical truth stream because replay is an
+    immutable research artifact, not an operational label feed.
+    """
 
     behavior_dir = run_dir / "behavior"
     payments_dir = run_dir / "payments"
@@ -408,41 +431,31 @@ def write_behavior_parquet(dataset: BehaviorDataset, run_dir: Path) -> dict[str,
     payments_dir.mkdir(parents=True, exist_ok=False)
     ledger_dir.mkdir(parents=True, exist_ok=False)
     fraud_dir.mkdir(parents=True, exist_ok=False)
-    tables = {
-        "behavior_profiles": (dataset.profiles, BEHAVIOR_PROFILE_SCHEMA, behavior_dir),
-        "payments": (dataset.payments, PAYMENT_SCHEMA, payments_dir),
-        "payment_events": (dataset.payment_events, PAYMENT_EVENT_SCHEMA, payments_dir),
-        "ledger_entries": (dataset.ledger_entries, LEDGER_ENTRY_SCHEMA, ledger_dir),
-        "fraud_records": (dataset.fraud_records, FRAUD_RECORD_SCHEMA, fraud_dir),
-        "fraud_alerts": (dataset.alerts, FRAUD_ALERT_SCHEMA, fraud_dir),
-        "fraud_cases": (
-            dataset.fraud_cases,
-            FRAUD_CASE_SCHEMA,
-            fraud_dir,
-        ),
-        "case_confirmations": (
-            dataset.case_confirmations,
-            CASE_CONFIRMATION_SCHEMA,
-            fraud_dir,
-        ),
-        "customer_disputes": (
-            dataset.customer_disputes,
-            CUSTOMER_DISPUTE_SCHEMA,
-            fraud_dir,
-        ),
-        "fraud_labels": (
-            dataset.fraud_labels,
-            FRAUD_LABEL_SCHEMA,
-            fraud_dir,
-        ),
+    table_directories = {
+        "behavior_profiles": behavior_dir,
+        "payments": payments_dir,
+        "payment_events": payments_dir,
+        "ledger_entries": ledger_dir,
+        "fraud_records": fraud_dir,
+        "fraud_alerts": fraud_dir,
+        "fraud_cases": fraud_dir,
+        "case_confirmations": fraud_dir,
+        "customer_disputes": fraud_dir,
+        "fraud_labels": fraud_dir,
     }
-    masked_fields = {
-        "fraud_cases": ("fraud_truth",),
-        "case_confirmations": ("fraud_truth",),
-        "fraud_labels": ("fraud_truth",),
-    }
+    masked_fields = (
+        {
+            "fraud_cases": ("fraud_truth",),
+            "case_confirmations": ("fraud_truth",),
+            "fraud_labels": ("fraud_truth",),
+        }
+        if mask_fraud_truth
+        else {}
+    )
     written: dict[str, Path] = {}
-    for table_name, (records, schema, directory) in tables.items():
+    for table_name, records in dataset.tables().items():
+        schema = BEHAVIOR_SCHEMAS[table_name]
+        directory = table_directories[table_name]
         path = directory / f"{table_name}.parquet"
         _write_table(records, schema, path, masked_fields=masked_fields.get(table_name, ()))
         written[table_name] = path

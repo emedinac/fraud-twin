@@ -1,5 +1,18 @@
-"""Small, local point-in-time dataset tools for Milestone 9."""
+"""Small, local point-in-time dataset and backtesting tools."""
 
+from fraudtwin.ml.backtest import (
+    BACKTEST_ROW_SCHEMA,
+    FOLD_METRIC_SCHEMA,
+    METRIC_NAMES,
+    BacktestResult,
+    BenchmarkPack,
+    BenchmarkPackWindows,
+    BenchmarkWindow,
+    FoldSpec,
+    load_benchmark_pack,
+    run_backtest,
+    write_backtest,
+)
 from fraudtwin.ml.dataset import (
     DATASET_SCHEMA,
     PIT_DATASET_SCHEMA,
@@ -22,4 +35,15 @@ __all__ = [
     "build_dataset",
     "load_generated_run",
     "write_point_in_time_dataset",
+    "BACKTEST_ROW_SCHEMA",
+    "FOLD_METRIC_SCHEMA",
+    "METRIC_NAMES",
+    "BenchmarkPack",
+    "BenchmarkPackWindows",
+    "BenchmarkWindow",
+    "BacktestResult",
+    "FoldSpec",
+    "load_benchmark_pack",
+    "run_backtest",
+    "write_backtest",
 ]

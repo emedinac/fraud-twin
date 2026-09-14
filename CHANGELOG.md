@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.10.0 — Milestone 10
+
+- Added deterministic historical replay from existing generated runs with half-open period selection, event-time ordering, original-delivery ordering, full domain-record preservation, and replay fingerprints.
+- Added rolling fixed/expanding point-in-time backtests with label-maturity gaps, deterministic baseline metrics, fold manifests, source snapshots, and PIT validation metadata.
+- Added explicit source-history fraud regimes that affect configured source generation; replay and backtesting remain read-only over that history and never create counterfactual records.
+- Added versioned immutable benchmark-pack YAML definitions with fixed train, validation, test, and optional stress windows.
+- Added `fraudtwin replay` and `fraudtwin ml backtest` commands, stable M10 Parquet schemas, focused tests, and documentation.
+
 ## 0.9.0 — Milestone 9
 
 - Added a local, deterministic point-in-time ML dataset builder over existing M1-M8 records.

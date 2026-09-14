@@ -122,4 +122,24 @@ availability and configured delay. Temporal split gaps default to the label
 delay and are excluded from all partitions. Dataset manifests make the source
 run, parameters, split boundaries, schema, row and output fingerprints, and
 feature/label policies explicit.
-M10 replay and rolling backtests are intentionally not part of this release.
+
+The focused M10 replay and rolling-backtest checks are:
+
+```bash
+poetry run pytest tests/test_m10.py
+poetry run fraudtwin replay --run-id <run-id> \
+  --from 2026-01-01T00:00:00Z --to 2026-01-02T00:00:00Z \
+  --order original_delivery --output-dir /tmp/fraudtwin-m10
+poetry run fraudtwin ml backtest configs/minimal.yaml --run-id <run-id> \
+  --benchmark-pack configs/benchmarks/m10-minimal-v1.yaml \
+  --output-dir /tmp/fraudtwin-m10
+```
+
+M10 replay selects `[from, to)` and preserves source identities, business and
+availability timestamps, causal links, fraud records, workflow history, and
+typed schemas. Rolling folds are chronological and non-overlapping; their
+manifests record exact windows, source snapshots, PIT checks, resolved regimes,
+label policy, deterministic baseline metrics, aggregate dispersion, and
+degradation from the first test fold. Benchmark-pack definitions are hashed
+and immutable: changing a window, regime, seed/configuration, label policy,
+scenario parameter, or metric definition creates a new pack identity.
