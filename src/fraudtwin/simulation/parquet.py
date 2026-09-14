@@ -1,14 +1,18 @@
 """Explicitly typed Parquet output for entities, behavior, and payments."""
 
+from __future__ import annotations
+
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from pydantic import BaseModel
 
-from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
+
+if TYPE_CHECKING:
+    from fraudtwin.simulation.behavior import BehaviorDataset
 
 _UTC_TIMESTAMP = pl.Datetime(time_zone="UTC")
 

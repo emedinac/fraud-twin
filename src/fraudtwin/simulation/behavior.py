@@ -52,6 +52,7 @@ class BehaviorDataset:
     fraud_labels: tuple[DelayedFraudLabel, ...] = ()
     quality_fault_counts: dict[str, int] = field(default_factory=dict)
     quality_fault_rates: dict[str, float] = field(default_factory=dict)
+    quality_diagnostics: dict[str, object] = field(default_factory=dict)
 
     @property
     def counts(self) -> dict[str, int]:

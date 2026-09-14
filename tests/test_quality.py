@@ -5,6 +5,8 @@ from pathlib import Path
 import polars as pl
 import pytest
 import yaml
+from hypothesis import given, settings
+from hypothesis import strategies as st
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
@@ -32,6 +34,33 @@ def _dataset(config=None):
     config = config or _config()
     entities = EntityGenerator(config).generate()
     return config, entities, BehaviorGenerator(config, entities).generate()
+
+
+@given(
+    seed=st.integers(min_value=0, max_value=10_000),
+    probability=st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
+)
+@settings(max_examples=8, deadline=None)
+def test_quality_reproducibility_property(seed: int, probability: float) -> None:
+    base = load_config(CONFIG_PATH)
+    simulation = base.simulation.model_copy(update={"seed": seed})
+    clean_quality = base.quality.model_copy(update={"profile": "clean"})
+    _, _, clean = _dataset()
+    configured = base.model_copy(
+        update={
+            "simulation": simulation,
+            "quality": clean_quality.model_copy(
+                update={"duplicate_event_probability": probability}
+            ),
+        }
+    )
+
+    first = QualityFaultInjector(configured).apply(clean)
+    second = QualityFaultInjector(configured).apply(clean)
+
+    assert first == second
+    assert first.quality_fault_rates["duplicate_events_requested"] == probability
+    assert first.quality_diagnostics == second.quality_diagnostics
 
 
 def test_clean_quality_is_a_m1_to_m7_regression_baseline() -> None:
@@ -88,6 +117,7 @@ def test_duplicate_records_and_events_keep_identity_and_causal_metadata() -> Non
     )
     assert duplicated.payment_events[0] == duplicated.payment_events[1]
     assert duplicated.payments[0] == duplicated.payments[1]
+    assert duplicated.quality_diagnostics["key_uniqueness"]["payments"]["duplicate_rows"] > 0
 
 
 def test_missing_optional_and_invalid_values_are_measured() -> None:
@@ -105,6 +135,49 @@ def test_missing_optional_and_invalid_values_are_measured() -> None:
     assert any(
         payment_before != payment_after
         for payment_before, payment_after in zip(clean.payments, corrupted.payments, strict=True)
+    )
+
+
+def test_pandera_and_sdmetrics_aligned_diagnostics_distinguish_clean_and_corrupt() -> None:
+    _, _, clean = _dataset()
+    assert clean.quality_diagnostics["data_validity"]["clean"]["payments"]["valid"] is True
+    assert clean.quality_diagnostics["data_validity"]["output"]["payment_events"]["valid"] is True
+    assert clean.quality_diagnostics["data_structure"]["payments"]["score"] == 1.0
+    assert clean.quality_diagnostics["relationship_validity"]["overall_rate"] == 1.0
+
+    corrupted = QualityFaultInjector(
+        _config(invalid_value_probability=1.0, duplicate_event_probability=1.0)
+    ).apply(clean)
+    output_validity = corrupted.quality_diagnostics["data_validity"]["output"]
+    assert output_validity["payments"]["valid"] is False
+    assert output_validity["payment_events"]["valid"] is False
+    assert corrupted.quality_diagnostics["key_uniqueness"]["payment_events"]["duplicate_rows"] > 0
+
+    import pandas as pd
+    from sdmetrics.column_pairs import ReferentialIntegrity
+    from sdmetrics.single_column import KeyUniqueness
+    from sdmetrics.single_table import TableStructure
+
+    payment_frame = pd.DataFrame([payment.model_dump(mode="python") for payment in clean.payments])
+    event_frame = pd.DataFrame([event.model_dump(mode="python") for event in clean.payment_events])
+    duplicate_event_frame = pd.DataFrame(
+        [event.model_dump(mode="python") for event in corrupted.payment_events]
+    )
+    assert (
+        KeyUniqueness.compute(
+            real_data=event_frame["event_id"], synthetic_data=duplicate_event_frame["event_id"]
+        )
+        < 1.0
+    )
+    assert (
+        TableStructure.compute(real_data=event_frame, synthetic_data=duplicate_event_frame) == 1.0
+    )
+    assert (
+        ReferentialIntegrity.compute(
+            real_data=(payment_frame["payment_id"], event_frame["payment_id"]),
+            synthetic_data=(payment_frame["payment_id"], duplicate_event_frame["payment_id"]),
+        )
+        == 1.0
     )
 
 
@@ -206,6 +279,8 @@ def test_quality_parquet_schemas_and_manifest_counts_are_stable(tmp_path: Path) 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["quality_fault_counts"]["source_delay_events"] > 0
     assert manifest["quality_fault_rates"]["source_delay_seconds"] == 7.0
+    assert manifest["quality_diagnostics"]["data_validity"]["output"]["payments"]["valid"] is True
+    assert manifest["quality_diagnostics"]["data_structure"]["payment_events"]["score"] == 1.0
 
 
 @pytest.mark.parametrize(

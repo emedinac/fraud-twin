@@ -27,6 +27,7 @@ class RunManifest(BaseModel):
     fraud_rates: dict[str, float]
     quality_fault_counts: dict[str, int]
     quality_fault_rates: dict[str, float] = Field(default_factory=dict)
+    quality_diagnostics: dict[str, object] = Field(default_factory=dict)
 
 
 class DatasetManifest(BaseModel):
@@ -93,6 +94,7 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         fraud_rates={},
         quality_fault_counts={},
         quality_fault_rates={},
+        quality_diagnostics={},
     )
 
 

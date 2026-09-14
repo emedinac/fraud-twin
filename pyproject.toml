@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2.7,<3.0",
     "PyYAML>=6.0,<7.0",
     "typer>=0.12,<1.0",
+    "pandera[polars] (>=0.26,<1.0)",
 ]
 
 [project.scripts]
@@ -28,6 +29,7 @@ pytest = "^8.0"
 pytest-cov = "^5.0"
 ruff = "^0.6"
 types-PyYAML = "^6.0"
+sdmetrics = {version = ">=0.30,<0.32", python = ">=3.12,<3.15"}
 
 [tool.pytest.ini_options]
 addopts = "--cov=fraudtwin --cov-report=term-missing"

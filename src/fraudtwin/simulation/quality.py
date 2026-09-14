@@ -29,6 +29,7 @@ from fraudtwin.domain import (
     PaymentEvent,
 )
 from fraudtwin.seed import create_stream_rng
+from fraudtwin.simulation.quality_diagnostics import build_quality_diagnostics
 
 if TYPE_CHECKING:
     from fraudtwin.simulation.behavior import BehaviorDataset
@@ -155,6 +156,10 @@ class QualityFaultInjector:
         events, duplicate_event_count = self._duplicate_events(events)
         counts["duplicate_events"] = duplicate_event_count
 
+        traffic_group_count = len({event.payment_id for event in events})
+        fraud_group_count = len(
+            {event.scenario_id for event in events if event.scenario_id is not None}
+        )
         events, traffic_count = self._apply_traffic_spikes(events)
         counts["traffic_spikes"] = traffic_count
         events, fraud_spike_count = self._apply_fraud_spikes(events)
@@ -178,8 +183,10 @@ class QualityFaultInjector:
             original_payment_count,
             original_event_count,
             original_fraud_record_count,
+            traffic_group_count,
+            fraud_group_count,
         )
-        return replace(
+        result = replace(
             dataset,
             payments=payments,
             payment_events=events,
@@ -193,6 +200,7 @@ class QualityFaultInjector:
             quality_fault_counts=counts,
             quality_fault_rates=rates,
         )
+        return replace(result, quality_diagnostics=build_quality_diagnostics(dataset, result))
 
     def _missing_payment_fields(
         self, payments: tuple[Payment, ...]
@@ -378,7 +386,7 @@ class QualityFaultInjector:
             values = [result[position] for position in positions]
             for position, value in zip(positions, (values[-1], *values[:-1]), strict=True):
                 result[position] = value
-            count += 2
+            count += len(positions)
         return tuple(result), count
 
     @staticmethod
@@ -506,6 +514,8 @@ class QualityFaultInjector:
         payment_count: int,
         event_count: int,
         fraud_record_count: int,
+        traffic_group_count: int,
+        fraud_group_count: int,
     ) -> dict[str, float]:
         denominators = {
             "duplicate_records": payment_count + fraud_record_count,
@@ -513,10 +523,10 @@ class QualityFaultInjector:
             "missing_optional_fields": payment_count + event_count,
             "invalid_values": payment_count + event_count,
             "late_events": event_count,
-            "out_of_order_events": max(1, payment_count * 2),
+            "out_of_order_events": event_count,
             "source_delay_events": event_count,
-            "fraud_spikes": max(1, len(self.config.fraud.scenarios)),
-            "traffic_spikes": payment_count,
+            "fraud_spikes": fraud_group_count,
+            "traffic_spikes": traffic_group_count,
         }
         requested = {
             "duplicate_records": self.quality.probability("duplicate_record"),

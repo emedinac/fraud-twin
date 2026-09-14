@@ -103,10 +103,7 @@ poetry run fraudtwin generate configs/minimal.yaml --output-dir /tmp/fraudtwin-m
 poetry run fraudtwin validate-ledger --run-id <run-id> --output-dir /tmp/fraudtwin-m8
 ```
 
-Use a temporary YAML override to exercise a fault profile without changing the
-tracked minimal configuration. The M8 tests cover reproducibility, independent
-fault settings, optional-field handling, invalid values, source timing,
-delivery ordering, spikes, Parquet schemas, manifests, and CLI generation.
+Use a temporary YAML override to exercise a fault profile without changing the tracked minimal configuration. The M8 tests cover reproducibility, independent fault settings, optional-field handling, invalid values, source timing, delivery ordering, spikes, Parquet schemas, manifests, CLI generation, Pandera dataframe validation, and SDMetrics-aligned uniqueness, structure, and referential-integrity diagnostics. The quality layer reports intentional validation failures instead of rejecting configured chaos output. Hypothesis property tests exercise deterministic fault application across seeds and requested probabilities.
 
 The focused M9 checks are:
 

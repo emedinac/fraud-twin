@@ -80,7 +80,7 @@ runs/<run_id>/
 
 All Parquet files use explicit, stable schemas and column ordering. Generated payments reference existing accounts, cards, merchants, devices, and customers. Amounts are positive, payment timestamps stay within the configured simulation window, delayed workflow timestamps follow their causal evidence, and no real personal data or payment credentials are used.
 
-The manifest records the seed, configuration hash, schema versions, entity counts, payment/lifecycle/ledger counts, fraud event/record counts, M7 alert/case/confirmation/dispute/label counts, per-scenario fraud rates, and M8 quality-fault counts and requested/realized rates. The default configuration uses the clean quality profile and keeps fraud disabled, so it produces the same legitimate CARD, PIX-like, and account-transfer behavior as the previous release.
+The manifest records the seed, configuration hash, schema versions, entity counts, payment/lifecycle/ledger counts, fraud event/record counts, M7 alert/case/confirmation/dispute/label counts, per-scenario fraud rates, M8 quality-fault counts and requested/realized rates, and dataframe-level quality diagnostics. M8 diagnostics use Pandera schemas for clean and intentionally corrupted tables and report SDMetrics-aligned validity, structure, key-uniqueness, envelope, delivery-order, and relationship measurements. The default configuration uses the clean quality profile and keeps fraud disabled, so it produces the same legitimate CARD, PIX-like, and account-transfer behavior as the previous release.
 
 Build or rebuild the M9 dataset from an existing run with:
 
