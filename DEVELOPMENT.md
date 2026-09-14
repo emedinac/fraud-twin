@@ -33,8 +33,8 @@ For focused tests, generated-run smoke checks, architecture notes, and the contr
 
 ## Documentation map
 
-- [Quickstart](docs/quickstart.md) — generate and inspect a first run.
-- [Configuration](docs/configuration.md) — tune behavior, fraud, quality, and benchmarks.
-- [Data and evaluation workflows](docs/workflows.md) — datasets, replay, and backtests.
-- [Graph and benchmark workflows](docs/graph-and-benchmarks.md) — graph export, difficulty, and camouflage.
-- [Release notes](CHANGELOG.md) — release history.
+- [Quickstart](docs/quickstart.md) - generate and inspect a first run.
+- [Configuration](docs/configuration.md) - tune behavior, fraud, quality, and benchmarks.
+- [Data and evaluation workflows](docs/workflows.md) - datasets, replay, and backtests.
+- [Graph and benchmark workflows](docs/graph-and-benchmarks.md) - graph export, difficulty, and camouflage.
+- [Release notes](CHANGELOG.md) - release history.

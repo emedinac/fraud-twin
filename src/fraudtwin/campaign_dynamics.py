@@ -338,6 +338,7 @@ def _campaign_actions(
                 phase=cast(CampaignPhaseName, current),
                 intensity=rate,
                 active_actor_ids=tuple(members),
+                active_device_ids=(current_device,) if current_device else (),
                 valid_from=current_time,
             )
         )
@@ -368,7 +369,12 @@ def _campaign_actions(
         current = next_phase
         duration = binding.phase_durations.get(cast(CampaignPhaseName, current), 1)
         current_time = min(end, current_time + timedelta(seconds=duration))
-        if current != "closed" and ordinal == 0 and binding.max_actor_joins:
+        if (
+            current != "closed"
+            and ordinal == 0
+            and binding.max_actor_joins
+            and len(members) < binding.max_active_members
+        ):
             available = [item for item in accounts if item.account_id not in members]
             if available:
                 actor = available[actor_rng.randrange(len(available))]

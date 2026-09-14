@@ -1547,7 +1547,7 @@ class CampaignDynamicsBinding(_StrictModel):
         default_factory=_default_dynamic_transitions
     )
     allowed_rails: tuple[Rail, ...] = ("ACCOUNT_TRANSFER", "PIX", "CARD")
-    max_actions: int = Field(default=24, ge=0)
+    max_actions: int = Field(default=24, ge=1)
     max_actor_joins: int = Field(default=2, ge=0)
     max_actor_leaves: int = Field(default=2, ge=0)
     max_mule_rotations: int = Field(default=2, ge=0)
@@ -1774,12 +1774,23 @@ class SimulationRunConfig(_StrictModel):
                     for scenario in self.graph.scenarios
                     if scenario.type == template
                 )
+                initial_members = max(
+                    (
+                        graph_account_capacity(scenario)
+                        for scenario in self.graph.scenarios
+                        if scenario.type == template and scenario.count
+                    ),
+                    default=0,
+                )
                 if self.population.accounts < static_members + binding.max_actor_joins:
                     raise ValueError(
                         f"campaign dynamics {template} exceeds account capacity for joins"
                     )
-                if binding.max_active_members < 2:
-                    raise ValueError("campaign dynamics requires at least two active members")
+                if initial_members > binding.max_active_members:
+                    raise ValueError(
+                        f"campaign dynamics {template} initial membership exceeds "
+                        "max_active_members"
+                    )
         stress_active = self.stress.active
         benchmark_camouflage_active = self.benchmark.camouflage_active
         if stress_active and benchmark_camouflage_active:
