@@ -456,7 +456,11 @@ class QualityFaultInjector:
                         if case.fraud_confirmed_at is not None
                         else None
                     ),
-                    "label_available_at": case.label_available_at + shift(case.fraud_record_id),
+                    "label_available_at": (
+                        case.label_available_at + shift(case.fraud_record_id)
+                        if case.label_available_at is not None
+                        else None
+                    ),
                 }
             )
             for case in cases

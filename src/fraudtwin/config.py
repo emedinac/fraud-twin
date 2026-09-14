@@ -35,9 +35,13 @@ FeatureWindowName = Literal[
     "fraud_loss_365d",
     "days_since_last_confirmed_fraud",
 ]
-# Five seconds of source delay plus one second each for ingestion and processing.
-CARD_EVENT_ENVELOPE_DELAY_SECONDS = 7
-PIX_EVENT_ENVELOPE_DELAY_SECONDS = 4
+# Source delay plus one second each for ingestion and processing.
+CARD_SOURCE_DELAY_SECONDS = 5
+PIX_SOURCE_DELAY_SECONDS = 2
+ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS = 5
+CARD_EVENT_ENVELOPE_DELAY_SECONDS = CARD_SOURCE_DELAY_SECONDS + 2
+PIX_EVENT_ENVELOPE_DELAY_SECONDS = PIX_SOURCE_DELAY_SECONDS + 2
+ACCOUNT_TRANSFER_EVENT_ENVELOPE_DELAY_SECONDS = ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS + 2
 
 
 class _StrictModel(BaseModel):

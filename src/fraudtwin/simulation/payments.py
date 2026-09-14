@@ -8,8 +8,11 @@ from random import Random
 from typing import Literal, TypeVar, cast
 
 from fraudtwin.config import (
+    ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS,
     CARD_EVENT_ENVELOPE_DELAY_SECONDS,
+    CARD_SOURCE_DELAY_SECONDS,
     PIX_EVENT_ENVELOPE_DELAY_SECONDS,
+    PIX_SOURCE_DELAY_SECONDS,
     SimulationRunConfig,
     config_hash,
 )
@@ -35,8 +38,6 @@ from fraudtwin.domain import (
 from fraudtwin.seed import create_stream_rng
 
 _ID_WIDTH = 8
-_CARD_SOURCE_DELAY_SECONDS = 5
-_PIX_SOURCE_DELAY_SECONDS = 2
 T = TypeVar("T")
 Record = TypeVar("Record")
 
@@ -420,7 +421,11 @@ class PaymentGenerator:
             payee_pix_key_id=payee_pix_key_id,
         )
         source_delay_seconds = (
-            _PIX_SOURCE_DELAY_SECONDS if rail == "PIX" else _CARD_SOURCE_DELAY_SECONDS
+            PIX_SOURCE_DELAY_SECONDS
+            if rail == "PIX"
+            else ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS
+            if rail == "ACCOUNT_TRANSFER"
+            else CARD_SOURCE_DELAY_SECONDS
         )
         source_available_at, ingested_at, processed_at = _event_times(
             initiated_at, source_delay_seconds
@@ -538,7 +543,7 @@ class PaymentGenerator:
                 previous_id,
                 event_type,
                 delay_seconds,
-                _CARD_SOURCE_DELAY_SECONDS,
+                CARD_SOURCE_DELAY_SECONDS,
             )
 
         if rng.random() >= settings.authorization_approval_probability:
@@ -592,7 +597,7 @@ class PaymentGenerator:
                 previous_id,
                 event_type,
                 delay_seconds,
-                _PIX_SOURCE_DELAY_SECONDS,
+                PIX_SOURCE_DELAY_SECONDS,
             )
 
         append("PIX_VALIDATED", settings.validation_delay_seconds)

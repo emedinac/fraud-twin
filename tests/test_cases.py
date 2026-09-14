@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 from fraudtwin.cli import app
 from fraudtwin.config import SimulationRunConfig, load_config
 from fraudtwin.domain import validate_fraud_workflow, validate_ledger
+from fraudtwin.ml import load_generated_run
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.parquet import (
     CASE_CONFIRMATION_SCHEMA,
@@ -102,7 +103,8 @@ def test_m7_references_and_causal_ids_are_valid() -> None:
         )
         assert case.causation_id == alert.fraud_alert_id
         assert case.label_available_at >= case.fraud_occurred_at
-        assert case.label_available_at >= case.fraud_confirmed_at
+        if case.fraud_confirmed_at is not None:
+            assert case.label_available_at >= case.fraud_confirmed_at
         label = next(
             label for label in dataset.fraud_labels if label.fraud_case_id == case.fraud_case_id
         )
@@ -114,6 +116,13 @@ def test_m7_references_and_causal_ids_are_valid() -> None:
         assert case.fraud_record_id in records
         confirmation = confirmations[case.fraud_case_id]
         assert confirmation.causation_id == case.fraud_case_id
+        assert confirmation.investigation_outcome == (
+            "CONFIRMED_FRAUD" if case.fraud_truth else "FALSE_POSITIVE"
+        )
+        if case.fraud_truth:
+            assert case.fraud_confirmed_at == confirmation.confirmed_at
+        else:
+            assert case.fraud_confirmed_at is None
         if case.fraud_truth:
             dispute = disputes[case.fraud_case_id]
             assert dispute.causation_id == case.fraud_case_id
@@ -137,6 +146,39 @@ def test_m7_references_and_causal_ids_are_valid() -> None:
     )
 
 
+def test_m7_confirmed_loss_uses_realized_payment_outcome() -> None:
+    _, _, dataset = _dataset()
+    payments = {payment.payment_id: payment for payment in dataset.payments}
+
+    for case in dataset.fraud_cases:
+        payment = payments[case.payment_id]
+        if case.investigation_outcome != "CONFIRMED_FRAUD":
+            assert case.loss_amount == 0.0
+            continue
+        entries = [
+            entry for entry in dataset.ledger_entries if entry.payment_id == payment.payment_id
+        ]
+        if entries:
+            debit = sum(
+                entry.amount
+                for entry in entries
+                if entry.account_id == payment.payer_account_id and entry.entry_type == "DEBIT"
+            )
+            credit = sum(
+                entry.amount
+                for entry in entries
+                if entry.account_id == payment.payer_account_id and entry.entry_type == "CREDIT"
+            )
+            expected_loss = max(0.0, round(debit - credit, 2))
+        else:
+            expected_loss = (
+                payment.amount
+                if payment.current_status in {"SETTLED", "COMPLETED", "RECEIVED"}
+                else 0.0
+            )
+        assert case.loss_amount == expected_loss
+
+
 def test_m7_can_leave_cases_unconfirmed_without_exposing_an_early_label() -> None:
     base = load_config(CONFIG_PATH)
     workflow = base.fraud_workflow.model_copy(
@@ -153,11 +195,48 @@ def test_m7_can_leave_cases_unconfirmed_without_exposing_an_early_label() -> Non
     assert dataset.fraud_cases
     assert not dataset.case_confirmations
     assert not dataset.customer_disputes
+    assert not dataset.fraud_labels
     assert all(case.fraud_confirmed_at is None for case in dataset.fraud_cases)
-    assert all(
-        label.label_available_at >= case.case_opened_at
-        for case, label in zip(dataset.fraud_cases, dataset.fraud_labels, strict=True)
+    assert all(case.case_closed_at is None for case in dataset.fraud_cases)
+    assert all(case.label_available_at is None for case in dataset.fraud_cases)
+    assert any(record.fraud_truth for record in dataset.fraud_records)
+
+
+def test_m7_operational_outputs_do_not_expose_oracle_truth(tmp_path: Path) -> None:
+    base = load_config(CONFIG_PATH)
+    workflow = base.fraud_workflow.model_copy(
+        update={
+            "confirmation_probability": 0.0,
+            "customer_dispute_probability": 0.0,
+        }
     )
+    fraud = base.fraud.model_copy(update={"enabled": True, "target_rate": 1.0, "scenario_count": 1})
+    config = base.model_copy(update={"fraud": fraud, "fraud_workflow": workflow})
+    entities = EntityGenerator(config).generate()
+    dataset = BehaviorGenerator(config, entities).generate()
+    paths = write_behavior_parquet(dataset, tmp_path / "run")
+
+    for table_name in ("fraud_cases", "case_confirmations", "fraud_labels"):
+        frame = pl.read_parquet(paths[table_name])
+        assert frame["fraud_truth"].null_count() == frame.height
+    assert all(alert.severity == "MEDIUM" for alert in dataset.alerts)
+    assert all(case.loss_amount == 0.0 for case in dataset.fraud_cases)
+
+
+def test_m7_persisted_workflow_is_revalidated_before_pit_loading(tmp_path: Path) -> None:
+    config, _, dataset = _dataset()
+    config_path = tmp_path / "m7.yaml"
+    config_path.write_text(yaml.safe_dump(config.model_dump(mode="json")), encoding="utf-8")
+    result = runner.invoke(
+        app,
+        ["generate", str(config_path), "--output-dir", str(tmp_path / "out")],
+    )
+    assert result.exit_code == 0, result.stdout
+    run_dir = next((tmp_path / "out").glob("*/manifest.json")).parent
+    _, loaded, _ = load_generated_run(run_dir)
+    assert loaded.fraud_cases
+    assert all(case.fraud_truth is None for case in loaded.fraud_cases)
+    assert len(loaded.fraud_labels) == len(dataset.fraud_labels)
 
 
 def test_m7_parquet_schemas_and_manifest_counts_are_stable(tmp_path: Path) -> None:

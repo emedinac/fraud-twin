@@ -8,6 +8,7 @@
 - Added dataset manifests containing source-run lineage, configuration, split, feature, label, schema, and row-reproducibility metadata.
 - Added `fraudtwin ml build-dataset` for building a dataset from an existing generated run without regenerating source records; M10 replay and backtesting remain deferred.
 - Added Pandera-backed M8 dataframe validation, Hypothesis reproducibility properties, and SDMetrics-aligned validity, structure, uniqueness, and relationship diagnostics for clean and intentionally corrupted outputs.
+- Hardened the M7 observation boundary: operational workflow outputs no longer expose copied latent truth, false-positive confirmations are distinct from confirmed fraud, persisted M7 relationships are revalidated before PIT dataset construction, and confirmed-case loss reflects realized payment or ledger activity.
 
 ## 0.8.0 — Milestone 8
 

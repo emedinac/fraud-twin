@@ -62,11 +62,8 @@ def test_features_are_available_at_prediction_time() -> None:
     config, entities, behavior, source_manifest = _source()
     dataset = PointInTimeDatasetBuilder(config, entities, behavior, source_manifest).build()
 
-    assert all(
-        row["business_event_time"] <= row["prediction_time"]
-        or row["source_available_at"] <= row["prediction_time"]
-        for row in dataset.rows
-    )
+    assert all(row["business_event_time"] <= row["prediction_time"] for row in dataset.rows)
+    assert all(row["source_available_at"] <= row["prediction_time"] for row in dataset.rows)
     assert all(row["feature_available_at"] <= row["prediction_time"] for row in dataset.rows)
     assert all(
         row["label_available_at"] is None or row["label_available_at"] <= row["prediction_time"]
@@ -200,6 +197,24 @@ def test_unavailable_label_is_unresolved_before_its_delay_expires() -> None:
     assert row["label"] is None
     assert row["fraud_truth"] is None
     assert row["label_available_at"] == label.label_available_at
+
+
+def test_in_memory_pit_validation_rejects_mismatched_dispute_evidence() -> None:
+    config, entities, behavior, source_manifest = _source(fraud=True)
+    label = next(label for label in behavior.fraud_labels if label.dispute_event_at is not None)
+    changed_label = label.model_copy(
+        update={"dispute_event_at": label.dispute_event_at + timedelta(seconds=1)}
+    )
+    changed_behavior = replace(
+        behavior,
+        fraud_labels=tuple(
+            changed_label if item.label_id == label.label_id else item
+            for item in behavior.fraud_labels
+        ),
+    )
+
+    with pytest.raises(ValueError, match="label dispute timestamp"):
+        PointInTimeDatasetBuilder(config, entities, changed_behavior, source_manifest).build()
 
 
 def test_manifest_contains_split_lineage_and_reproducibility_metadata(tmp_path: Path) -> None:

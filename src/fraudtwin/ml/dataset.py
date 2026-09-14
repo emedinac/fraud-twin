@@ -34,6 +34,7 @@ from fraudtwin.domain import (
     Payment,
     PaymentEvent,
     PixKey,
+    validate_fraud_workflow,
 )
 from fraudtwin.manifest import DatasetManifest, RunManifest
 from fraudtwin.simulation.behavior import BehaviorDataset
@@ -182,11 +183,11 @@ def _schema_fingerprint() -> str:
     return hashlib.sha256(_canonical(schema).encode()).hexdigest()
 
 
-def _in_window(event_time: datetime, candidate_time: datetime, seconds: int) -> bool:
+def _in_window(reference_time: datetime, candidate_time: datetime, window_seconds: int) -> bool:
     """Return whether a prior business event falls in a feature window."""
 
-    delta = event_time - candidate_time
-    return timedelta(0) < delta <= timedelta(seconds=seconds)
+    delta = reference_time - candidate_time
+    return timedelta(0) < delta <= timedelta(seconds=window_seconds)
 
 
 def _deduplicate(records: Iterable[T], identifier: str) -> tuple[T, ...]:
@@ -219,6 +220,32 @@ def _read_models(path: Path, model: type[T]) -> tuple[T, ...]:
 
 def _read_run_table(run_dir: Path, group: str, table: str, model: type[T]) -> tuple[T, ...]:
     return _read_models(run_dir / group / f"{table}.parquet", model)
+
+
+def _validate_behavior_workflow(entities: EntityDataset, behavior: BehaviorDataset) -> None:
+    """Validate the complete M7 workflow against its M1-M6 source records."""
+
+    entity_ids = entities.reference_ids
+    validate_fraud_workflow(
+        behavior.alerts,
+        behavior.fraud_cases,
+        behavior.case_confirmations,
+        behavior.customer_disputes,
+        behavior.fraud_labels,
+        customer_ids=entity_ids["customers"],
+        account_ids=entity_ids["accounts"],
+        card_ids=entity_ids["cards"],
+        device_ids=entity_ids["devices"],
+        merchant_ids=entity_ids["merchants"],
+        payment_ids=frozenset(payment.payment_id for payment in behavior.payments),
+        event_ids=frozenset(event.event_id for event in behavior.payment_events),
+        fraud_record_ids=frozenset(record.fraud_record_id for record in behavior.fraud_records),
+        all_entity_ids=entities.all_ids,
+        fraud_truth_by_record={
+            record.fraud_record_id: record.fraud_truth for record in behavior.fraud_records
+        },
+        fraud_records_by_id={record.fraud_record_id: record for record in behavior.fraud_records},
+    )
 
 
 def load_generated_run(run_dir: Path) -> tuple[EntityDataset, BehaviorDataset, RunManifest]:
@@ -254,6 +281,7 @@ def load_generated_run(run_dir: Path) -> tuple[EntityDataset, BehaviorDataset, R
         customer_disputes=_read_run_table(run_dir, "fraud", "customer_disputes", CustomerDispute),
         fraud_labels=_read_run_table(run_dir, "fraud", "fraud_labels", DelayedFraudLabel),
     )
+    _validate_behavior_workflow(entities, behavior)
     return entities, behavior, manifest
 
 
@@ -286,6 +314,9 @@ class PointInTimeDatasetBuilder:
         self.label_delay_seconds = config.effective_label_delay_seconds()
         if self.end <= self.start:
             raise ValueError("dataset end must be after dataset start")
+        self.fraud_truth_by_record = {
+            record.fraud_record_id: record.fraud_truth for record in behavior.fraud_records
+        }
         self._validate_sources()
         self.payments = _deduplicate(behavior.payments, "payment_id")
         self.payments_by_id = {payment.payment_id: payment for payment in self.payments}
@@ -300,13 +331,8 @@ class PointInTimeDatasetBuilder:
         self.devices = {device.device_id: device for device in entities.devices}
 
     def _validate_sources(self) -> None:
-        entity_ids = {
-            "customers": {item.customer_id for item in self.entities.customers},
-            "accounts": {item.account_id for item in self.entities.accounts},
-            "cards": {item.card_id for item in self.entities.cards},
-            "devices": {item.device_id for item in self.entities.devices},
-            "merchants": {item.merchant_id for item in self.entities.merchants},
-        }
+        _validate_behavior_workflow(self.entities, self.behavior)
+        entity_ids = self.entities.reference_ids
         payment_ids = {payment.payment_id for payment in self.behavior.payments}
         for payment in self.behavior.payments:
             _utc(payment.initiated_at)
@@ -395,8 +421,15 @@ class PointInTimeDatasetBuilder:
                 seconds=self.label_delay_seconds
             ):
                 raise ValueError(f"label {label.label_id} violates configured label delay")
+            if (
+                label.dispute_event_at is not None
+                and label.dispute_event_at > label.label_available_at
+            ):
+                raise ValueError(f"label {label.label_id} is available before dispute evidence")
             if label.payment_id not in payment_ids:
                 raise ValueError(f"label {label.label_id} references unknown payment")
+            if label.fraud_record_id not in self.fraud_truth_by_record:
+                raise ValueError(f"label {label.label_id} references unknown fraud record")
         event_by_id = {event.event_id: event for event in self.behavior.payment_events}
         for entry in self.behavior.ledger_entries:
             for timestamp in (entry.occurred_at, entry.effective_at, entry.posted_at):
@@ -551,25 +584,18 @@ class PointInTimeDatasetBuilder:
         return PointInTimeDataset(tuple(rows), manifest)
 
     def _prior_events(
-        self, event: PaymentEvent, prediction_time: datetime
+        self,
+        event: PaymentEvent,
+        prediction_time: datetime,
+        *,
+        same_customer: bool = True,
     ) -> tuple[PaymentEvent, ...]:
         return tuple(
             candidate
             for candidate in self.events_by_payment.values()
-            if candidate.customer_id == event.customer_id
+            if (not same_customer or candidate.customer_id == event.customer_id)
             and candidate.payment_id != event.payment_id
             and candidate.event_time < prediction_time
-            and candidate.source_available_at <= prediction_time
-        )
-
-    def _all_prior_events(
-        self, event: PaymentEvent, prediction_time: datetime
-    ) -> tuple[PaymentEvent, ...]:
-        return tuple(
-            candidate
-            for candidate in self.events_by_payment.values()
-            if candidate.payment_id != event.payment_id
-            if candidate.event_time < prediction_time
             and candidate.source_available_at <= prediction_time
         )
 
@@ -619,14 +645,17 @@ class PointInTimeDatasetBuilder:
         tuple[DelayedFraudLabel, ...],
         tuple[DelayedFraudLabel, ...],
     ]:
-        known_labels = tuple(
+        historical_labels = tuple(
             label
             for label in self.labels
             if label.label_available_at <= prediction_time
             and label.payment_id != payment.payment_id
-            and label.label == "FRAUD"
-            and label.fraud_confirmed_at is not None
             and label.fraud_occurred_at < prediction_time
+        )
+        known_labels = tuple(
+            label
+            for label in historical_labels
+            if label.label == "FRAUD" and label.fraud_confirmed_at is not None
         )
         prior_confirmed = tuple(
             label
@@ -648,11 +677,8 @@ class PointInTimeDatasetBuilder:
         )
         merchant_labels = tuple(
             label
-            for label in self.labels
-            if label.label_available_at <= prediction_time
-            and label.payment_id != payment.payment_id
-            and label.fraud_occurred_at < prediction_time
-            and _in_window(
+            for label in historical_labels
+            if _in_window(
                 prediction_time,
                 label.fraud_occurred_at,
                 self.feature_windows["merchant_fraud_rate_historical"],
@@ -840,7 +866,7 @@ class PointInTimeDatasetBuilder:
         split: str,
     ) -> dict[str, Any]:
         prior = self._prior_events(event, prediction_time)
-        all_prior = self._all_prior_events(event, prediction_time)
+        all_prior = self._prior_events(event, prediction_time, same_customer=False)
         merchant = self.merchants.get(payment.merchant_id or "")
         device = self.devices.get(event.device_id or "")
         account = self.accounts.get(payment.payer_account_id)
@@ -922,7 +948,11 @@ class PointInTimeDatasetBuilder:
             "feature_available_at": feature_available_at,
             "label_available_at": label.label_available_at if label is not None else None,
             "label": label.label if label is not None and label_is_mature else None,
-            "fraud_truth": label.fraud_truth if label is not None and label_is_mature else None,
+            "fraud_truth": (
+                self.fraud_truth_by_record.get(label.fraud_record_id)
+                if label is not None and label_is_mature
+                else None
+            ),
             **feature_values,
             "split": split,
         }

@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import Field
 
 from fraudtwin.domain.entities import _EntityModel
+from fraudtwin.domain.fraud import FraudRecord
 
 InvestigationOutcome = Literal[
     "CONFIRMED_FRAUD",
@@ -51,6 +52,23 @@ _CASE_ALERT_FIELDS = (
     "amount",
     "currency",
 )
+_ALERT_RECORD_FIELDS = (
+    "customer_id",
+    "account_id",
+    "card_id",
+    "device_id",
+    "merchant_id",
+    "payment_id",
+    "event_id",
+    "scenario_id",
+    "scenario_type",
+    "trigger",
+    "reason",
+    "amount",
+    "currency",
+    "correlation_id",
+    "affected_entity_ids",
+)
 _CONFIRMATION_CASE_FIELDS = (
     "customer_id",
     "payment_id",
@@ -58,7 +76,6 @@ _CONFIRMATION_CASE_FIELDS = (
     "fraud_record_id",
     "scenario_id",
     "scenario_type",
-    "fraud_truth",
     "amount",
     "currency",
 )
@@ -80,7 +97,6 @@ _LABEL_CASE_FIELDS = (
     "event_id",
     "scenario_id",
     "scenario_type",
-    "fraud_truth",
     "amount",
     "currency",
 )
@@ -128,13 +144,13 @@ class FraudCase(_EntityModel):
     fraud_record_id: str
     scenario_id: str
     scenario_type: str
-    fraud_truth: bool
+    fraud_truth: bool | None
     fraud_occurred_at: datetime
     alert_created_at: datetime
     case_opened_at: datetime
     case_closed_at: datetime | None
     fraud_confirmed_at: datetime | None
-    label_available_at: datetime
+    label_available_at: datetime | None
     investigation_outcome: InvestigationOutcome
     loss_amount: float = Field(ge=0)
     recovered_amount: float = Field(ge=0)
@@ -158,7 +174,7 @@ class FraudCaseConfirmation(_EntityModel):
     fraud_record_id: str
     scenario_id: str
     scenario_type: str
-    fraud_truth: bool
+    fraud_truth: bool | None
     confirmed_at: datetime
     investigation_outcome: InvestigationOutcome
     amount: float = Field(gt=0)
@@ -218,7 +234,7 @@ class DelayedFraudLabel(_EntityModel):
     scenario_id: str
     scenario_type: str
     label: Literal["FRAUD", "LEGITIMATE"]
-    fraud_truth: bool
+    fraud_truth: bool | None
     fraud_occurred_at: datetime
     fraud_confirmed_at: datetime | None
     dispute_event_at: datetime | None
@@ -248,6 +264,8 @@ def validate_fraud_workflow(
     event_ids: frozenset[str] = frozenset(),
     fraud_record_ids: frozenset[str] = frozenset(),
     all_entity_ids: frozenset[str] = frozenset(),
+    fraud_truth_by_record: Mapping[str, bool] | None = None,
+    fraud_records_by_id: Mapping[str, FraudRecord] | None = None,
 ) -> None:
     """Validate M7 references, causal chains, and temporal availability rules."""
 
@@ -278,10 +296,20 @@ def validate_fraud_workflow(
         "underlying_event_id": (event_ids, "event"),
         "fraud_record_id": (fraud_record_ids, "fraud record"),
     }
+    truth_by_record = fraud_truth_by_record or {}
+    records_by_id = fraud_records_by_id or {}
 
     for alert in alerts:
         _validate_affected_entities(alert.affected_entity_ids, all_entity_ids)
         _validate_references(alert, reference_pools, _FULL_REFERENCE_FIELDS)
+        if truth_by_record and alert.fraud_record_id not in truth_by_record:
+            raise ValueError("alert references an unknown fraud record truth")
+        record = records_by_id.get(alert.fraud_record_id)
+        if record is not None:
+            if not _fields_match(alert, record, _ALERT_RECORD_FIELDS):
+                raise ValueError("alert fields do not match its fraud record")
+            if alert.alert_created_at < record.occurred_at:
+                raise ValueError("alert precedes its fraud record")
 
     for case in cases:
         _validate_affected_entities(case.affected_entity_ids, all_entity_ids)
@@ -296,24 +324,63 @@ def validate_fraud_workflow(
         if not _fields_match(case, alert, _CASE_ALERT_FIELDS):
             raise ValueError("case references do not match its alert")
         _validate_references(case, reference_pools, _FULL_REFERENCE_FIELDS)
+        record = records_by_id.get(case.fraud_record_id)
+        if record is not None and case.fraud_occurred_at != record.occurred_at:
+            raise ValueError("case occurrence does not match its fraud record")
+        truth = truth_by_record.get(case.fraud_record_id, case.fraud_truth)
+        if truth_by_record and case.fraud_truth is not None and truth != case.fraud_truth:
+            raise ValueError("case fraud truth does not match its fraud record")
         if not case.alert_created_at <= case.case_opened_at:
             raise ValueError("case opened before its alert")
         if case.case_closed_at is not None and case.case_closed_at < case.case_opened_at:
             raise ValueError("case closed before it opened")
         if case.fraud_confirmed_at is not None and case.fraud_confirmed_at < case.case_opened_at:
             raise ValueError("case confirmed before it opened")
-        if case.label_available_at < max(
+        confirmation = confirmations_by_case.get(case.fraud_case_id)
+        dispute = disputes_by_case.get(case.fraud_case_id)
+        has_label_evidence = confirmation is not None or dispute is not None
+        if (case.case_closed_at is None) != (not has_label_evidence):
+            raise ValueError("case closure does not match its investigation evidence")
+        if (case.label_available_at is None) != (not has_label_evidence):
+            raise ValueError("unresolved case cannot expose a label availability time")
+        expected_outcome: InvestigationOutcome
+        if confirmation is not None:
+            if truth is None:
+                raise ValueError("confirmed case is missing fraud truth for validation")
+            expected_outcome = "CONFIRMED_FRAUD" if truth else "FALSE_POSITIVE"
+        elif dispute is not None:
+            expected_outcome = "CUSTOMER_DISPUTE"
+        else:
+            expected_outcome = "UNRESOLVED"
+        if case.investigation_outcome != expected_outcome:
+            raise ValueError("case outcome does not match its investigation evidence")
+        if case.label_available_at is not None and case.label_available_at < max(
             case.fraud_occurred_at,
             case.case_opened_at,
             case.fraud_confirmed_at or case.case_opened_at,
             case.case_closed_at or case.case_opened_at,
         ):
             raise ValueError("case label became available before required evidence")
-        confirmation = confirmations_by_case.get(case.fraud_case_id)
         if case.fraud_confirmed_at != (
-            confirmation.confirmed_at if confirmation is not None else None
+            confirmation.confirmed_at
+            if confirmation is not None and expected_outcome == "CONFIRMED_FRAUD"
+            else None
         ):
             raise ValueError("case confirmation timestamp does not match its confirmation")
+        if case.recovered_amount > case.loss_amount:
+            raise ValueError("case recovered amount exceeds realized loss")
+        if case.case_closed_at is not None and case.case_closed_at != max(
+            case.case_opened_at,
+            *(
+                timestamp
+                for timestamp in (
+                    confirmation.confirmed_at if confirmation is not None else None,
+                    dispute.processed_at if dispute is not None else None,
+                )
+                if timestamp is not None
+            ),
+        ):
+            raise ValueError("case closure does not match its latest evidence")
 
     for confirmation in confirmations:
         _validate_affected_entities(confirmation.affected_entity_ids, all_entity_ids)
@@ -322,6 +389,21 @@ def validate_fraud_workflow(
             raise ValueError("confirmation references an unknown case")
         if not _fields_match(confirmation, fraud_case, _CONFIRMATION_CASE_FIELDS):
             raise ValueError("confirmation references do not match its case")
+        truth = truth_by_record.get(confirmation.fraud_record_id, confirmation.fraud_truth)
+        if (
+            truth is not None
+            and confirmation.fraud_truth is not None
+            and truth != confirmation.fraud_truth
+        ):
+            raise ValueError("confirmation fraud truth does not match its fraud record")
+        expected_confirmation_outcome: InvestigationOutcome | None = (
+            "CONFIRMED_FRAUD" if truth else "FALSE_POSITIVE" if truth is False else None
+        )
+        if (
+            expected_confirmation_outcome is not None
+            and confirmation.investigation_outcome != expected_confirmation_outcome
+        ):
+            raise ValueError("confirmation outcome does not match its fraud record")
         _validate_references(confirmation, reference_pools, _EVENT_REFERENCE_FIELDS)
         if confirmation.causation_id != fraud_case.fraud_case_id:
             raise ValueError("confirmation causation does not reference its case")
@@ -368,6 +450,8 @@ def validate_fraud_workflow(
         _validate_references(label, reference_pools, _EVENT_REFERENCE_FIELDS)
         confirmation_item = confirmations_by_case.get(label.fraud_case_id)
         dispute_item = disputes_by_case.get(label.fraud_case_id)
+        if confirmation_item is None and dispute_item is None:
+            raise ValueError("label has no investigation evidence")
         evidence = [fraud_case.fraud_occurred_at, fraud_case.case_opened_at]
         if confirmation_item is not None:
             evidence.append(confirmation_item.confirmed_at)
@@ -375,8 +459,29 @@ def validate_fraud_workflow(
             evidence.append(dispute_item.processed_at)
         if label.label_available_at < max(evidence):
             raise ValueError("label became available before its evidence")
-        if label.label != ("FRAUD" if label.fraud_truth else "LEGITIMATE"):
+        if label.investigation_outcome != fraud_case.investigation_outcome:
+            raise ValueError("label outcome does not match its case")
+        expected_confirmed_at = (
+            confirmation_item.confirmed_at
+            if confirmation_item is not None
+            and confirmation_item.investigation_outcome == "CONFIRMED_FRAUD"
+            else None
+        )
+        if label.fraud_confirmed_at != expected_confirmed_at:
+            raise ValueError("label confirmation timestamp does not match its evidence")
+        expected_dispute_at = dispute_item.event_time if dispute_item is not None else None
+        if label.dispute_event_at != expected_dispute_at:
+            raise ValueError("label dispute timestamp does not match its evidence")
+        expected_label = (
+            "FRAUD"
+            if label.investigation_outcome in {"CONFIRMED_FRAUD", "CUSTOMER_DISPUTE"}
+            else "LEGITIMATE"
+        )
+        if label.label != expected_label:
             raise ValueError("label value does not match fraud truth")
+        truth = truth_by_record.get(label.fraud_record_id, label.fraud_truth)
+        if truth is not None and label.fraud_truth is not None and truth != label.fraud_truth:
+            raise ValueError("label fraud truth does not match its fraud record")
         if label.label_available_at != fraud_case.label_available_at:
             raise ValueError("label availability does not match its case")
         if label.causation_id not in {

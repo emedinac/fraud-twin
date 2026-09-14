@@ -87,11 +87,13 @@ class BehaviorDataset:
 
         if not self.fraud_records:
             return {}
+        record_counts = self.fraud_record_counts
+        fraud_count = sum(record_counts.values())
         return {
-            **self.fraud_record_counts,
+            **record_counts,
             "fraud_events": len(self.fraud_events),
-            "fraud_records": sum(record.fraud_truth for record in self.fraud_records),
-            "hard_negatives": sum(not record.fraud_truth for record in self.fraud_records),
+            "fraud_records": fraud_count,
+            "hard_negatives": len(self.fraud_records) - fraud_count,
             "alerts": len(self.alerts),
             "cases": len(self.fraud_cases),
             "confirmations": len(self.case_confirmations),

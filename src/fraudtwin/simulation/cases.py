@@ -88,48 +88,83 @@ class FraudWorkflowGenerator:
                 disputes.append(dispute)
 
             outcome = self._outcome(record, confirmation, dispute)
-            closed_at = max(
-                (
-                    confirmation.confirmed_at if confirmation is not None else case.case_opened_at,
-                    dispute.processed_at if dispute is not None else case.case_opened_at,
+            evidence_times = [
+                timestamp
+                for timestamp in (
+                    confirmation.confirmed_at if confirmation is not None else None,
+                    dispute.processed_at if dispute is not None else None,
                 )
-            )
-            label_evidence = [case.case_opened_at, closed_at, record.occurred_at]
-            if confirmation is not None:
-                label_evidence.append(confirmation.confirmed_at)
-            if dispute is not None:
-                label_evidence.append(dispute.processed_at)
-            label_available_at = max(label_evidence) + timedelta(
-                seconds=self.workflow.label_delay_seconds
+                if timestamp is not None
+            ]
+            closed_at = max(evidence_times) if evidence_times else None
+            label_available_at = (
+                max(case.case_opened_at, record.occurred_at, *evidence_times)
+                + timedelta(seconds=self.workflow.label_delay_seconds)
+                if evidence_times
+                else None
             )
             case = case.model_copy(
                 update={
                     "case_closed_at": closed_at,
                     "fraud_confirmed_at": (
-                        confirmation.confirmed_at if confirmation is not None else None
+                        confirmation.confirmed_at
+                        if outcome == "CONFIRMED_FRAUD" and confirmation is not None
+                        else None
                     ),
                     "label_available_at": label_available_at,
                     "investigation_outcome": outcome,
+                    "loss_amount": (
+                        self._realized_loss(payment) if outcome == "CONFIRMED_FRAUD" else 0.0
+                    ),
                 }
             )
             cases.append(case)
-            labels.append(
-                self._label(
-                    len(labels) + 1,
-                    case,
-                    record,
-                    confirmation,
-                    dispute,
-                    label_available_at,
-                    outcome,
+            if label_available_at is not None:
+                labels.append(
+                    self._label(
+                        len(labels) + 1,
+                        case,
+                        record,
+                        confirmation,
+                        dispute,
+                        label_available_at,
+                        outcome,
+                    )
                 )
-            )
 
         result = FraudWorkflowDataset(
             tuple(alerts), tuple(cases), tuple(confirmations), tuple(disputes), tuple(labels)
         )
         self._validate(result)
         return result
+
+    def _realized_loss(self, payment: Payment) -> float:
+        """Return the confirmed fraud amount that remained debited after settlement."""
+
+        entries = tuple(
+            entry
+            for entry in self.fraud_dataset.ledger_entries
+            if entry.payment_id == payment.payment_id
+        )
+        if entries:
+            payer_debits = sum(
+                entry.amount
+                for entry in entries
+                if entry.account_id == payment.payer_account_id and entry.entry_type == "DEBIT"
+            )
+            payer_credits = sum(
+                entry.amount
+                for entry in entries
+                if entry.account_id == payment.payer_account_id and entry.entry_type == "CREDIT"
+            )
+            return max(0.0, round(payer_debits - payer_credits, 2))
+
+        # Card lifecycle settlement is intentionally not posted to the existing
+        # account ledger, so use its final lifecycle status as the realized
+        # payment boundary for that rail.
+        if payment.current_status in {"SETTLED", "COMPLETED", "RECEIVED"}:
+            return payment.amount
+        return 0.0
 
     def _alert(
         self, number: int, record: FraudRecord, payment: Payment, event: PaymentEvent
@@ -140,7 +175,7 @@ class FraudWorkflowGenerator:
         return FraudAlert(
             fraud_alert_id=f"ALT-{number:0{_ID_WIDTH}d}",
             alert_type="AUTOMATED_SCENARIO_ALERT",
-            severity="HIGH" if record.fraud_truth else "MEDIUM",
+            severity="MEDIUM",
             customer_id=record.customer_id,
             account_id=record.account_id,
             card_id=record.card_id,
@@ -189,7 +224,7 @@ class FraudWorkflowGenerator:
             fraud_confirmed_at=None,
             label_available_at=opened_at,
             investigation_outcome="UNRESOLVED",
-            loss_amount=payment.amount if record.fraud_truth else 0.0,
+            loss_amount=0.0,
             recovered_amount=0.0,
             amount=payment.amount,
             currency=payment.currency,
@@ -209,7 +244,9 @@ class FraudWorkflowGenerator:
         confirmed_at = case.case_opened_at + timedelta(
             seconds=self.workflow.confirmation_delay_seconds
         )
-        outcome: InvestigationOutcome = "CONFIRMED_FRAUD" if record.fraud_truth else "LEGITIMATE"
+        outcome: InvestigationOutcome = (
+            "CONFIRMED_FRAUD" if record.fraud_truth else "FALSE_POSITIVE"
+        )
         return FraudCaseConfirmation(
             confirmation_id=f"CNF-{number:0{_ID_WIDTH}d}",
             fraud_case_id=case.fraud_case_id,
@@ -304,10 +341,14 @@ class FraudWorkflowGenerator:
             event_id=record.event_id,
             scenario_id=record.scenario_id,
             scenario_type=record.scenario_type,
-            label="FRAUD" if record.fraud_truth else "LEGITIMATE",
+            label=("FRAUD" if outcome in {"CONFIRMED_FRAUD", "CUSTOMER_DISPUTE"} else "LEGITIMATE"),
             fraud_truth=record.fraud_truth,
             fraud_occurred_at=record.occurred_at,
-            fraud_confirmed_at=confirmation.confirmed_at if confirmation is not None else None,
+            fraud_confirmed_at=(
+                confirmation.confirmed_at
+                if outcome == "CONFIRMED_FRAUD" and confirmation is not None
+                else None
+            ),
             dispute_event_at=dispute.event_time if dispute is not None else None,
             label_available_at=label_available_at,
             investigation_outcome=outcome,
@@ -326,7 +367,7 @@ class FraudWorkflowGenerator:
         dispute: CustomerDispute | None,
     ) -> InvestigationOutcome:
         if confirmation is not None:
-            return "CONFIRMED_FRAUD" if record.fraud_truth else "LEGITIMATE"
+            return "CONFIRMED_FRAUD" if record.fraud_truth else "FALSE_POSITIVE"
         if dispute is not None:
             return "CUSTOMER_DISPUTE"
         return "UNRESOLVED"
@@ -334,13 +375,7 @@ class FraudWorkflowGenerator:
     def _validate(self, dataset: FraudWorkflowDataset) -> None:
         """Validate workflow references against all existing M1-M6 records."""
 
-        entity_ids = {
-            "customers": frozenset(entity.customer_id for entity in self.entities.customers),
-            "accounts": frozenset(entity.account_id for entity in self.entities.accounts),
-            "cards": frozenset(entity.card_id for entity in self.entities.cards),
-            "devices": frozenset(entity.device_id for entity in self.entities.devices),
-            "merchants": frozenset(entity.merchant_id for entity in self.entities.merchants),
-        }
+        entity_ids = self.entities.reference_ids
         validate_fraud_workflow(
             dataset.alerts,
             dataset.cases,
@@ -357,20 +392,14 @@ class FraudWorkflowGenerator:
             fraud_record_ids=frozenset(
                 record.fraud_record_id for record in self.fraud_dataset.fraud_records
             ),
-            all_entity_ids=frozenset(
-                entity_id
-                for collection in (
-                    self.entities.customers,
-                    self.entities.accounts,
-                    self.entities.cards,
-                    self.entities.devices,
-                    self.entities.merchants,
-                    self.entities.pix_keys,
-                )
-                for entity in collection
-                for entity_id in entity.model_dump().values()
-                if isinstance(entity_id, str)
-            ),
+            fraud_truth_by_record={
+                record.fraud_record_id: record.fraud_truth
+                for record in self.fraud_dataset.fraud_records
+            },
+            fraud_records_by_id={
+                record.fraud_record_id: record for record in self.fraud_dataset.fraud_records
+            },
+            all_entity_ids=self.entities.all_ids,
         )
 
 

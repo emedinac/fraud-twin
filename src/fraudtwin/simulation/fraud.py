@@ -7,7 +7,13 @@ from datetime import UTC, datetime, timedelta
 from random import Random
 
 from fraudtwin.config import (
+    ACCOUNT_TRANSFER_EVENT_ENVELOPE_DELAY_SECONDS,
+    ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS,
+    CARD_EVENT_ENVELOPE_DELAY_SECONDS,
+    CARD_SOURCE_DELAY_SECONDS,
     FRAUD_SCENARIO_IDS,
+    PIX_EVENT_ENVELOPE_DELAY_SECONDS,
+    PIX_SOURCE_DELAY_SECONDS,
     FraudScenarioId,
     FraudScenarioSettings,
     SimulationRunConfig,
@@ -405,9 +411,12 @@ class FraudScenarioGenerator:
                     "event_type": event_type,
                     "event_time": event_time,
                     "source_created_at": event_time,
-                    "source_available_at": event_time + timedelta(seconds=5),
-                    "ingested_at": event_time + timedelta(seconds=6),
-                    "processed_at": event_time + timedelta(seconds=7),
+                    "source_available_at": event_time
+                    + timedelta(seconds=ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS),
+                    "ingested_at": event_time
+                    + timedelta(seconds=ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS + 1),
+                    "processed_at": event_time
+                    + timedelta(seconds=ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS + 2),
                     "causation_id": previous_id,
                     "scenario_id": scenario_id,
                     "scenario_type": scenario_type,
@@ -605,7 +614,11 @@ class FraudScenarioGenerator:
             payer_pix_key_id=payer_pix_key_id,
             payee_pix_key_id=payee_pix_key_id,
         )
-        source_delay = 2 if rail == "PIX" else 5
+        source_delay = {
+            "CARD": CARD_SOURCE_DELAY_SECONDS,
+            "PIX": PIX_SOURCE_DELAY_SECONDS,
+            "ACCOUNT_TRANSFER": ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS,
+        }[rail]
         event = PaymentEvent(
             event_id=event_id,
             event_type=event_type,
@@ -731,11 +744,11 @@ class FraudScenarioGenerator:
         self, settings: FraudScenarioSettings, *, rail: str, offset: int = 0
     ) -> datetime:
         lifecycle = (
-            self.config.card_lifecycle.maximum_delay_seconds + 7
+            self.config.card_lifecycle.maximum_delay_seconds + CARD_EVENT_ENVELOPE_DELAY_SECONDS
             if rail == "CARD"
-            else self.config.pix_lifecycle.maximum_delay_seconds + 4
+            else self.config.pix_lifecycle.maximum_delay_seconds + PIX_EVENT_ENVELOPE_DELAY_SECONDS
             if rail == "PIX"
-            else 7
+            else ACCOUNT_TRANSFER_EVENT_ENVELOPE_DELAY_SECONDS
         )
         latest = self.end - timedelta(seconds=lifecycle + settings.duration_seconds, microseconds=1)
         base = self.start + timedelta(seconds=offset)

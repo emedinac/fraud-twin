@@ -367,8 +367,19 @@ FRAUD_LABEL_SCHEMA: dict[str, Any] = {
 }
 
 
-def _write_table(records: Iterable[BaseModel], schema: dict[str, Any], path: Path) -> None:
-    rows = [record.model_dump(mode="python") for record in records]
+def _write_table(
+    records: Iterable[BaseModel],
+    schema: dict[str, Any],
+    path: Path,
+    *,
+    masked_fields: tuple[str, ...] = (),
+) -> None:
+    rows = []
+    for record in records:
+        row = record.model_dump(mode="python")
+        for field in masked_fields:
+            row[field] = None
+        rows.append(row)
     pl.DataFrame(rows, schema=schema, orient="row").write_parquet(path)
 
 
@@ -404,18 +415,35 @@ def write_behavior_parquet(dataset: BehaviorDataset, run_dir: Path) -> dict[str,
         "ledger_entries": (dataset.ledger_entries, LEDGER_ENTRY_SCHEMA, ledger_dir),
         "fraud_records": (dataset.fraud_records, FRAUD_RECORD_SCHEMA, fraud_dir),
         "fraud_alerts": (dataset.alerts, FRAUD_ALERT_SCHEMA, fraud_dir),
-        "fraud_cases": (dataset.fraud_cases, FRAUD_CASE_SCHEMA, fraud_dir),
+        "fraud_cases": (
+            dataset.fraud_cases,
+            FRAUD_CASE_SCHEMA,
+            fraud_dir,
+        ),
         "case_confirmations": (
             dataset.case_confirmations,
             CASE_CONFIRMATION_SCHEMA,
             fraud_dir,
         ),
-        "customer_disputes": (dataset.customer_disputes, CUSTOMER_DISPUTE_SCHEMA, fraud_dir),
-        "fraud_labels": (dataset.fraud_labels, FRAUD_LABEL_SCHEMA, fraud_dir),
+        "customer_disputes": (
+            dataset.customer_disputes,
+            CUSTOMER_DISPUTE_SCHEMA,
+            fraud_dir,
+        ),
+        "fraud_labels": (
+            dataset.fraud_labels,
+            FRAUD_LABEL_SCHEMA,
+            fraud_dir,
+        ),
+    }
+    masked_fields = {
+        "fraud_cases": ("fraud_truth",),
+        "case_confirmations": ("fraud_truth",),
+        "fraud_labels": ("fraud_truth",),
     }
     written: dict[str, Path] = {}
     for table_name, (records, schema, directory) in tables.items():
         path = directory / f"{table_name}.parquet"
-        _write_table(records, schema, path)
+        _write_table(records, schema, path, masked_fields=masked_fields.get(table_name, ()))
         written[table_name] = path
     return written

@@ -87,6 +87,30 @@ class EntityDataset:
             "pix_keys": len(self.pix_keys),
         }
 
+    @property
+    def reference_ids(self) -> dict[str, frozenset[str]]:
+        """Return the stable IDs used by relationship validators."""
+
+        return {
+            "customers": frozenset(item.customer_id for item in self.customers),
+            "accounts": frozenset(item.account_id for item in self.accounts),
+            "cards": frozenset(item.card_id for item in self.cards),
+            "devices": frozenset(item.device_id for item in self.devices),
+            "merchants": frozenset(item.merchant_id for item in self.merchants),
+        }
+
+    @property
+    def all_ids(self) -> frozenset[str]:
+        """Return every string identifier carried by the entity collections."""
+
+        return frozenset(
+            value
+            for collection in self.tables().values()
+            for entity in collection
+            for value in entity.model_dump().values()
+            if isinstance(value, str)
+        )
+
     def tables(self) -> dict[str, tuple[Entity, ...]]:
         """Return entities keyed by their stable output table names."""
 
