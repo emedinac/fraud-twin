@@ -2,7 +2,7 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 from fraudtwin import __version__
 from fraudtwin.config import SimulationRunConfig, config_hash
@@ -33,6 +33,14 @@ class RunManifest(BaseModel):
     regime_definitions: list[dict[str, object]] = Field(default_factory=list)
     output_artifacts: dict[str, object] = Field(default_factory=dict)
     graph: dict[str, object] = Field(default_factory=dict)
+    difficulty: dict[str, object] | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize_without_inactive_difficulty(self, handler):  # type: ignore[no-untyped-def]
+        data = handler(self)
+        if data.get("difficulty") is None:
+            data.pop("difficulty", None)
+        return data
 
 
 class GraphManifest(BaseModel):
@@ -56,6 +64,14 @@ class GraphManifest(BaseModel):
     canonical_content_fingerprint: str | None = None
     file_checksums: dict[str, str] = Field(default_factory=dict)
     export_parameters: dict[str, object] = Field(default_factory=dict)
+    difficulty: dict[str, object] | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize_without_inactive_difficulty(self, handler):  # type: ignore[no-untyped-def]
+        data = handler(self)
+        if data.get("difficulty") is None:
+            data.pop("difficulty", None)
+        return data
 
 
 class DatasetManifest(BaseModel):
@@ -83,6 +99,14 @@ class DatasetManifest(BaseModel):
     date_range: dict[str, str]
     schema_fingerprint: str
     output_fingerprint: str
+    difficulty: dict[str, object] | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize_without_inactive_difficulty(self, handler):  # type: ignore[no-untyped-def]
+        data = handler(self)
+        if data.get("difficulty") is None:
+            data.pop("difficulty", None)
+        return data
 
 
 class ReplayManifest(BaseModel):
@@ -154,6 +178,8 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
     resolved = config.model_dump(mode="json")
     if not config.graph.enabled:
         resolved.pop("graph", None)
+    if not config.benchmark.enabled:
+        resolved.pop("benchmark", None)
     return RunManifest(
         run_id=f"RUN-{run_hash}",
         generator_version=__version__,
@@ -172,6 +198,7 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         quality_diagnostics={},
         resolved_configuration=resolved,
         regime_definitions=[regime.model_dump(mode="json") for regime in config.backtest.regimes],
+        difficulty=None,
     )
 
 

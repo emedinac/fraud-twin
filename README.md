@@ -1,7 +1,15 @@
 # FraudTwin
 
+[![Python](https://img.shields.io/badge/python-3.12%2B-3776AB.svg?logo=python&logoColor=white)](https://docs.python.org/3/)
+[![Polars](https://img.shields.io/badge/Polars-1.x-CD792C?logo=polars&logoColor=white)](https://docs.pola.rs/)
+[![Apache Parquet](https://img.shields.io/badge/data%20format-Apache%20Parquet-50ABF1?logo=apacheparquet&logoColor=white)](https://parquet.apache.org/docs/)
+[![Pydantic](https://img.shields.io/badge/Pydantic-2.x-E92063?logo=pydantic&logoColor=white)](https://pydantic.dev/docs/)
+[![Pandera](https://img.shields.io/badge/validation-Pandera-150458)](https://pandera.readthedocs.io/en/stable/)
+[![Neo4j](https://img.shields.io/badge/graph%20export-Neo4j-4581C3?logo=neo4j&logoColor=white)](https://neo4j.com/docs/)
+[![PyTorch Geometric](https://img.shields.io/badge/optional%20graph%20ML-PyTorch%20Geometric-EE4C2C?logo=pyg&logoColor=white)](https://pytorch-geometric.readthedocs.io/)
+[![Typer](https://img.shields.io/badge/CLI-Typer-009688?logo=typer&logoColor=white)](https://typer.tiangolo.com/)
+[![Poetry](https://img.shields.io/badge/Poetry-2.x-60A5FA?logo=poetry&logoColor=white)](https://python-poetry.org/docs/)
 [![CI: GitHub Actions](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=github-actions&logoColor=white)](.github/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.12%2B-3776AB.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 
 ## Synthetic financial behavior for testing fraud systems
@@ -10,7 +18,7 @@ FraudTwin creates a small, coherent financial world that behaves more like a rea
 
 The project is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and temporal patterns before introducing data-quality faults, streaming, or production infrastructure.
 
-## Current release: 0.12.0 — Graph Fraud (Milestone 11)
+## Current release: 0.13.0 — Fraud Difficulty Engine (Milestone 12)
 
 Milestones 1 through 10 are complete. Every generated customer receives a deterministic
 behavior profile, and payments reflect customer-specific preferences for:
@@ -27,6 +35,16 @@ The current release generates legitimate CARD, PIX-like, and account-transfer pa
 M9 adds a local point-in-time dataset builder over those generated records. Historical features use only source records whose `source_available_at` is no later than the row's `prediction_time`; business `event_time` remains separate from feature availability. Labels are included only after their configured `label_available_at` and label delay, or can be retained as unresolved rows for inspection. M10 adds deterministic replay from an existing run, rolling PIT backtests, source-history fraud regimes, and versioned benchmark packs without regenerating the financial world during replay or analysis.
 
 M11 adds an opt-in graph-fraud source mode and a read-only graph exporter. Graphs preserve source IDs and event timestamps, provide separate observable and oracle views, derive shared-device/IP relationships only from supporting events, and write deterministic Parquet and Neo4j artifacts. Enable graph campaigns in a new run with a `graph:` section, then export with `fraudtwin graph export --run-id <run-id> --output-dir runs`.
+
+M12 adds an opt-in difficulty engine above the existing fraud and graph
+scenarios. Set `benchmark.difficulty` from 1 (obvious) through 10 (subtle),
+then optionally replace individual normalized controls for fraud/legitimate
+overlap, behavioral deviation, scenario subtlety, hard-negative noise,
+prevalence, temporal irregularity, or graph structural subtlety. The resolved
+profile and effective hash are recorded in manifests. Active M12 operational
+events omit direct scenario truth fields; complete truth remains available in
+the oracle artifacts. Runs without an active benchmark difficulty section keep
+the legacy stream and identities unchanged.
 
 ## Quick start
 
@@ -63,18 +81,34 @@ runs/<run_id>/
 │   └── pix_keys.parquet
 ├── behavior/
 │   └── behavior_profiles.parquet
-└── payments/
-    ├── payments.parquet
-    └── payment_events.parquet
-└── ledger/
-    └── ledger_entries.parquet
-└── fraud/
-    ├── fraud_records.parquet
-    ├── fraud_alerts.parquet
-    ├── fraud_cases.parquet
-    ├── case_confirmations.parquet
-    ├── customer_disputes.parquet
-    └── fraud_labels.parquet
+├── payments/
+│   ├── payments.parquet
+│   └── payment_events.parquet
+├── ledger/
+│   └── ledger_entries.parquet
+├── fraud/
+│   ├── fraud_records.parquet
+│   ├── fraud_alerts.parquet
+│   ├── fraud_cases.parquet
+│   ├── case_confirmations.parquet
+│   ├── customer_disputes.parquet
+│   └── fraud_labels.parquet
+├── oracle/                 # active M12 runs only
+│   ├── behavior/
+│   │   └── behavior_profiles.parquet
+│   ├── payments/
+│   │   ├── payments.parquet
+│   │   └── payment_events.parquet
+│   ├── ledger/
+│   │   └── ledger_entries.parquet
+│   ├── fraud/
+│   │   ├── fraud_records.parquet
+│   │   └── fraud_labels.parquet
+│   └── graph/
+│       ├── campaigns.parquet
+│       ├── campaign_memberships.parquet
+│       ├── patterns.parquet
+│       └── graph_evidence.parquet
 └── ml/
     ├── dataset.parquet
     ├── dataset_manifest.json
@@ -87,7 +121,7 @@ runs/<run_id>/
 
 All Parquet files use explicit, stable schemas and column ordering. Generated payments reference existing accounts, cards, merchants, devices, and customers. Amounts are positive, payment timestamps stay within the configured simulation window, delayed workflow timestamps follow their causal evidence, and no real personal data or payment credentials are used.
 
-The manifest records the seed, configuration hash, schema versions, entity counts, payment/lifecycle/ledger counts, fraud event/record counts, M7 alert/case/confirmation/dispute/label counts, per-scenario fraud rates, M8 quality-fault counts and requested/realized rates, and dataframe-level quality diagnostics. M8 diagnostics use Pandera schemas for clean and intentionally corrupted tables and report SDMetrics-aligned validity, structure, key-uniqueness, envelope, delivery-order, and relationship measurements. The default configuration uses the clean quality profile and keeps fraud disabled, so it produces the same legitimate CARD, PIX-like, and account-transfer behavior as the previous release.
+The manifest records the seed, configuration hash, schema versions, entity counts, payment/lifecycle/ledger counts, fraud event/record counts, M7 alert/case/confirmation/dispute/label counts, per-scenario fraud rates, M8 quality-fault counts and requested/realized rates, and dataframe-level quality diagnostics. Active M12 manifests additionally record requested and resolved difficulty, per-scenario transformations, effective configuration hash, source snapshot, schema/output fingerprints, and measured overlap, deviation, prevalence, noise, timing, and graph summaries. M8 diagnostics use Pandera schemas for clean and intentionally corrupted tables and report SDMetrics-aligned validity, structure, key-uniqueness, envelope, delivery-order, and relationship measurements. The default configuration uses the clean quality profile and keeps fraud disabled, so it produces the same legitimate CARD, PIX-like, and account-transfer behavior as the previous release.
 
 Build or rebuild the M9 dataset from an existing run with:
 
@@ -281,6 +315,44 @@ faults; the clean run remains suitable for lifecycle and ledger validation.
 The manifest records `quality_fault_counts` plus requested and realized values
 in `quality_fault_rates`.
 
+## Difficulty benchmarks (M12)
+
+Use the versioned fixture to generate a boundary-oriented fraud dataset:
+
+```bash
+poetry run fraudtwin config validate configs/benchmarks/m12-difficulty-v1.yaml
+poetry run fraudtwin generate configs/benchmarks/m12-difficulty-v1.yaml \
+  --output-dir /tmp/fraudtwin-m12
+```
+
+The simple level form is:
+
+```yaml
+benchmark:
+  difficulty: 7
+```
+
+Difficulty is derived from generator parameters. Higher levels increase the
+resolved strengths of legitimate-cohort overlap, behavioral similarity,
+scenario subtlety, hard-negative noise, temporal irregularity, and graph
+structural subtlety while retaining each scenario objective and topology.
+Individual controls replace only their matching level value:
+
+```yaml
+benchmark:
+  difficulty: 7
+  controls:
+    temporal_irregularity: 0.9
+    prevalence: 0.6
+```
+
+All controls are normalized to `[0, 1]`, and overrides require a difficulty
+level. `resolve_difficulty` and `apply_difficulty` are available from the
+public Python API. M12 uses isolated deterministic streams, preserves full
+truth in oracle artifacts, and removes direct scenario/linkage fields from
+active-run operational payment events. The oracle records retain the original
+IDs, timestamps, campaign membership, graph evidence, and fraud labels.
+
 ## Project status
 
 | Capability | Status |
@@ -298,6 +370,7 @@ in `quality_fault_rates`.
 | Point-in-time historical ML dataset and delayed labels | Available |
 | Deterministic replay, rolling PIT backtesting, regimes, and benchmark packs | Available |
 | Opt-in M11 graph-fraud scenarios, oracle truth, Parquet and Neo4j exports | Available |
+| Opt-in M12 difficulty levels, controls, oracle separation, and summaries | Available |
 | Kafka, PostgreSQL, Flink, feature stores, and advanced models | Planned |
 
 FraudTwin is being built milestone by milestone. The priority is a correct, readable, reproducible simulation core before adding distributed systems or advanced modeling.

@@ -1,5 +1,18 @@
 # Release notes
 
+## 0.13.0 — Milestone 12 Fraud Difficulty Engine
+
+- Added strict opt-in difficulty levels 1–10 with per-dimension override
+  controls for overlap, behavioral deviation, scenario subtlety,
+  hard-negative noise, prevalence, temporal irregularity, and graph structure.
+- Added deterministic `resolve_difficulty` and `apply_difficulty` APIs with
+  isolated streams, explicit per-scenario transformations, and effective
+  configuration hashes.
+- Added difficulty-aware M6/M11 generation while preserving fraud objectives,
+  graph topology, ledger reconciliation, temporal ordering, and oracle truth.
+- Added active-run oracle separation, source/dataset/graph difficulty metadata,
+  measured summaries, the M12 fixture, focused tests, and documentation.
+
 ## 0.12.0 — Milestone 11 Graph Fraud
 
 - Added schema-v2 opt-in deterministic graph scenarios: mule, cyclic ring,

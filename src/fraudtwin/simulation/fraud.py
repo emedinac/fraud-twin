@@ -16,6 +16,7 @@ from fraudtwin.config import (
     FraudScenarioSettings,
     SimulationRunConfig,
 )
+from fraudtwin.difficulty import apply_difficulty, resolve_difficulty
 from fraudtwin.domain import (
     Account,
     Card,
@@ -118,9 +119,14 @@ class FraudScenarioGenerator:
         self.untrusted_devices = tuple(device for device in devices if not device.trusted)
         self._campaign_anchor: datetime | None = None
         self._active_camouflage = 0.0
+        self._difficulty = resolve_difficulty(config)
+        self._active_plan = apply_difficulty(self._difficulty, "F01")
+        self._difficulty_choice_counter = 0
 
     def generate(self) -> FraudDataset:
         """Generate deterministic campaigns and preserve baseline output when disabled."""
+
+        self._difficulty_choice_counter = 0
 
         baseline_result = FraudDataset(
             self.baseline.payments,
@@ -142,9 +148,21 @@ class FraudScenarioGenerator:
                 and settings_by_id[scenario_id].count > 0
             )
         )
+        prevalence_strength = (
+            self._difficulty.resolved_controls.get("prevalence", 0.0)
+            if self._difficulty.enabled
+            else 0.0
+        )
+        effective_target_rate = self.config.fraud.target_rate * (1.0 - 0.5 * prevalence_strength)
+        effective_scenario_count = self.config.fraud.scenario_count
+        if self._difficulty.enabled:
+            effective_scenario_count = max(
+                1,
+                round(self.config.fraud.scenario_count * (1.0 - 0.75 * prevalence_strength)),
+            )
         campaign_count = min(
-            self.config.fraud.scenario_count,
-            int(len(self.baseline.payments) * self.config.fraud.target_rate),
+            effective_scenario_count,
+            int(len(self.baseline.payments) * effective_target_rate),
             sum(settings_by_id[scenario_id].count for scenario_id in candidates),
         )
         if not candidates or campaign_count == 0:
@@ -159,6 +177,20 @@ class FraudScenarioGenerator:
         for campaign_number, (scenario_type, regime) in enumerate(campaign_plan, start=1):
             scenario_id = f"{scenario_type}-{campaign_number:0{_ID_WIDTH}d}"
             settings = self._settings_for_regime(settings_by_id[scenario_type], regime)
+            self._active_plan = apply_difficulty(self._difficulty, scenario_type)
+            if self._difficulty.enabled:
+                settings = settings.model_copy(
+                    update={
+                        "window_seconds": max(
+                            1,
+                            round(settings.window_seconds * self._active_plan.timing_multiplier),
+                        ),
+                        "duration_seconds": max(
+                            0,
+                            round(settings.duration_seconds * self._active_plan.timing_multiplier),
+                        ),
+                    }
+                )
             self._campaign_anchor = self._campaign_anchor_time(regime, campaign_number)
             self._active_camouflage = regime.camouflage if regime is not None else 0.0
             rng = create_stream_rng(
@@ -170,11 +202,24 @@ class FraudScenarioGenerator:
             payments.extend(new_payments)
             events.extend(new_events)
             records.extend(new_records)
-            if self.config.fraud.hard_negative_rate > 0 and self.baseline.payments:
-                hard_negative = self._hard_negative_campaign(
-                    scenario_type, campaign_number, settings
+            negative_count = 1
+            if self._difficulty.enabled:
+                negative_count = max(
+                    1,
+                    round(
+                        self._active_plan.hard_negative_multiplier
+                        * self.config.fraud.hard_negative_rate
+                    ),
                 )
-                if hard_negative is not None:
+            if self.config.fraud.hard_negative_rate > 0 and self.baseline.payments:
+                for negative_number in range(negative_count):
+                    hard_negative = self._hard_negative_campaign(
+                        scenario_type,
+                        campaign_number + negative_number * max(1, campaign_count),
+                        settings,
+                    )
+                    if hard_negative is None:
+                        continue
                     negative_payments, negative_events, negative_record = hard_negative
                     payments.extend(negative_payments)
                     events.extend(negative_events)
@@ -487,9 +532,18 @@ class FraudScenarioGenerator:
             event_type="CARD_AUTHORIZATION_REQUESTED",
         )
         payment, payment_events = self.payment_generator._card_lifecycle(payment, initial, rng)
+        subtlety = self._active_plan.scenario_subtlety if self._difficulty.enabled else 0.0
         should_decline = force_scenario_decline and (
-            (scenario_type == "F01" and attempt < count)
-            or (scenario_type == "F02" and attempt % 4 != 0)
+            (
+                scenario_type == "F01"
+                and attempt < count
+                and not (subtlety >= 0.67 and attempt == count - 1)
+            )
+            or (
+                scenario_type == "F02"
+                and attempt % 4 != 0
+                and not (subtlety >= 0.67 and attempt % 4 == 2)
+            )
         )
         if should_decline:
             declined = payment_events[1].model_copy(update={"event_type": "CARD_DECLINED"})
@@ -813,10 +867,38 @@ class FraudScenarioGenerator:
         return self.cards[rng.randrange(len(self.cards))], self._choose_device(rng)
 
     def _choose_device(self, rng: Random) -> Device | None:
+        if self._difficulty.enabled:
+            self._difficulty_choice_counter += 1
+            rng = create_stream_rng(
+                self.config.simulation.seed,
+                f"milestone-12:device:{self._active_plan.scenario}:"
+                f"{self._difficulty_choice_counter}",
+            )
+        if self._difficulty.enabled and self.devices:
+            # Higher behavioral similarity deliberately permits trusted devices
+            # while retaining a deterministic device stream.
+            if rng.random() < self._active_plan.behavior_similarity:
+                return self.devices[rng.randrange(len(self.devices))]
         device_pool = self.untrusted_devices or self.devices
         return device_pool[rng.randrange(len(device_pool))] if device_pool else None
 
     def _merchant_for_attempt(self, attempt: int, rng: Random) -> Merchant:
+        if self._difficulty.enabled and self.merchants:
+            baseline_ids = {
+                payment.merchant_id
+                for payment in self.baseline.payments
+                if payment.merchant_id is not None
+            }
+            cohort = tuple(
+                merchant for merchant in self.merchants if merchant.merchant_id in baseline_ids
+            )
+            if cohort:
+                cohort_rng = create_stream_rng(
+                    self.config.simulation.seed,
+                    f"milestone-12:merchant:{self._active_plan.scenario}:{attempt}",
+                )
+                if cohort_rng.random() < self._active_plan.behavior_similarity:
+                    return cohort[cohort_rng.randrange(len(cohort))]
         return self.merchants[(attempt + rng.randrange(len(self.merchants))) % len(self.merchants)]
 
     def _hard_negative_campaign(
@@ -827,8 +909,9 @@ class FraudScenarioGenerator:
     ) -> tuple[list[Payment], list[PaymentEvent], FraudRecord] | None:
         """Generate one legitimate sequence with the selected fraud signals."""
 
+        stream_prefix = "milestone-12" if self._difficulty.enabled else "milestone-6"
         rng = create_stream_rng(
-            self.config.simulation.seed, f"milestone-6:hard-negative:{scenario_type}:{number}"
+            self.config.simulation.seed, f"{stream_prefix}:hard-negative:{scenario_type}:{number}"
         )
         trigger, reason = self._lookalike_metadata(scenario_type)
         if scenario_type in {"F01", "F02", "F05"}:
@@ -1044,11 +1127,31 @@ class FraudScenarioGenerator:
             upper = min(upper, capacity)
         if upper < lower or upper <= 0:
             return None
-        return round(max(lower, rng.uniform(lower, upper)), 2)
+        amount = max(lower, rng.uniform(lower, upper))
+        if (
+            self._difficulty.enabled
+            and self._active_plan.amount_similarity
+            and self.baseline.payments
+        ):
+            rail = "CARD" if low_value else "PIX" if high_value else None
+            cohort = [
+                item.amount
+                for item in self.baseline.payments
+                if rail is None or item.payment_rail == rail
+            ]
+            if cohort:
+                reference = sorted(cohort)[len(cohort) // 2]
+                amount = (1.0 - self._active_plan.amount_similarity) * amount + (
+                    self._active_plan.amount_similarity * reference
+                )
+        amount = min(max(amount, lower), upper)
+        return round(amount, 2)
 
     def _start_time(
         self, settings: FraudScenarioSettings, *, rail: str, offset: int = 0
     ) -> datetime:
+        if self._difficulty.enabled and self._active_plan.temporal_irregularity:
+            offset = round(offset * (1.0 + self._active_plan.temporal_irregularity))
         lifecycle = (
             self.config.card_lifecycle.maximum_delay_seconds + CARD_EVENT_ENVELOPE_DELAY_SECONDS
             if rail == "CARD"

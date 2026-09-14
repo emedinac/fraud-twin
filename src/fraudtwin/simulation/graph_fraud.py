@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, timedelta
 
 from fraudtwin.config import GraphScenarioConfig, SimulationRunConfig
+from fraudtwin.difficulty import apply_difficulty, resolve_difficulty
 from fraudtwin.domain import (
     Account,
     Device,
@@ -80,6 +81,8 @@ class GraphFraudGenerator:
         self.run_id = simulation_run_id or "in-memory"
         self.start = config.simulation.start.astimezone(UTC)
         self.end = self.start + timedelta(days=config.simulation.duration_days)
+        self._difficulty = resolve_difficulty(config)
+        self._active_plan = apply_difficulty(self._difficulty, "MULE_NETWORK")
 
     def generate(self) -> GraphFraudDataset:
         if not self.config.graph.enabled:
@@ -106,6 +109,7 @@ class GraphFraudGenerator:
         ).plan()
         for plan in plans:
             scenario = plan.scenario
+            self._active_plan = apply_difficulty(self._difficulty, scenario.type)
             campaign = f"G-{scenario.type}-{plan.ordinal:04d}"
             pairs = self._pairs(scenario, plan.accounts)
             generated = self._materialize(scenario, campaign, pairs, plan, spent)
@@ -264,18 +268,41 @@ class GraphFraudGenerator:
         memberships: list[GraphCampaignMembership] = []
         evidence: list[GraphEvidence] = []
         base_amount = s.min_amount or self.config.behavior.amount_min
-        step = max(1, self.config.graph.dwell_threshold_seconds // max(1, len(pairs)))
+        dwell = self.config.graph.dwell_threshold_seconds
+        if self._difficulty.enabled:
+            dwell = max(
+                1,
+                round(
+                    dwell
+                    * self._active_plan.timing_multiplier
+                    * (1.0 + self._active_plan.graph_structural_subtlety)
+                ),
+            )
+        step = max(1, dwell // max(1, len(pairs)))
         for index, (payer, payee) in enumerate(pairs, 1):
+            jitter = 0
+            if self._difficulty.enabled:
+                jitter = (index % 3) * round(
+                    step * 0.2 * self._active_plan.graph_structural_subtlety
+                )
             when = min(
-                self.start + timedelta(seconds=index * step), self.end - timedelta(microseconds=1)
+                self.start + timedelta(seconds=index * step + jitter),
+                self.end - timedelta(microseconds=1),
             )
             amount = round(
                 base_amount * (1 - (0.05 * (index - 1) if s.type == "CYCLIC_RING" else 0)),
                 2,
             )
-            if "CAMOUFLAGE_FEATURE" in s.modifiers and self.baseline.payments:
+            if (
+                self._active_plan.amount_similarity > 0 or "CAMOUFLAGE_FEATURE" in s.modifiers
+            ) and self.baseline.payments:
                 cohort_amounts = sorted(item.amount for item in self.baseline.payments)
-                amount = round(cohort_amounts[len(cohort_amounts) // 2], 2)
+                reference = cohort_amounts[len(cohort_amounts) // 2]
+                amount = round(
+                    (1.0 - self._active_plan.amount_similarity) * amount
+                    + self._active_plan.amount_similarity * reference,
+                    2,
+                )
             if s.max_amount is not None:
                 amount = min(amount, s.max_amount)
             if payer.available_balance < amount:

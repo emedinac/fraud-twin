@@ -1,5 +1,11 @@
 """Deterministic entity generation and batch output adapters."""
 
+from fraudtwin.difficulty import (
+    ResolvedDifficulty,
+    ScenarioDifficultyPlan,
+    apply_difficulty,
+    resolve_difficulty,
+)
 from fraudtwin.domain.graph import (
     GraphCampaign,
     GraphCampaignMembership,
@@ -45,4 +51,8 @@ __all__ = [
     "NetworkEndpoint",
     "GraphFraudDataset",
     "GraphFraudGenerator",
+    "ResolvedDifficulty",
+    "ScenarioDifficultyPlan",
+    "resolve_difficulty",
+    "apply_difficulty",
 ]

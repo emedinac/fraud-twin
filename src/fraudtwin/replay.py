@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -12,7 +12,7 @@ import polars as pl
 from fraudtwin import __version__
 from fraudtwin.manifest import ReplayManifest
 from fraudtwin.ml.dataset import load_generated_run
-from fraudtwin.reproducibility import sha256_json
+from fraudtwin.reproducibility import as_utc, sha256_json
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
 from fraudtwin.simulation.parquet import (
@@ -63,9 +63,7 @@ REPLAY_EVENT_SCHEMA: dict[str, Any] = {
 
 
 def _utc(value: datetime) -> datetime:
-    if value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError("replay timestamps must include a timezone")
-    return value.astimezone(UTC)
+    return as_utc(value, error_message="replay timestamps must include a timezone")
 
 
 def _in_period(value: datetime, start: datetime, end: datetime) -> bool:

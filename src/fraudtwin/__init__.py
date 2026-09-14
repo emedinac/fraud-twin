@@ -1,5 +1,11 @@
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
+from fraudtwin.difficulty import (  # noqa: E402
+    ResolvedDifficulty,
+    ScenarioDifficultyPlan,
+    apply_difficulty,
+    resolve_difficulty,
+)
 from fraudtwin.graph import (  # noqa: E402
     GraphCampaign,
     GraphDataset,
@@ -17,6 +23,10 @@ from fraudtwin.graph import (  # noqa: E402
 
 __all__ = [
     "__version__",
+    "ResolvedDifficulty",
+    "ScenarioDifficultyPlan",
+    "resolve_difficulty",
+    "apply_difficulty",
     "GraphDataset",
     "GraphCampaign",
     "GraphEdge",

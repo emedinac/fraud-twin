@@ -7,7 +7,7 @@ import math
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
@@ -25,7 +25,7 @@ from fraudtwin.config import (
 )
 from fraudtwin.manifest import BacktestManifest, RunManifest
 from fraudtwin.ml.dataset import PointInTimeDatasetBuilder
-from fraudtwin.reproducibility import sha256_json
+from fraudtwin.reproducibility import as_utc, sha256_json
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
 
@@ -66,9 +66,7 @@ FOLD_METRIC_SCHEMA: dict[str, Any] = {
 
 
 def _utc(value: datetime) -> datetime:
-    if value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError("benchmark timestamps must include a timezone")
-    return value.astimezone(UTC)
+    return as_utc(value, error_message="benchmark timestamps must include a timezone")
 
 
 def _source_snapshots(entities: EntityDataset, behavior: BehaviorDataset) -> dict[str, object]:

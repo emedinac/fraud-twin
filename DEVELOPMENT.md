@@ -182,3 +182,31 @@ source-supported relationships available at the selected cutoff; oracle graphs
 add campaign, pattern, evidence, and optional hyperedge incidence records.
 Neo4j artifacts contain deterministic bulk-import CSV/Cypher files. PyTorch
 Geometric remains optional via `poetry install -E graph`.
+
+## M12 fraud difficulty
+
+Run the focused M12 tests and the versioned fixture in a temporary directory:
+
+```bash
+poetry run pytest tests/test_m12.py
+poetry run fraudtwin config validate configs/benchmarks/m12-difficulty-v1.yaml
+poetry run fraudtwin generate configs/benchmarks/m12-difficulty-v1.yaml \
+  --output-dir /tmp/fraudtwin-m12
+poetry run fraudtwin validate-ledger --run-id <run-id> \
+  --output-dir /tmp/fraudtwin-m12
+```
+
+M12 is disabled when `benchmark.difficulty` is omitted. A level from 1 through
+10 resolves measurable transformations for all M6 and M11 scenarios. Advanced
+users can replace individual dimensions under `benchmark.controls`; supplied
+values do not blend with the level profile. Active M12 runs retain full truth in
+oracle artifacts while operational payment events omit direct scenario and
+fraud-record linkage fields. The source and point-in-time dataset manifests
+record the requested/resolved controls, transformations, effective hash,
+fingerprints, and measured summaries.
+
+The M12 regression suite also compares disabled configurations against the
+legacy stream and checks deterministic lifecycle, ledger, temporal, graph,
+workflow, oracle, manifest, and CLI behavior. The cited research papers and
+Fraud Detection Handbook are design references only; no source code, datasets,
+models, or trained detectors are copied.

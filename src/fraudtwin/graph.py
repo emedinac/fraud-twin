@@ -369,6 +369,7 @@ def _event_edges(
     payments: dict[str, Payment],
     start: datetime,
     end: datetime,
+    events: tuple[PaymentEvent, ...] | None = None,
 ) -> list[GraphEdge]:
     edges: list[GraphEdge] = []
     key_by_id = {item.pix_key_id: item for item in entities.pix_keys}
@@ -405,7 +406,8 @@ def _event_edges(
                 valid_from=merchant.created_at,
             )
         )
-    for event in sorted(behavior.payment_events, key=lambda item: (item.event_time, item.event_id)):
+    event_records = events if events is not None else behavior.payment_events
+    for event in sorted(event_records, key=lambda item: (item.event_time, item.event_id)):
         if not start <= event.event_time < end:
             continue
         if event.event_type not in {
@@ -763,7 +765,13 @@ def build_graph(
     if not hyperedge_memberships:
         hyperedge_memberships = behavior.graph_hyperedge_memberships
     nodes = _static_nodes(entities, start)
-    edges = _event_edges(entities, behavior, payments, start, end)
+    oracle_events = behavior.oracle_tables.get("payment_events") if view == "oracle" else None
+    event_records = (
+        tuple(item for item in oracle_events if isinstance(item, PaymentEvent))
+        if oracle_events is not None
+        else None
+    )
+    edges = _event_edges(entities, behavior, payments, start, end, event_records)
     edges.extend(_derived_shared(edges, config.graph, "SHARES_DEVICE"))
     edges.extend(_derived_shared(edges, config.graph, "SHARES_IP"))
     derived_by_event = {
@@ -1108,6 +1116,7 @@ def write_graph(
             ).items()
         },
         export_parameters={"views": sorted(datasets), "formats": list(formats)},
+        difficulty=source_manifest.difficulty,
     )
     manifest_path = graph_dir / "graph_manifest.json"
     manifest_path.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")

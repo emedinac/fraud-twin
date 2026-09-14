@@ -7,12 +7,13 @@ feature-store or model-serving dependency.
 
 import hashlib
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, TypeVar
 
 import polars as pl
+from pydantic import BaseModel
 
 from fraudtwin import __version__
 from fraudtwin.config import SimulationRunConfig, _default_feature_windows, config_hash
@@ -45,7 +46,7 @@ from fraudtwin.domain import (
     validate_fraud_workflow,
 )
 from fraudtwin.manifest import DatasetManifest, RunManifest
-from fraudtwin.reproducibility import canonical_json, sha256_json
+from fraudtwin.reproducibility import as_utc, canonical_json, sha256_json
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
 
@@ -174,9 +175,7 @@ class PointInTimeDataset:
 
 
 def _utc(value: datetime) -> datetime:
-    if value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError("dataset timestamps must include a timezone")
-    return value.astimezone(UTC)
+    return as_utc(value, error_message="dataset timestamps must include a timezone")
 
 
 def _record_key(record: Any) -> str:
@@ -374,6 +373,25 @@ def load_generated_run(
             else ()
         ),
     )
+    if manifest.difficulty is not None:
+        oracle_models: dict[str, tuple[type[BaseModel], str, str]] = {
+            "behavior_profiles": (BehaviorProfile, "oracle/behavior", "behavior_profiles"),
+            "payments": (Payment, "oracle/payments", "payments"),
+            "payment_events": (PaymentEvent, "oracle/payments", "payment_events"),
+            "ledger_entries": (LedgerEntry, "oracle/ledger", "ledger_entries"),
+            "fraud_records": (FraudRecord, "oracle/fraud", "fraud_records"),
+            "fraud_alerts": (FraudAlert, "oracle/fraud", "fraud_alerts"),
+            "fraud_cases": (FraudCase, "oracle/fraud", "fraud_cases"),
+            "case_confirmations": (FraudCaseConfirmation, "oracle/fraud", "case_confirmations"),
+            "customer_disputes": (CustomerDispute, "oracle/fraud", "customer_disputes"),
+            "fraud_labels": (DelayedFraudLabel, "oracle/fraud", "fraud_labels"),
+        }
+        oracle_tables: dict[str, tuple[BaseModel, ...]] = {}
+        for name, (model, group, table) in oracle_models.items():
+            path = run_dir / group / f"{table}.parquet"
+            if path.is_file():
+                oracle_tables[name] = _read_models(path, model)
+        behavior = replace(behavior, oracle_tables=oracle_tables)
     _validate_behavior_workflow(entities, behavior)
     return entities, behavior, manifest
 
@@ -1230,6 +1248,7 @@ class PointInTimeDatasetBuilder:
             date_range=date_range,
             schema_fingerprint=schema_fingerprint,
             output_fingerprint=output_fingerprint,
+            difficulty=(self.source_manifest.difficulty if self.source_manifest else None),
         )
 
     def _source_manifest_hash(self) -> str:

@@ -1,12 +1,13 @@
 """Customer behavior profiles and their generated payment dataset."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from random import Random
 from typing import Literal
 
 from pydantic import BaseModel
 
 from fraudtwin.config import SimulationRunConfig
+from fraudtwin.difficulty import resolve_difficulty
 from fraudtwin.domain import (
     BehaviorProfile,
     Customer,
@@ -96,7 +97,9 @@ class BehaviorDataset:
     def fraud_events(self) -> tuple[PaymentEvent, ...]:
         """Return scenario-linked payment events, excluding hard negatives."""
 
-        return scenario_events(self.payment_events)
+        source_events = self.oracle_tables.get("payment_events", self.payment_events)
+        typed_events = tuple(event for event in source_events if isinstance(event, PaymentEvent))
+        return scenario_events(typed_events)
 
     @property
     def fraud_record_counts(self) -> dict[str, int]:
@@ -169,6 +172,25 @@ class BehaviorDataset:
             **card_counts,
             **pix_counts,
         }
+
+
+def _mask_difficulty_event_truth(dataset: BehaviorDataset) -> BehaviorDataset:
+    """Keep direct M6 scenario annotations in oracle tables only."""
+
+    masked_events = tuple(
+        event.model_copy(
+            update={
+                "scenario_id": None,
+                "scenario_type": None,
+                "scenario_trigger": None,
+                "scenario_reason": None,
+                "fraud_record_id": None,
+                "affected_entity_ids": (),
+            }
+        )
+        for event in dataset.payment_events
+    )
+    return replace(dataset, payment_events=masked_events)
 
 
 class BehaviorGenerator:
@@ -342,7 +364,10 @@ class BehaviorGenerator:
             graph_hyperedges=graph_dataset.hyperedges,
             graph_hyperedge_memberships=graph_dataset.hyperedge_memberships,
         )
-        return QualityFaultInjector(self.config).apply(dataset)
+        dataset = QualityFaultInjector(self.config).apply(dataset)
+        if resolve_difficulty(self.config).enabled:
+            dataset = _mask_difficulty_event_truth(dataset)
+        return dataset
 
 
 def generate_behavior(config: SimulationRunConfig, entities: EntityDataset) -> BehaviorDataset:

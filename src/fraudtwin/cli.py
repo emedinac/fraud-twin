@@ -7,6 +7,7 @@ import polars as pl
 import typer
 
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
+from fraudtwin.difficulty import difficulty_metadata
 from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
 from fraudtwin.graph import GraphDataset, build_graph, validate_graph, write_graph
 from fraudtwin.manifest import RunManifest, create_manifest, write_manifest
@@ -181,6 +182,13 @@ def generate(
             "quality_fault_rates": behavior_dataset.quality_fault_rates,
             "quality_diagnostics": behavior_dataset.quality_diagnostics,
             "graph": graph_metadata,
+            "difficulty": difficulty_metadata(
+                config,
+                entity_dataset,
+                behavior_dataset,
+                base_manifest.run_id,
+            )
+            or None,
         }
     )
     dataset_path: Path | None = None

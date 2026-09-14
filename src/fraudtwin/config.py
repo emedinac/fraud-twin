@@ -47,6 +47,14 @@ PIX_EVENT_ENVELOPE_DELAY_SECONDS = PIX_SOURCE_DELAY_SECONDS + 2
 ACCOUNT_TRANSFER_EVENT_ENVELOPE_DELAY_SECONDS = ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS + 2
 
 
+def _require_timezone(value: datetime, message: str) -> datetime:
+    """Validate a timezone-aware datetime while preserving caller-specific errors."""
+
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(message)
+    return value
+
+
 class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
@@ -62,9 +70,7 @@ class SimulationConfig(_StrictModel):
     @field_validator("start")
     @classmethod
     def start_must_include_timezone(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("start must include a timezone")
-        return value
+        return _require_timezone(value, "start must include a timezone")
 
 
 class PopulationConfig(_StrictModel):
@@ -353,9 +359,7 @@ class OutageConfig(_StrictModel):
     @field_validator("from_time", "to_time")
     @classmethod
     def outage_timestamps_must_include_timezone(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("outage timestamps must include a timezone")
-        return value
+        return _require_timezone(value, "outage timestamps must include a timezone")
 
     @model_validator(mode="after")
     def outage_bounds_must_be_ordered(self) -> "OutageConfig":
@@ -374,9 +378,7 @@ class SchemaChangeConfig(_StrictModel):
     @field_validator("at")
     @classmethod
     def schema_change_timestamp_must_include_timezone(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("schema change timestamp must include a timezone")
-        return value
+        return _require_timezone(value, "schema change timestamp must include a timezone")
 
 
 class QualityConfig(_StrictModel):
@@ -528,9 +530,11 @@ class TemporalSplitConfig(_StrictModel):
     @field_validator("train_end", "validation_end", "test_end")
     @classmethod
     def split_timestamps_must_include_timezone(cls, value: datetime | None) -> datetime | None:
-        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
-            raise ValueError("temporal split timestamps must include a timezone")
-        return value
+        return (
+            _require_timezone(value, "temporal split timestamps must include a timezone")
+            if value is not None
+            else None
+        )
 
     @model_validator(mode="after")
     def split_fractions_must_form_distribution(self) -> "TemporalSplitConfig":
@@ -587,9 +591,11 @@ class PointInTimeDatasetConfig(_StrictModel):
     @field_validator("start", "end")
     @classmethod
     def dataset_timestamps_must_include_timezone(cls, value: datetime | None) -> datetime | None:
-        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
-            raise ValueError("dataset timestamps must include a timezone")
-        return value
+        return (
+            _require_timezone(value, "dataset timestamps must include a timezone")
+            if value is not None
+            else None
+        )
 
     @model_validator(mode="after")
     def dataset_range_must_be_ordered(self) -> "PointInTimeDatasetConfig":
@@ -651,9 +657,7 @@ class FraudRegimeConfig(_StrictModel):
     @field_validator("from_time", "to_time")
     @classmethod
     def regime_timestamps_must_include_timezone(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("regime timestamps must include a timezone")
-        return value
+        return _require_timezone(value, "regime timestamps must include a timezone")
 
     @model_validator(mode="after")
     def regime_bounds_and_mixes_must_be_valid(self) -> "FraudRegimeConfig":
@@ -725,6 +729,63 @@ GraphModifierType = Literal[
     "STRUCTURAL_HYPEREDGE",
     "SEMANTIC_HYPEREDGE",
 ]
+
+DifficultyControlName = Literal[
+    "fraud_legitimate_overlap",
+    "behavioral_deviation",
+    "scenario_subtlety",
+    "noise_hard_negatives",
+    "prevalence",
+    "temporal_irregularity",
+    "graph_structural_subtlety",
+]
+
+
+class DifficultyControls(_StrictModel):
+    """Optional per-dimension M12 difficulty overrides.
+
+    Values are normalized strengths: zero is the level profile's easiest
+    setting and one is its most difficult setting.  A supplied value replaces
+    only that dimension of the requested benchmark level.
+    """
+
+    fraud_legitimate_overlap: float | None = Field(default=None, ge=0, le=1)
+    behavioral_deviation: float | None = Field(default=None, ge=0, le=1)
+    scenario_subtlety: float | None = Field(default=None, ge=0, le=1)
+    noise_hard_negatives: float | None = Field(default=None, ge=0, le=1)
+    prevalence: float | None = Field(default=None, ge=0, le=1)
+    temporal_irregularity: float | None = Field(default=None, ge=0, le=1)
+    graph_structural_subtlety: float | None = Field(default=None, ge=0, le=1)
+
+    @property
+    def active(self) -> bool:
+        """Whether at least one dimension was explicitly overridden."""
+
+        return any(getattr(self, field) is not None for field in type(self).model_fields)
+
+    def values(self) -> dict[str, float | None]:
+        """Return all normalized override values in stable field order."""
+
+        return {field: getattr(self, field) for field in type(self).model_fields}
+
+
+class BenchmarkConfig(_StrictModel):
+    """Opt-in M12 fraud-difficulty controls."""
+
+    difficulty: Annotated[int, Field(ge=1, le=10)] | None = None
+    controls: DifficultyControls = Field(default_factory=DifficultyControls)
+
+    @model_validator(mode="after")
+    def level_required_for_overrides(self) -> "BenchmarkConfig":
+        if self.controls.active and self.difficulty is None:
+            raise ValueError("benchmark.difficulty is required when controls are supplied")
+        return self
+
+    @property
+    def enabled(self) -> bool:
+        """Whether M12 should alter generation or artifacts."""
+
+        return self.difficulty is not None
 
 
 class GraphScenarioConfig(_StrictModel):
@@ -985,6 +1046,7 @@ class SimulationRunConfig(_StrictModel):
     dataset: PointInTimeDatasetConfig = Field(default_factory=PointInTimeDatasetConfig)
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
     graph: GraphConfig = Field(default_factory=GraphConfig)
+    benchmark: BenchmarkConfig = Field(default_factory=BenchmarkConfig)
 
     def effective_label_delay_seconds(self) -> int:
         """Return the dataset label delay, falling back to workflow settings."""
@@ -1077,6 +1139,28 @@ class SimulationRunConfig(_StrictModel):
                 if scenario.type == "BENEFICIARY_NETWORK"
             ):
                 raise ValueError("beneficiary graph scenarios require at least one PIX key")
+        if self.benchmark.enabled and not (self.fraud.enabled or self.graph.enabled):
+            raise ValueError(
+                "benchmark difficulty requires fraud or graph generation to be enabled"
+            )
+        if self.benchmark.enabled:
+            if self.fraud.enabled and self.fraud.target_rate > 0:
+                if self.payments.daily_target == 0 or self.population.customers == 0:
+                    raise ValueError(
+                        "difficulty-enabled fraud generation requires payment capacity"
+                    )
+                if self.population.cards == 0 or self.population.merchants == 0:
+                    raise ValueError(
+                        "difficulty-enabled fraud generation requires cards and merchants"
+                    )
+                if self.population.accounts < 2:
+                    raise ValueError("difficulty-enabled fraud generation requires two accounts")
+                if self.fraud.scenario_count > min(
+                    self.population.cards, self.population.merchants, self.population.accounts
+                ):
+                    raise ValueError(
+                        "difficulty-enabled fraud scenario count exceeds entity capacity"
+                    )
         return self
 
 
@@ -1136,6 +1220,10 @@ def _canonical_config(
     # M11 is opt-in; a disabled graph section must not change legacy run IDs.
     if not config.graph.enabled:
         payload.pop("graph", None)
+    # M12 is opt-in; a benchmark section with no level must not change legacy
+    # run IDs, manifests, or fingerprints.
+    if not config.benchmark.enabled:
+        payload.pop("benchmark", None)
     # Keep run identities backward-compatible when newly optional methodology
     # controls remain at their neutral defaults.
     neutral_defaults: dict[str, dict[str, object]] = {
