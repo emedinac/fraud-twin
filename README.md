@@ -46,6 +46,7 @@ Tutorials will be added under `docs/` as the workflows settle. Each tutorial sho
 - Opt-in counterfactual fraud trajectories with minimum-change budgets and audit lineage.
 - Opt-in dynamic fraud campaigns with phase evolution, rail movement, topology mutations, and oracle sidecars.
 - Reference calibration profiles that tune aggregate amounts, timing, balances, activity, and merchant behavior without copying reference rows.
+- An opt-in label observation engine for selective, delayed, missing, preliminary, corrected, and reopened labels with point-in-time-safe history.
 
 FraudTwin is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and timing before introducing a larger streaming or production stack.
 
