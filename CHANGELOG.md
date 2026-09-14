@@ -1,5 +1,17 @@
 # Release notes
 
+## 0.14.0 — Milestone 13 Camouflage Engine
+
+- Added strict opt-in feature and relation camouflage controls with global,
+  fraud-family, graph-family, and per-signal overrides.
+- Added deterministic legitimate cohort selection, isolated M13 seed streams,
+  measurable similarity summaries, feasibility caps, and observable/oracle
+  truth separation.
+- Added lineage-valid benign graph support events while preserving fraud
+  campaign induced topology, lifecycle, ledger, workflow, and oracle truth.
+- Added source, dataset, and graph camouflage provenance, the M13 fixture,
+  focused regression tests, and public resolver APIs.
+
 ## 0.13.0 — Milestone 12 Fraud Difficulty Engine
 
 - Added strict opt-in difficulty levels 1–10 with per-dimension override
