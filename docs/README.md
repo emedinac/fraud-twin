@@ -2,6 +2,17 @@
 
 FraudTwin is easiest to understand as a small, deterministic payment world. Start with the shortest path to a generated run, then move into configuration and the workflows you need.
 
+## Build the API website
+
+Install the optional documentation tools and build the local site:
+
+```bash
+poetry install --with docs
+poetry run sphinx-build -b html docs docs/_build/html
+```
+
+Open `docs/_build/html/index.html` to see the FraudTwin hello-world page and generated API reference.
+
 ## Start here
 
 - [Getting Started tutorial](tutorials/01-getting-started.ipynb) - generate and inspect a first run in a notebook.

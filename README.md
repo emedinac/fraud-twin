@@ -16,6 +16,24 @@
 
 FraudTwin generates a small, coherent payment world: customers have accounts, cards, merchants, devices, habits, and transaction histories. The same seed and configuration produce the same world, which makes a difficult fraud case reproducible instead of anecdotal.
 
+## Documentation
+
+[FraudTwin docs](https://emedinac.github.io/fraud-twin/)
+
+| Need | Guide |
+| --- | --- |
+| Browse the hosted Python API reference | [API reference](https://emedinac.github.io/fraud-twin/api.html) |
+| Read the documentation sources | [Documentation hub](docs/README.md) |
+| Install and generate a first run | [Quickstart](docs/quickstart.md) |
+| Tune behavior, fraud, quality, and stress | [Configuration](docs/configuration.md) |
+| Build datasets, replay runs, and backtest | [Data and evaluation workflows](docs/workflows.md) |
+| Export graphs and use benchmark fixtures | [Graph and benchmark workflows](docs/graph-and-benchmarks.md) |
+| Contribute and run the quality gate | [Development guide](docs/development.md) |
+| Review release history | [CHANGELOG.md](CHANGELOG.md) |
+| Understand external references | [References](docs/references.md) |
+
+Tutorials will be added under `docs/` as the workflows settle. Each tutorial should start from a versioned configuration and show the resulting artifacts, not only the command that produced them.
+
 ## What it provides
 
 - Behavior-aware customers and legitimate CARD, PIX-like, and account-transfer payments.
@@ -57,21 +75,6 @@ poetry run fraudtwin generate configs/minimal.yaml \
 ```
 
 The minimal configuration creates 10 customers, 10 behavior profiles, and 100 target payments. Fraud is disabled in this baseline; enable it in a copied YAML file or start with a fixture under `configs/benchmarks/`.
-
-## Documentation
-
-| Need | Guide |
-| --- | --- |
-| Browse the documentation set | [Documentation hub](docs/README.md) |
-| Install and generate a first run | [Quickstart](docs/quickstart.md) |
-| Tune behavior, fraud, quality, and stress | [Configuration](docs/configuration.md) |
-| Build datasets, replay runs, and backtest | [Data and evaluation workflows](docs/workflows.md) |
-| Export graphs and use benchmark fixtures | [Graph and benchmark workflows](docs/graph-and-benchmarks.md) |
-| Contribute and run the quality gate | [Development guide](docs/development.md) |
-| Review release history | [CHANGELOG.md](CHANGELOG.md) |
-| Understand external references | [References](docs/references.md) |
-
-Tutorials will be added under `docs/` as the workflows settle. Each tutorial should start from a versioned configuration and show the resulting artifacts, not only the command that produced them.
 
 ## Generated output
 
