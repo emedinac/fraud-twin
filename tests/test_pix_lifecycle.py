@@ -98,6 +98,63 @@ def test_rejected_pix_has_no_settlement_or_receipt() -> None:
     assert not dataset.ledger_entries
 
 
+def test_timeout_path_has_terminal_status_and_no_settlement_effects() -> None:
+    _, entities, dataset = _dataset(
+        authorization_approval_probability=1.0,
+        rejection_probability=0.0,
+        timeout_probability=1.0,
+        timeout_delay_seconds=7,
+    )
+    payments = {payment.payment_id: payment for payment in dataset.payments}
+    for payment_id, events in _events_by_payment(dataset).items():
+        assert [event.event_type for event in events] == [
+            "PIX_INITIATED",
+            "PIX_VALIDATED",
+            "PIX_AUTHORIZED",
+            "PIX_SUBMITTED",
+            "PIX_TIMEOUT",
+        ]
+        assert payments[payment_id].current_status == "TIMED_OUT"
+        validate_pix_lifecycle(payments[payment_id], tuple(events))
+    assert not dataset.ledger_entries
+    validate_ledger(entities.accounts, dataset.payments, dataset.payment_events, ())
+
+
+def test_return_can_start_directly_from_settlement() -> None:
+    _, _, dataset = _dataset(
+        authorization_approval_probability=1.0,
+        rejection_probability=0.0,
+        return_probability=0.0,
+    )
+    payment = dataset.payments[0]
+    original_events = list(_events_by_payment(dataset)[payment.payment_id])
+    settled = original_events[-2]
+    events = original_events[:-2]
+    returned_request = settled.model_copy(
+        update={
+            "event_id": f"{settled.event_id}-RETURN-REQUESTED",
+            "event_type": "PIX_RETURN_REQUESTED",
+            "event_time": settled.event_time.replace(
+                microsecond=settled.event_time.microsecond + 1
+            ),
+            "causation_id": settled.event_id,
+        }
+    )
+    returned = returned_request.model_copy(
+        update={
+            "event_id": f"{settled.event_id}-RETURNED",
+            "event_type": "PIX_RETURNED",
+            "event_time": returned_request.event_time.replace(
+                microsecond=returned_request.event_time.microsecond + 1
+            ),
+            "causation_id": returned_request.event_id,
+        }
+    )
+    events.extend((settled, returned_request, returned))
+    updated_payment = payment.model_copy(update={"current_status": "RETURNED"})
+    validate_pix_lifecycle(updated_payment, tuple(events))
+
+
 def test_return_path_is_eligible_and_double_sided() -> None:
     _, entities, dataset = _dataset(
         authorization_approval_probability=1.0,

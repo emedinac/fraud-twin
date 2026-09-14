@@ -18,6 +18,7 @@ from fraudtwin.config import (
 )
 from fraudtwin.difficulty import apply_difficulty, resolve_difficulty
 from fraudtwin.domain import (
+    PAYMENT_EVENT_CONTRACT_VERSION,
     Account,
     Card,
     Device,
@@ -529,7 +530,7 @@ class FraudScenarioGenerator:
             merchant_id=merchant.merchant_id,
             device_id=device.device_id if device else None,
             online=True,
-            event_type="CARD_AUTHORIZATION_REQUESTED",
+            event_type="CARD_PAYMENT_INITIATED",
         )
         payment, payment_events = self.payment_generator._card_lifecycle(payment, initial, rng)
         subtlety = self._active_plan.scenario_subtlety if self._difficulty.enabled else 0.0
@@ -546,10 +547,21 @@ class FraudScenarioGenerator:
             )
         )
         if should_decline:
-            declined = payment_events[1].model_copy(update={"event_type": "CARD_DECLINED"})
-            payment = payment.model_copy(update={"current_status": "DECLINED"})
-            payment_events = (payment_events[0], declined)
-            validate_card_lifecycle(payment, payment_events)
+            authorization_index = next(
+                (
+                    index
+                    for index, event in enumerate(payment_events)
+                    if event.event_type == "CARD_AUTHORIZED"
+                ),
+                None,
+            )
+            if authorization_index is not None:
+                declined = payment_events[authorization_index].model_copy(
+                    update={"event_type": "CARD_DECLINED"}
+                )
+                payment = payment.model_copy(update={"current_status": "DECLINED"})
+                payment_events = (*payment_events[:authorization_index], declined)
+                validate_card_lifecycle(payment, payment_events)
         return payment, payment_events
 
     def _account_takeover(
@@ -817,7 +829,7 @@ class FraudScenarioGenerator:
             processed_at=processed_at,
             producer="fraudtwin.fraud",
             source_system="synthetic_fraud_source",
-            schema_version="2" if rail == "CARD" else "3" if rail == "PIX" else "1",
+            schema_version=PAYMENT_EVENT_CONTRACT_VERSION,
             correlation_id=payment_id,
             causation_id=causation_id,
             simulation_run_id=self.payment_generator.simulation_run_id,

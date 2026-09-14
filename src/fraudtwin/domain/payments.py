@@ -7,9 +7,12 @@ from pydantic import Field
 
 from fraudtwin.domain.entities import Account, _EntityModel
 
+PAYMENT_EVENT_CONTRACT_VERSION = "5"
+
 PaymentRail = Literal["CARD", "PIX", "ACCOUNT_TRANSFER"]
 PaymentType = Literal["PURCHASE", "TRANSFER"]
 CardLifecycleEventType = Literal[
+    "CARD_PAYMENT_INITIATED",
     "CARD_AUTHORIZATION_REQUESTED",
     "CARD_AUTHORIZED",
     "CARD_DECLINED",
@@ -26,6 +29,7 @@ PixLifecycleEventType = Literal[
     "PIX_VALIDATED",
     "PIX_AUTHORIZED",
     "PIX_SUBMITTED",
+    "PIX_TIMEOUT",
     "PIX_SETTLED",
     "PIX_RECEIVED",
     "PIX_REJECTED",
@@ -44,6 +48,7 @@ PaymentEventType = (
     | Literal["TRANSFER_COMPLETED"]
 )
 CARD_LIFECYCLE_EVENT_TYPES = (
+    "CARD_PAYMENT_INITIATED",
     "CARD_AUTHORIZATION_REQUESTED",
     "CARD_AUTHORIZED",
     "CARD_DECLINED",
@@ -60,6 +65,7 @@ PIX_LIFECYCLE_EVENT_TYPES = (
     "PIX_VALIDATED",
     "PIX_AUTHORIZED",
     "PIX_SUBMITTED",
+    "PIX_TIMEOUT",
     "PIX_SETTLED",
     "PIX_RECEIVED",
     "PIX_REJECTED",
@@ -67,6 +73,7 @@ PIX_LIFECYCLE_EVENT_TYPES = (
     "PIX_RETURNED",
 )
 _CARD_LIFECYCLE_TRANSITIONS: dict[str, tuple[str, ...]] = {
+    "CARD_PAYMENT_INITIATED": ("CARD_AUTHORIZATION_REQUESTED",),
     "CARD_AUTHORIZATION_REQUESTED": ("CARD_AUTHORIZED", "CARD_DECLINED"),
     "CARD_AUTHORIZED": ("CARD_REVERSED", "CARD_CAPTURED"),
     "CARD_CAPTURED": ("CARD_REVERSED", "CARD_CLEARED"),
@@ -103,6 +110,7 @@ class Payment(_EntityModel):
         "REFUNDED",
         "COMPLETED",
         "REJECTED",
+        "TIMED_OUT",
         "RECEIVED",
         "RETURNED",
         "CHARGEBACK_RESOLVED",
@@ -141,6 +149,7 @@ class PaymentEvent(_EntityModel):
     card_id: str | None
     device_id: str | None
     ip_id: str | None = None
+    transport_partition: int | None = Field(default=None, ge=0)
     online: bool
     amount: float = Field(gt=0)
     currency: str
@@ -157,7 +166,7 @@ def _validate_lifecycle_envelope(
     *,
     rail: PaymentRail,
     event_types: tuple[str, ...],
-    initial_event_type: str,
+    initial_event_type: str | tuple[str, ...],
 ) -> None:
     """Validate the fields shared by all payment lifecycle event chains."""
 
@@ -186,7 +195,10 @@ def _validate_lifecycle_envelope(
         for previous, current in zip(events, events[1:], strict=False)
     ):
         raise ValueError(f"{rail} lifecycle event times must be strictly increasing")
-    if events[0].event_type != initial_event_type:
+    allowed_initial_types = (
+        (initial_event_type,) if isinstance(initial_event_type, str) else initial_event_type
+    )
+    if events[0].event_type not in allowed_initial_types:
         raise ValueError(f"{rail} lifecycle has an invalid initial event")
 
 
@@ -195,12 +207,17 @@ def validate_card_lifecycle(payment: Payment, events: tuple[PaymentEvent, ...]) 
 
     if payment.payment_rail != "CARD":
         return
+    initial_event_type: str | tuple[str, ...] = "CARD_PAYMENT_INITIATED"
+    if events and events[0].event_type == "CARD_AUTHORIZATION_REQUESTED":
+        if events[0].schema_version not in {"1", "2", "3", "4"}:
+            raise ValueError("card authorization-first lifecycle requires a legacy contract")
+        initial_event_type = "CARD_AUTHORIZATION_REQUESTED"
     _validate_lifecycle_envelope(
         payment,
         events,
         rail="CARD",
         event_types=CARD_LIFECYCLE_EVENT_TYPES,
-        initial_event_type="CARD_AUTHORIZATION_REQUESTED",
+        initial_event_type=initial_event_type,
     )
 
     for previous, current in zip(events, events[1:], strict=False):
@@ -229,11 +246,12 @@ _PIX_LIFECYCLE_TRANSITIONS: dict[str, tuple[str, ...]] = {
     "PIX_INITIATED": ("PIX_VALIDATED",),
     "PIX_VALIDATED": ("PIX_AUTHORIZED", "PIX_REJECTED"),
     "PIX_AUTHORIZED": ("PIX_SUBMITTED",),
-    "PIX_SUBMITTED": ("PIX_SETTLED",),
-    "PIX_SETTLED": ("PIX_RECEIVED",),
+    "PIX_SUBMITTED": ("PIX_SETTLED", "PIX_TIMEOUT"),
+    "PIX_SETTLED": ("PIX_RECEIVED", "PIX_RETURN_REQUESTED"),
     "PIX_RECEIVED": ("PIX_RETURN_REQUESTED",),
     "PIX_RETURN_REQUESTED": ("PIX_RETURNED",),
     "PIX_REJECTED": (),
+    "PIX_TIMEOUT": (),
     "PIX_RETURNED": (),
 }
 
@@ -264,6 +282,7 @@ def validate_pix_lifecycle(payment: Payment, events: tuple[PaymentEvent, ...]) -
         raise ValueError("rejected PIX payment cannot reach authorization or settlement")
     expected_status = {
         "PIX_REJECTED": "REJECTED",
+        "PIX_TIMEOUT": "TIMED_OUT",
         "PIX_RECEIVED": "RECEIVED",
         "PIX_RETURNED": "RETURNED",
     }.get(events[-1].event_type)

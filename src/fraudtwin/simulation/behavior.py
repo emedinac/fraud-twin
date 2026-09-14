@@ -76,6 +76,10 @@ class BehaviorDataset:
     camouflage_metadata: dict[str, object] = field(default_factory=dict)
     # M8 keeps an immutable in-memory oracle before intentional corruption.
     oracle_tables: dict[str, tuple[BaseModel, ...]] = field(default_factory=dict, repr=False)
+    quality_raw_faults: tuple[dict[str, object], ...] = field(default_factory=tuple, repr=False)
+    schema_evolution_rows: dict[str, tuple[dict[str, object], ...]] = field(
+        default_factory=dict, repr=False
+    )
     counterfactual: CounterfactualDataset | None = field(default=None, repr=False)
 
     def tables(self) -> dict[str, tuple[BaseModel, ...]]:

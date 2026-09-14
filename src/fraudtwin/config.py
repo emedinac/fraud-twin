@@ -225,6 +225,7 @@ class CardLifecycleConfig(_StrictModel):
         return sum(
             (
                 self.authorization_delay_seconds,
+                self.authorization_delay_seconds,
                 self.capture_delay_seconds,
                 self.clearing_delay_seconds,
                 self.settlement_delay_seconds,
@@ -242,10 +243,12 @@ class PixLifecycleConfig(_StrictModel):
 
     authorization_approval_probability: float = Field(default=0.98, ge=0, le=1)
     rejection_probability: float = Field(default=0.02, ge=0, le=1)
+    timeout_probability: float = Field(default=0.0, ge=0, le=1)
     return_probability: float = Field(default=0.05, ge=0, le=1)
     validation_delay_seconds: Annotated[int, Field(ge=0)] = 1
     authorization_delay_seconds: Annotated[int, Field(ge=0)] = 1
     submission_delay_seconds: Annotated[int, Field(ge=0)] = 1
+    timeout_delay_seconds: Annotated[int, Field(ge=0)] = 1
     settlement_delay_seconds: Annotated[int, Field(ge=0)] = 1
     receipt_delay_seconds: Annotated[int, Field(ge=0)] = 1
     return_request_delay_seconds: Annotated[int, Field(ge=0)] = 60
@@ -260,7 +263,7 @@ class PixLifecycleConfig(_StrictModel):
                 self.validation_delay_seconds,
                 self.authorization_delay_seconds,
                 self.submission_delay_seconds,
-                self.settlement_delay_seconds,
+                max(self.timeout_delay_seconds, self.settlement_delay_seconds),
                 self.receipt_delay_seconds,
                 self.return_request_delay_seconds,
                 self.return_delay_seconds,
@@ -369,16 +372,43 @@ class OutageConfig(_StrictModel):
 
 
 class SchemaChangeConfig(_StrictModel):
-    """A scheduled, additive event-schema version change."""
+    """A scheduled event-schema change with optional compatibility metadata."""
 
     at: datetime
     event: str = Field(min_length=1)
     version: str = Field(min_length=1)
+    change: dict[str, object] = Field(default_factory=dict)
+    compatibility: (
+        Literal[
+            "BACKWARD_COMPATIBLE",
+            "FORWARD_COMPATIBLE",
+            "FULLY_COMPATIBLE",
+            "BREAKING",
+        ]
+        | None
+    ) = None
 
     @field_validator("at")
     @classmethod
     def schema_change_timestamp_must_include_timezone(cls, value: datetime) -> datetime:
         return _require_timezone(value, "schema change timestamp must include a timezone")
+
+    @model_validator(mode="after")
+    def schema_change_definition_must_be_supported(self) -> "SchemaChangeConfig":
+        supported = {
+            "add_optional_field",
+            "rename",
+            "remove_field",
+            "nullability",
+            "enum",
+            "type",
+        }
+        unknown = set(self.change) - supported
+        if unknown:
+            raise ValueError(f"unsupported schema change operation(s): {sorted(unknown)}")
+        if len(self.change) > 1:
+            raise ValueError("schema change must contain exactly one operation")
+        return self
 
 
 class QualityConfig(_StrictModel):
@@ -414,6 +444,15 @@ class QualityConfig(_StrictModel):
         le=1,
         validation_alias=AliasChoices("invalid_value_probability", "invalid_records"),
     )
+    invalid_enum_probability: float | None = Field(default=None, ge=0, le=1)
+    invalid_reference_probability: float | None = Field(default=None, ge=0, le=1)
+    negative_amount_probability: float | None = Field(default=None, ge=0, le=1)
+    corrupted_timestamp_probability: float | None = Field(default=None, ge=0, le=1)
+    timezone_error_probability: float | None = Field(default=None, ge=0, le=1)
+    schema_mismatch_probability: float | None = Field(default=None, ge=0, le=1)
+    extreme_value_probability: float | None = Field(default=None, ge=0, le=1)
+    encoding_error_probability: float | None = Field(default=None, ge=0, le=1)
+    partition_skew_probability: float | None = Field(default=None, ge=0, le=1)
     late_event_probability: float | None = Field(
         default=None,
         ge=0,
@@ -471,6 +510,10 @@ class QualityConfig(_StrictModel):
         explicit = getattr(self, f"{fault_name}_probability")
         if explicit is not None:
             return cast(float, explicit)
+        if fault_name == "negative_amount":
+            legacy = self.invalid_value_probability
+            if legacy is not None:
+                return legacy
         return _QUALITY_PROFILE_DEFAULTS[self.profile][fault_name]
 
 
@@ -480,6 +523,15 @@ _QUALITY_PROFILE_DEFAULTS: dict[QualityProfile, dict[str, float]] = {
         "duplicate_event": 0.0,
         "missing_optional": 0.0,
         "invalid_value": 0.0,
+        "invalid_enum": 0.0,
+        "invalid_reference": 0.0,
+        "negative_amount": 0.0,
+        "corrupted_timestamp": 0.0,
+        "timezone_error": 0.0,
+        "schema_mismatch": 0.0,
+        "extreme_value": 0.0,
+        "encoding_error": 0.0,
+        "partition_skew": 0.0,
         "late_event": 0.0,
         "out_of_order": 0.0,
         "fraud_spike": 0.0,
@@ -490,6 +542,15 @@ _QUALITY_PROFILE_DEFAULTS: dict[QualityProfile, dict[str, float]] = {
         "duplicate_event": 0.002,
         "missing_optional": 0.01,
         "invalid_value": 0.0005,
+        "invalid_enum": 0.0,
+        "invalid_reference": 0.0,
+        "negative_amount": 0.0005,
+        "corrupted_timestamp": 0.0,
+        "timezone_error": 0.0,
+        "schema_mismatch": 0.0,
+        "extreme_value": 0.0,
+        "encoding_error": 0.0,
+        "partition_skew": 0.0,
         "late_event": 0.03,
         "out_of_order": 0.02,
         "fraud_spike": 0.0,
@@ -500,6 +561,15 @@ _QUALITY_PROFILE_DEFAULTS: dict[QualityProfile, dict[str, float]] = {
         "duplicate_event": 0.03,
         "missing_optional": 0.08,
         "invalid_value": 0.02,
+        "invalid_enum": 0.0,
+        "invalid_reference": 0.0,
+        "negative_amount": 0.02,
+        "corrupted_timestamp": 0.0,
+        "timezone_error": 0.0,
+        "schema_mismatch": 0.0,
+        "extreme_value": 0.0,
+        "encoding_error": 0.0,
+        "partition_skew": 0.0,
         "late_event": 0.20,
         "out_of_order": 0.20,
         "fraud_spike": 0.10,

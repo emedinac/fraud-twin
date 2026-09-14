@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.16.0 — Methodology completion for Milestones 4, 5 and 8
+
+- Completed strict M4/M5 lifecycle gaps with explicit card initiation, PIX
+  timeout handling, direct settled-return transitions, contract version 5, and
+  legacy v1-v4 read/replay compatibility.
+- Expanded M8 with independently configurable deterministic fault types,
+  mutation audit records, diagnostics, raw encoding artifacts, partition-skew
+  assignments, and serialized schema evolution with compatibility metadata.
+
 ## 0.15.0 — Milestone 14 Counterfactual Fraud Generation
 
 - Added strict opt-in counterfactual configuration with deterministic source

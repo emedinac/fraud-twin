@@ -6,6 +6,7 @@ from datetime import UTC, timedelta
 from fraudtwin.config import GraphScenarioConfig, SimulationRunConfig
 from fraudtwin.difficulty import apply_difficulty, resolve_difficulty
 from fraudtwin.domain import (
+    PAYMENT_EVENT_CONTRACT_VERSION,
     Account,
     Device,
     FraudRecord,
@@ -366,7 +367,7 @@ class GraphFraudGenerator:
                 processed_at=when + timedelta(seconds=7),
                 producer="fraudtwin.graph_fraud",
                 source_system="synthetic_payment_source",
-                schema_version="5",
+                schema_version=PAYMENT_EVENT_CONTRACT_VERSION,
                 correlation_id=pid,
                 causation_id=None,
                 simulation_run_id=self.run_id,

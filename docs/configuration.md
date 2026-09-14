@@ -12,11 +12,11 @@ Start from [`configs/minimal.yaml`](../configs/minimal.yaml) and change only the
 | `population` | Counts for customers, accounts, cards, merchants, devices, and institutions |
 | `payments` | Daily volume and payment-rail weights |
 | `behavior` | Customer spending, timing, merchant, and device preferences |
-| `card_lifecycle` | Card authorization, capture, clearing, settlement, refunds, and reversals |
-| `pix_lifecycle` | Pix-like validation, authorization, settlement, rejection, and return timing |
+| `card_lifecycle` | Card initiation, authorization, capture, clearing, settlement, refunds, and reversals |
+| `pix_lifecycle` | Pix-like validation, authorization, settlement, rejection, timeout, and return timing |
 | `fraud` | Scenario selection, prevalence, weights, and hard negatives |
 | `fraud_workflow` | Alerts, cases, confirmations, disputes, and label delays |
-| `quality` | Deterministic duplicates, missing values, invalid values, delays, and spikes |
+| `quality` | Deterministic typed faults, delivery defects, outages, schema changes, and spikes |
 | `dataset` | Point-in-time feature and label construction |
 | `backtest` | Rolling train, validation, test, and stress windows |
 | `graph` | Opt-in fraud-network campaigns and graph export inputs |
@@ -114,7 +114,7 @@ Workflow projections are controlled separately. Their delays are causal: an inve
 
 ## Data quality
 
-Use `quality.profile: clean` for a baseline, `realistic` for bounded faults, or `hostile` for a more demanding stream. Individual probabilities and delays can override a profile. Faults include duplicates, missing optional fields, invalid values, late or out-of-order delivery, source delay, outages, schema changes, fraud spikes, and traffic spikes.
+Use `quality.profile: clean` for a baseline, `realistic` for bounded faults, or `hostile` for a more demanding stream. Individual probabilities and delays can override a profile. Faults include duplicates, missing optional fields, invalid enums/references, negative or extreme amounts, timestamp/time-zone corruption, schema mismatches, encoding faults, late or out-of-order delivery, source delay, outages, schema changes, fraud spikes, traffic spikes, and deterministic partition skew.
 
 ```yaml
 quality:
@@ -122,9 +122,29 @@ quality:
   duplicate_event_probability: 0.02
   late_event_probability: 0.05
   source_delay_seconds: 30
+  invalid_enum_probability: 0.001
+  invalid_reference_probability: 0.001
+  negative_amount_probability: 0.001
+  corrupted_timestamp_probability: 0.001
+  timezone_error_probability: 0.001
+  schema_mismatch_probability: 0.001
+  extreme_value_probability: 0.001
+  encoding_error_probability: 0.001
+  partition_skew_probability: 0.01
+  schema_changes:
+    - at: 2026-01-15T00:00:00Z
+      event: payment_events
+      version: "6"
+      change:
+        add_optional_field:
+          risk_reason: null
+
+pix_lifecycle:
+  timeout_probability: 0.0
+  timeout_delay_seconds: 1
 ```
 
-Quality mutations are deterministic and audited in the manifest. They do not silently change the clean lifecycle or ledger path.
+Quality mutations are applied in a deterministic order, preserve the pristine oracle snapshot, and are audited in the manifest with targets, requested rates, actual mutations, identity effects, boundaries, and expected validation failures. Encoding faults are written to `quality/raw_faults.jsonl`; schema-evolved rows are written under `quality/schema_evolution/`. Version-only `schema_changes` remain supported as a compatibility shorthand.
 
 ## Difficulty and camouflage
 

@@ -1,7 +1,7 @@
 id: fraudtwin-m10-minimal
 version: 1.0.0
 source_seed: 42
-source_config_hash: 9b476d4295d00b3c50fef7e02d788266aa2494472db5aaa5302743441486ba00
+source_config_hash: 19652188a1efbe6ccc5b9862e34099fb9fa0f727e83c623b02f0ceddbf75300b
 windows:
   train:
     from: 2026-01-01T00:00:00Z

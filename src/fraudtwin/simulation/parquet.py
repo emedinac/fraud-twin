@@ -224,6 +224,7 @@ PAYMENT_EVENT_SCHEMA: dict[str, Any] = {
     "merchant_id": pl.Utf8,
     "card_id": pl.Utf8,
     "device_id": pl.Utf8,
+    "transport_partition": pl.Int64,
     "online": pl.Boolean,
     "amount": pl.Float64,
     "currency": pl.Utf8,
@@ -525,6 +526,56 @@ def _write_table(
     pl.DataFrame(rows, schema=schema, orient="row").write_parquet(path)
 
 
+def _behavior_schema(table_name: str, records: tuple[BaseModel, ...]) -> dict[str, Any]:
+    """Select the stable event schema, including optional graph columns."""
+
+    schema = BEHAVIOR_SCHEMAS[table_name]
+    if table_name == "payment_events" and any(
+        getattr(record, "ip_id", None) is not None for record in records
+    ):
+        return GRAPH_PAYMENT_EVENT_SCHEMA
+    return schema
+
+
+def _write_json_lines(rows: Iterable[Mapping[str, object]], path: Path) -> None:
+    """Write deterministic JSONL rows used by quality sidecar artifacts."""
+
+    path.write_text(
+        "".join(json.dumps(row, sort_keys=True, default=str) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+
+def _write_json_document(value: object, path: Path) -> None:
+    """Write one deterministic, human-readable JSON artifact."""
+
+    path.write_text(
+        json.dumps(value, sort_keys=True, indent=2, default=str) + "\n", encoding="utf-8"
+    )
+
+
+def _write_quality_artifacts(dataset: BehaviorDataset, run_dir: Path) -> None:
+    """Write optional M8 artifacts without affecting typed Parquet tables."""
+
+    if not (
+        dataset.quality_raw_faults or dataset.schema_evolution_rows or dataset.quality_diagnostics
+    ):
+        return
+    quality_dir = run_dir / "quality"
+    quality_dir.mkdir(parents=True, exist_ok=True)
+    _write_json_document(
+        dataset.quality_diagnostics.get("fault_audit", []), quality_dir / "fault_audit.json"
+    )
+    if dataset.quality_raw_faults:
+        _write_json_lines(dataset.quality_raw_faults, quality_dir / "raw_faults.jsonl")
+    if dataset.schema_evolution_rows:
+        schema_dir = quality_dir / "schema_evolution"
+        schema_dir.mkdir(parents=True, exist_ok=True)
+        for name, rows in sorted(dataset.schema_evolution_rows.items()):
+            filename = name.replace("/", "_").replace(":", "_") + ".jsonl"
+            _write_json_lines(rows, schema_dir / filename)
+
+
 def _write_counterfactual_workflows(
     records: Mapping[str, Iterable[BaseModel]],
     directory: Path,
@@ -621,11 +672,7 @@ def write_behavior_parquet(
     )
     written: dict[str, Path] = {}
     for table_name, records in dataset.tables().items():
-        schema = BEHAVIOR_SCHEMAS[table_name]
-        if table_name == "payment_events" and any(
-            getattr(record, "ip_id", None) is not None for record in records
-        ):
-            schema = GRAPH_PAYMENT_EVENT_SCHEMA
+        schema = _behavior_schema(table_name, records)
         directory = table_directories[table_name]
         path = directory / f"{table_name}.parquet"
         _write_table(records, schema, path, masked_fields=masked_fields.get(table_name, ()))
@@ -638,16 +685,13 @@ def write_behavior_parquet(
             directory.mkdir(parents=True, exist_ok=True)
         for table_name, records in dataset.oracle_tables.items():
             if table_name in BEHAVIOR_SCHEMAS:
-                schema = BEHAVIOR_SCHEMAS[table_name]
-                if table_name == "payment_events" and any(
-                    getattr(record, "ip_id", None) is not None for record in records
-                ):
-                    schema = GRAPH_PAYMENT_EVENT_SCHEMA
+                schema = _behavior_schema(table_name, records)
                 _write_table(
                     records,
                     schema,
                     oracle_directories[table_name] / f"{table_name}.parquet",
                 )
+    _write_quality_artifacts(dataset, run_dir)
     return written
 
 

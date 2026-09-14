@@ -34,6 +34,7 @@ from fraudtwin.domain.graph import (
 )
 from fraudtwin.domain.payments import (
     CARD_LIFECYCLE_EVENT_TYPES,
+    PAYMENT_EVENT_CONTRACT_VERSION,
     PIX_LIFECYCLE_EVENT_TYPES,
     CardLifecycleEventType,
     FraudSignalEventType,
@@ -83,6 +84,7 @@ __all__ = [
     "PaymentEvent",
     "CARD_LIFECYCLE_EVENT_TYPES",
     "PIX_LIFECYCLE_EVENT_TYPES",
+    "PAYMENT_EVENT_CONTRACT_VERSION",
     "CardLifecycleEventType",
     "PixLifecycleEventType",
     "PaymentEventType",

@@ -16,6 +16,7 @@ from fraudtwin.config import (
     StressConfig,
 )
 from fraudtwin.domain import (
+    PAYMENT_EVENT_CONTRACT_VERSION,
     BehaviorProfile,
     FraudRecord,
     GraphCampaign,
@@ -410,7 +411,7 @@ def _build_relation_support(
                     processed_at=processed_at,
                     producer="fraudtwin.camouflage",
                     source_system="synthetic_payment_source",
-                    schema_version="1",
+                    schema_version=PAYMENT_EVENT_CONTRACT_VERSION,
                     correlation_id=payment_id,
                     causation_id=None,
                     simulation_run_id=simulation_run_id,

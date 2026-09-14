@@ -183,7 +183,7 @@ def generate(
             "schema_versions": {
                 **{entity_name: "1" for entity_name in entity_counts},
                 "payments": "2",
-                "payment_events": "4",
+                "payment_events": "5",
                 "ledger_entries": "1",
                 "fraud_records": "1",
                 "fraud_alerts": "1",

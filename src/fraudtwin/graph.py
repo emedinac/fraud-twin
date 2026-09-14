@@ -411,6 +411,7 @@ def _event_edges(
         if not start <= event.event_time < end:
             continue
         if event.event_type not in {
+            "CARD_PAYMENT_INITIATED",
             "CARD_AUTHORIZATION_REQUESTED",
             "PIX_INITIATED",
             "TRANSFER_COMPLETED",
