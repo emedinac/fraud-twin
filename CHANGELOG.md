@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.19.0 — Milestone 16 Reference Calibration & Fidelity
+
+- Added strict Parquet reference loading, deterministic aggregate calibration profiles, profile serialization/reuse, custom calibration registries, and named calibration streams.
+- Added calibrated generation controls for amount and account-balance distributions, typed fidelity reports, append-only calibration sidecars, provenance fingerprints, and CLI workflows.
+- Preserved neutral M1–M15 identities and observable/oracle boundaries when calibration is disabled.
+
 ## 0.18.0 — Package convertion release
 
 - Added a `pip install` procedure and first getting-started tutorial in ipynb.

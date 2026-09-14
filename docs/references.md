@@ -33,6 +33,11 @@ These references informed FraudTwin’s design. The repository does not bundle c
 
 ## Engineering references
 
+## Reference calibration
+
+- [SDV data quality reports](https://docs.sdv.dev/sdv/multi-table-data/evaluation/data-quality) and [SDMetrics quality reports](https://docs.sdv.dev/sdmetrics/data-metrics/quality/quality-report) — informed aggregate distribution, pair-trend, cardinality, and fidelity-report concepts. FraudTwin stores deterministic summaries rather than source rows.
+- [PaySim](https://github.com/EdgarLopezPhD/PaySim) — informed aggregate calibration of simulation parameters while retaining domain-specific causal payment rules.
+
 ## Advanced Campaign Dynamics references
 
 - Prasetya et al., [*A multi-rounded adversarial scenario for graph-based promo fraud detection*](https://doi.org/10.1007/s13278-025-01566-0) — evolving campaign structure.

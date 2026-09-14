@@ -6,6 +6,11 @@ from typing import Annotated, Literal, cast
 import polars as pl
 import typer
 
+from fraudtwin.calibration import (
+    fit_calibration_profile,
+    load_reference_data,
+    write_calibration_profile,
+)
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
 from fraudtwin.generation import generate as generate_library
@@ -39,9 +44,11 @@ app.add_typer(counterfactual_app, name="counterfactual")
 app.add_typer(campaign_app, name="campaign")
 
 
-def _load_or_exit(path: Path) -> SimulationRunConfig:
+def _load_or_exit(
+    path: Path, *, calibration_profile_override: Path | None = None
+) -> SimulationRunConfig:
     try:
-        return load_config(path)
+        return load_config(path, calibration_profile_override=calibration_profile_override)
     except (FileNotFoundError, ValueError) as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
@@ -72,11 +79,13 @@ def generate(
         Path,
         typer.Option("--output-dir", help="Directory in which to store run manifests."),
     ] = Path("runs"),
+    profile: Annotated[Path | None, typer.Option("--profile")] = None,
+    seed: Annotated[int | None, typer.Option("--seed")] = None,
 ) -> None:
     """Validate a configuration and generate a reproducible batch dataset."""
 
-    config = _load_or_exit(path)
-    result = generate_library(config, write=True, output_dir=output_dir)
+    config = _load_or_exit(path, calibration_profile_override=profile)
+    result = generate_library(config, write=True, output_dir=output_dir, profile=profile, seed=seed)
     manifest = result.manifest
     entity_counts = manifest.entity_counts
     event_counts = manifest.event_counts
@@ -92,6 +101,24 @@ def generate(
     typer.echo("Generated payment counts:")
     for event_name, count in event_counts.items():
         typer.echo(f"  {event_name}: {count}")
+
+
+@app.command()
+def calibrate(
+    reference: Annotated[Path, typer.Argument(help="Reference Parquet file.")],
+    output: Annotated[Path, typer.Option("--output", help="Output profile YAML.")],
+    seed: Annotated[int, typer.Option("--seed", help="Calibration seed.")] = 0,
+) -> None:
+    """Fit an aggregate-only deterministic calibration profile."""
+
+    try:
+        profile = fit_calibration_profile(load_reference_data(reference), seed=seed)
+        write_calibration_profile(profile, output)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Calibration failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Calibration profile generated: {profile.profile_id}")
+    typer.echo(f"Profile: {output}")
 
 
 @campaign_app.command("evolve")

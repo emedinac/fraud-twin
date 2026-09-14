@@ -64,4 +64,10 @@ M15 evolves matching M11 campaigns in stable campaign order. Phase snapshots and
 | `m12-difficulty-v1.yaml` | Boundary-oriented fraud difficulty |
 | `m13-camouflage-v1.yaml` | Feature and relation camouflage |
 
+Reference calibration can be combined with graph fixtures when the reference
+contains transfer endpoints. Graph calibration contributes aggregate degree and
+motif summaries only; configured M11 topology and graph closure remain
+authoritative. Campaign summaries are available when the reference supplies a
+campaign identifier and M15 is enabled.
+
 Treat these files as immutable examples. Copy one into a working configuration when you need to explore a variation; do not edit the versioned fixture in place.

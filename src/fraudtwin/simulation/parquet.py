@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
     from fraudtwin.campaign_dynamics import DynamicCampaignDataset
     from fraudtwin.simulation.behavior import BehaviorDataset
 
+from fraudtwin.calibration import CalibrationProfile, FidelityReport
 from fraudtwin.counterfactual import CounterfactualDataset
 
 _UTC_TIMESTAMP = pl.Datetime(time_zone="UTC")
@@ -602,6 +604,17 @@ CAMPAIGN_DYNAMIC_SCHEMAS: dict[str, dict[str, Any]] = {
     },
 }
 
+CALIBRATION_METRIC_SCHEMA: dict[str, Any] = {
+    "name": pl.Utf8,
+    "version": pl.Utf8,
+    "status": pl.Utf8,
+    "score": pl.Float64,
+    "weight": pl.Float64,
+    "reference_summary_fingerprint": pl.Utf8,
+    "generated_summary_fingerprint": pl.Utf8,
+    "details": pl.Utf8,
+}
+
 
 def _write_table(
     records: Iterable[BaseModel],
@@ -820,6 +833,31 @@ def write_graph_truth(
     return written
 
 
+def write_calibration_artifacts(
+    profile: CalibrationProfile,
+    report: FidelityReport,
+    run_dir: Path,
+) -> tuple[Path, Path]:
+    """Write aggregate-only M16 fidelity artifacts under an immutable sidecar."""
+
+    root = run_dir / "calibration" / profile.profile_id
+    if root.exists():
+        raise FileExistsError(f"calibration sidecar already exists: {root}")
+    root.mkdir(parents=True)
+    rows = [
+        {
+            **item.model_dump(mode="python"),
+            "details": json.dumps(item.details, sort_keys=True),
+        }
+        for item in report.metrics
+    ]
+    metrics_path = root / "fidelity_metrics.parquet"
+    pl.DataFrame(rows, schema=CALIBRATION_METRIC_SCHEMA).write_parquet(metrics_path)
+    report_path = root / "fidelity_report.json"
+    report_path.write_text(report.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    return metrics_path, report_path
+
+
 def write_campaign_dynamics_sidecar(
     dataset: DynamicCampaignDataset,
     run_dir: Path,
@@ -875,8 +913,7 @@ def write_campaign_dynamics_sidecar(
             _write_table(records, GRAPH_TRUTH_SCHEMAS[name], graph_dir / f"{name}.parquet")
     files = sorted(path for path in root.rglob("*") if path.is_file())
     checksums = {
-        str(path.relative_to(root)): __import__("hashlib").sha256(path.read_bytes()).hexdigest()
-        for path in files
+        str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in files
     }
     payload = {
         "version": "1",

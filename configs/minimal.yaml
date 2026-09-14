@@ -106,3 +106,6 @@ outputs:
   parquet: true
   postgres: false
   kafka: false
+
+calibration:
+  enabled: false

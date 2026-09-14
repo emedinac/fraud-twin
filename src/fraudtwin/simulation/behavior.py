@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel
 
+from fraudtwin.calibration import ResolvedCalibration
 from fraudtwin.camouflage import resolve_camouflage, transform_generated_data
 from fraudtwin.config import SimulationRunConfig
 from fraudtwin.counterfactual import CounterfactualDataset, generate_counterfactuals
@@ -216,10 +217,12 @@ class BehaviorGenerator:
         config: SimulationRunConfig,
         entities: EntityDataset,
         simulation_run_id: str | None = None,
+        calibration: ResolvedCalibration | None = None,
     ) -> None:
         self.config = config
         self.entities = entities
         self.simulation_run_id = simulation_run_id
+        self.calibration = calibration
         self.merchant_categories = tuple(
             sorted({merchant.merchant_category_code for merchant in entities.merchants})
         )
@@ -329,6 +332,7 @@ class BehaviorGenerator:
             self.entities.devices,
             self.entities.pix_keys,
             simulation_run_id=self.simulation_run_id,
+            calibration=self.calibration,
         ).generate(profiles)
         counterfactual_dataset = (
             generate_counterfactuals(

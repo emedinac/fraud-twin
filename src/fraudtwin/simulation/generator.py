@@ -5,6 +5,11 @@ from datetime import UTC, date, datetime, timedelta
 from random import Random
 from typing import Literal, cast
 
+from fraudtwin.calibration import (
+    CALIBRATED_BALANCE_STREAM_ID,
+    CALIBRATED_MERCHANT_STREAM_ID,
+    ResolvedCalibration,
+)
 from fraudtwin.config import SimulationRunConfig
 from fraudtwin.domain import (
     Account,
@@ -17,7 +22,7 @@ from fraudtwin.domain import (
     NetworkEndpoint,
     PixKey,
 )
-from fraudtwin.seed import create_legacy_entity_stream_rng
+from fraudtwin.seed import create_legacy_entity_stream_rng, create_stream_rng
 
 _ID_WIDTH = 6
 _CUSTOMER_HISTORY_DAYS = 3650
@@ -166,8 +171,11 @@ class EntityDataset:
 class EntityGenerator:
     """Generate a reproducible population from a validated configuration."""
 
-    def __init__(self, config: SimulationRunConfig) -> None:
+    def __init__(
+        self, config: SimulationRunConfig, calibration: ResolvedCalibration | None = None
+    ) -> None:
         self.config = config
+        self.calibration = calibration
         self.start = config.simulation.start.astimezone(UTC)
         self.population = config.population
 
@@ -309,6 +317,31 @@ class EntityGenerator:
         self, customers: tuple[Customer, ...], institutions: tuple[Institution, ...]
     ) -> tuple[Account, ...]:
         rng = _entity_stream_rng(self.config.simulation.seed, "accounts")
+        balance_rng = (
+            create_stream_rng(self.config.simulation.seed, CALIBRATED_BALANCE_STREAM_ID)
+            if self.calibration is not None and self.calibration.enabled
+            else rng
+        )
+        balance_summary = next(
+            (
+                item
+                for item in (
+                    self.calibration.profile.summaries
+                    if self.calibration and self.calibration.profile
+                    else ()
+                )
+                if item.name == "account_balance"
+            ),
+            None,
+        )
+        balance_range = (
+            (
+                float(cast(float, balance_summary.parameters["minimum"])),
+                float(cast(float, balance_summary.parameters["maximum"])),
+            )
+            if balance_summary and "minimum" in balance_summary.parameters
+            else (100.0, 25_000.0)
+        )
         account_types: tuple[AccountType, ...] = (
             "CHECKING",
             "PAYMENT_ACCOUNT",
@@ -320,7 +353,7 @@ class EntityGenerator:
         records: list[Account] = []
         for number in range(1, self.population.accounts + 1):
             opening = _synthetic_datetime(self.start, rng, _ACCOUNT_HISTORY_DAYS)
-            balance = round(rng.uniform(100.0, 25_000.0), 2)
+            balance = round(balance_rng.uniform(*balance_range), 2)
             records.append(
                 Account(
                     account_id=_entity_id("ACC", number),
@@ -374,6 +407,28 @@ class EntityGenerator:
 
     def _merchants(self, institutions: tuple[Institution, ...]) -> tuple[Merchant, ...]:
         rng = _entity_stream_rng(self.config.simulation.seed, "merchants")
+        merchant_summary = next(
+            (
+                item
+                for item in (
+                    self.calibration.profile.summaries
+                    if self.calibration and self.calibration.profile
+                    else ()
+                )
+                if item.name == "merchant_frequency"
+            ),
+            None,
+        )
+        merchant_weights = (
+            cast(dict[str, float], merchant_summary.parameters.get("weights", {}))
+            if merchant_summary
+            else {}
+        )
+        merchant_rng = (
+            create_stream_rng(self.config.simulation.seed, CALIBRATED_MERCHANT_STREAM_ID)
+            if merchant_weights
+            else rng
+        )
         acquirers = (
             tuple(
                 institution
@@ -388,7 +443,17 @@ class EntityGenerator:
                 Merchant(
                     merchant_id=_entity_id("MER", number),
                     merchant_name=f"Synthetic Merchant {number:0{_ID_WIDTH}d}",
-                    merchant_category_code=rng.choice(("5411", "5311", "5732", "5812")),
+                    merchant_category_code=(
+                        merchant_rng.choices(
+                            tuple(sorted(merchant_weights)),
+                            weights=tuple(
+                                merchant_weights[key] for key in sorted(merchant_weights)
+                            ),
+                            k=1,
+                        )[0]
+                        if merchant_weights
+                        else rng.choice(("5411", "5311", "5732", "5812"))
+                    ),
                     country="BR",
                     city=rng.choice(_CITIES),
                     risk_segment=rng.choice(_RISK_SEGMENTS),

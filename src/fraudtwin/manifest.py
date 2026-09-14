@@ -11,8 +11,17 @@ from fraudtwin.config import SimulationRunConfig, config_hash
 def _drop_inactive_metadata(data: dict[str, object]) -> dict[str, object]:
     """Keep optional methodology sections out of inactive manifests."""
 
-    for field in ("difficulty", "camouflage", "counterfactual", "campaign_dynamics"):
+    for field in (
+        "difficulty",
+        "camouflage",
+        "counterfactual",
+        "campaign_dynamics",
+        "calibration",
+    ):
         if data.get(field) is None:
+            data.pop(field, None)
+    for field in ("output_fingerprint", "schema_fingerprint", "file_checksums"):
+        if not data.get(field):
             data.pop(field, None)
     return data
 
@@ -41,11 +50,15 @@ class RunManifest(BaseModel):
     resolved_configuration: dict[str, object] = Field(default_factory=dict)
     regime_definitions: list[dict[str, object]] = Field(default_factory=list)
     output_artifacts: dict[str, object] = Field(default_factory=dict)
+    schema_fingerprint: str | None = None
+    output_fingerprint: str | None = None
+    file_checksums: dict[str, str] = Field(default_factory=dict)
     graph: dict[str, object] = Field(default_factory=dict)
     difficulty: dict[str, object] | None = None
     camouflage: dict[str, object] | None = None
     counterfactual: dict[str, object] | None = None
     campaign_dynamics: dict[str, object] | None = None
+    calibration: dict[str, object] | None = None
 
     @model_serializer(mode="wrap")
     def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
@@ -193,6 +206,8 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         resolved.pop("counterfactual", None)
     if not config.campaign_dynamics.active:
         resolved.pop("campaign_dynamics", None)
+    if not config.calibration.enabled:
+        resolved.pop("calibration", None)
     return RunManifest(
         run_id=f"RUN-{run_hash}",
         generator_version=__version__,

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
@@ -804,6 +805,85 @@ CampaignDynamicsProfile = Literal["linear", "rotating_ring", "adaptive_network",
 CampaignPhase = Literal["compromise", "setup", "transfer", "cash_out", "dormant", "closed"]
 CampaignIntensityModel = Literal["marked_hawkes_v1", "piecewise_rate_v1"]
 
+CalibrationSummaryName = Literal[
+    "amount_distribution",
+    "inter_arrival",
+    "seasonality",
+    "merchant_frequency",
+    "customer_activity",
+    "feature_dependencies",
+    "account_balance",
+    "transaction_count",
+    "graph_statistics",
+    "campaign_statistics",
+]
+
+
+class CalibrationConfig(_StrictModel):
+    """Strict opt-in controls for Milestone 16 reference calibration."""
+
+    enabled: bool = False
+    profile: Path | None = None
+    model_names: tuple[str, ...] = ("builtin",)
+    summary_names: tuple[CalibrationSummaryName, ...] = (
+        "amount_distribution",
+        "inter_arrival",
+        "seasonality",
+        "merchant_frequency",
+        "customer_activity",
+        "feature_dependencies",
+        "account_balance",
+        "transaction_count",
+        "graph_statistics",
+        "campaign_statistics",
+    )
+    weights: dict[CalibrationSummaryName, float] = Field(default_factory=dict)
+    minimum_scores: dict[str, float] = Field(default_factory=dict)
+
+    @field_validator("model_names")
+    @classmethod
+    def model_names_must_be_unique(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if not value or any(not item.strip() for item in value) or len(set(value)) != len(value):
+            raise ValueError("calibration model_names must be non-empty and unique")
+        return value
+
+    @field_validator("summary_names")
+    @classmethod
+    def summary_names_must_be_unique(
+        cls, value: tuple[CalibrationSummaryName, ...]
+    ) -> tuple[CalibrationSummaryName, ...]:
+        if not value or len(set(value)) != len(value):
+            raise ValueError("calibration summary_names must be non-empty and unique")
+        return value
+
+    @field_validator("weights")
+    @classmethod
+    def weights_must_be_finite_positive(
+        cls, value: dict[CalibrationSummaryName, float]
+    ) -> dict[CalibrationSummaryName, float]:
+        if any(not math.isfinite(weight) or weight <= 0 for weight in value.values()):
+            raise ValueError("calibration weights must be finite and positive")
+        return value
+
+    @field_validator("minimum_scores")
+    @classmethod
+    def thresholds_must_be_valid(cls, value: dict[str, float]) -> dict[str, float]:
+        if any(not math.isfinite(score) or score < 0 or score > 1 for score in value.values()):
+            raise ValueError("calibration minimum_scores must be finite values in [0, 1]")
+        return value
+
+    @model_validator(mode="after")
+    def active_profile_requirements(self) -> "CalibrationConfig":
+        if self.enabled and self.profile is None:
+            raise ValueError("calibration.enabled requires calibration.profile")
+        if not self.enabled and self.profile is not None:
+            raise ValueError("calibration.profile requires calibration.enabled=true")
+        if set(self.weights) - set(self.summary_names):
+            raise ValueError("calibration weights may only target selected summaries")
+        if set(self.minimum_scores) - set(self.summary_names):
+            raise ValueError("calibration minimum_scores may only target selected summaries")
+        return self
+
 
 _DYNAMIC_PROFILE_TEMPLATES: dict[str, str] = {
     "linear": "MULE_NETWORK",
@@ -1575,6 +1655,7 @@ class SimulationRunConfig(_StrictModel):
     stress: StressConfig = Field(default_factory=StressConfig)
     counterfactual: CounterfactualConfig = Field(default_factory=CounterfactualConfig)
     campaign_dynamics: CampaignDynamicsConfig = Field(default_factory=CampaignDynamicsConfig)
+    calibration: CalibrationConfig = Field(default_factory=CalibrationConfig)
 
     def effective_label_delay_seconds(self) -> int:
         """Return the dataset label delay, falling back to workflow settings."""
@@ -1815,7 +1896,11 @@ class SimulationRunConfig(_StrictModel):
         return self
 
 
-def load_config(path: Path) -> SimulationRunConfig:
+def load_config(
+    path: Path,
+    *,
+    calibration_profile_override: Path | None = None,
+) -> SimulationRunConfig:
     """Load and validate a YAML configuration file."""
 
     if not path.is_file():
@@ -1826,7 +1911,24 @@ def load_config(path: Path) -> SimulationRunConfig:
 
     if not isinstance(raw_config, dict):
         raise ValueError("configuration root must be a mapping")
-    return SimulationRunConfig.model_validate(raw_config)
+    if calibration_profile_override is not None:
+        calibration_values = raw_config.setdefault("calibration", {})
+        if not isinstance(calibration_values, dict):
+            raise ValueError("calibration configuration must be a mapping")
+        calibration_values["enabled"] = True
+        calibration_values["profile"] = str(calibration_profile_override)
+    elif isinstance(raw_config.get("calibration"), dict):
+        profile_value = raw_config["calibration"].get("profile")
+        if profile_value is not None:
+            profile_path = Path(str(profile_value))
+            if not profile_path.is_absolute():
+                raw_config["calibration"]["profile"] = str(path.parent / profile_path)
+    config = SimulationRunConfig.model_validate(raw_config)
+    if config.calibration.enabled:
+        from fraudtwin.calibration import resolve_calibration
+
+        resolve_calibration(config)
+    return config
 
 
 def config_hash(
@@ -1883,6 +1985,15 @@ def _canonical_config(
         payload.pop("counterfactual", None)
     if not config.campaign_dynamics.active:
         payload.pop("campaign_dynamics", None)
+    if not config.calibration.enabled:
+        payload.pop("calibration", None)
+    else:
+        # A profile path is an access detail.  The calibrated run identity is
+        # anchored by the resolved profile ID, so equivalent profiles remain
+        # reproducible when copied to a different location.
+        calibration_payload = payload.get("calibration")
+        if isinstance(calibration_payload, dict):
+            calibration_payload.pop("profile", None)
     # Keep run identities backward-compatible when newly optional methodology
     # controls remain at their neutral defaults.
     neutral_defaults: dict[str, dict[str, object]] = {

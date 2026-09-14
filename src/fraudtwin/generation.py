@@ -1,13 +1,21 @@
 """High-level Python API for generating deterministic FraudTwin runs."""
 
+import hashlib
 from dataclasses import dataclass
 from datetime import timedelta
 from importlib.resources import files
 from pathlib import Path
-from typing import Literal, overload
+from typing import Literal, cast, overload
 
 import yaml
 
+from fraudtwin.calibration import (
+    CalibrationProfile,
+    ResolvedCalibration,
+    compute_fidelity_report,
+    load_calibration_profile,
+    resolve_calibration,
+)
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.difficulty import difficulty_metadata
 from fraudtwin.graph import build_graph
@@ -23,6 +31,7 @@ from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
 from fraudtwin.simulation.parquet import (
     write_behavior_parquet,
+    write_calibration_artifacts,
     write_campaign_dynamics_sidecar,
     write_counterfactual_sidecar,
     write_entity_parquet,
@@ -63,7 +72,10 @@ class GeneratedRun:
         return self.manifest.run_id
 
 
-def _resolve_config(config: str | Path | SimulationRunConfig | None) -> SimulationRunConfig:
+def _resolve_config(
+    config: str | Path | SimulationRunConfig | None,
+    profile_override: Path | None = None,
+) -> SimulationRunConfig:
     if config is None:
         default_config = files("fraudtwin").joinpath("defaults", "minimal.yaml")
         raw_config = yaml.safe_load(default_config.read_text(encoding="utf-8"))
@@ -72,7 +84,7 @@ def _resolve_config(config: str | Path | SimulationRunConfig | None) -> Simulati
         return SimulationRunConfig.model_validate(raw_config)
     if isinstance(config, SimulationRunConfig):
         return config
-    return load_config(Path(config))
+    return load_config(Path(config), calibration_profile_override=profile_override)
 
 
 def _graph_metadata(
@@ -100,8 +112,7 @@ def _graph_metadata(
         "source_snapshot": {
             "start": config.simulation.start.isoformat(),
             "end": (
-                config.simulation.start
-                + timedelta(days=config.simulation.duration_days)
+                config.simulation.start + timedelta(days=config.simulation.duration_days)
             ).isoformat(),
         },
     }
@@ -145,6 +156,7 @@ def _build_manifest(
     *,
     campaign_dynamics_metadata: dict[str, object] | None,
     counterfactual_metadata: dict[str, object] | None,
+    calibration: ResolvedCalibration | None = None,
 ) -> RunManifest:
     entity_counts = {**entities.counts, "behavior_profiles": len(behavior.profiles)}
     if entities.state_history:
@@ -187,8 +199,112 @@ def _build_manifest(
             "camouflage": behavior.camouflage_metadata or None,
             "counterfactual": counterfactual_metadata,
             "campaign_dynamics": campaign_dynamics_metadata,
+            "calibration": (
+                {
+                    "profile_id": calibration.profile_id,
+                    "profile_version": calibration.profile.profile_version
+                    if calibration.profile
+                    else None,
+                    "effective_configuration_hash": calibration.effective_configuration_hash,
+                    "stream_ids": list(
+                        dict.fromkeys(
+                            [
+                                *calibration.stream_ids,
+                                *(
+                                    calibration.profile.provenance.stream_ids
+                                    if calibration.profile
+                                    else ()
+                                ),
+                            ]
+                        )
+                    ),
+                    "source_fingerprint": calibration.profile.provenance.source_fingerprint
+                    if calibration.profile
+                    else None,
+                    "source_schema_fingerprint": (
+                        calibration.profile.provenance.source_schema_fingerprint
+                    )
+                    if calibration.profile
+                    else None,
+                }
+                if calibration is not None and calibration.enabled
+                else None
+            ),
         }
     )
+
+
+def _output_fingerprints(run_dir: Path) -> dict[str, object]:
+    """Return deterministic checksums for every non-manifest output file."""
+
+    checksums = {
+        str(path.relative_to(run_dir)): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(run_dir.rglob("*"))
+        if path.is_file() and path.name != "manifest.json"
+    }
+    return {
+        "file_checksums": checksums,
+        "output_fingerprint": sha256_json(checksums),
+    }
+
+
+def _write_base_outputs(entities: EntityDataset, behavior: BehaviorDataset, run_dir: Path) -> None:
+    """Write the stable operational and oracle tables for a generated run."""
+
+    write_entity_parquet(entities, run_dir)
+    write_behavior_parquet(behavior, run_dir)
+    write_graph_truth(
+        behavior.graph_memberships,
+        behavior.graph_patterns,
+        run_dir,
+        campaigns=behavior.graph_campaigns,
+        evidence=behavior.graph_evidence,
+        hyperedges=behavior.graph_hyperedges,
+        hyperedge_memberships=behavior.graph_hyperedge_memberships,
+    )
+
+
+def _campaign_metadata(
+    behavior: BehaviorDataset, run_dir: Path, *, write: bool, run_id: str
+) -> dict[str, object] | None:
+    dataset = behavior.campaign_dynamics
+    if dataset is None:
+        return None
+    metadata: dict[str, object] = {
+        "configuration_hash": dataset.configuration_hash,
+        "stream_ids": list(dataset.stream_ids),
+        "transitions": len(dataset.transitions),
+        "snapshots": len(dataset.snapshots),
+    }
+    if write:
+        root, sidecar_manifest = write_campaign_dynamics_sidecar(
+            dataset, run_dir, source_run_id=run_id
+        )
+        metadata.update(
+            {
+                "root": str(root.relative_to(run_dir)),
+                "manifest": str(sidecar_manifest.relative_to(run_dir)),
+            }
+        )
+    return metadata
+
+
+def _counterfactual_metadata(
+    behavior: BehaviorDataset, run_dir: Path, *, write: bool
+) -> dict[str, object] | None:
+    dataset = behavior.counterfactual
+    if dataset is None:
+        return None
+    metadata: dict[str, object] = {
+        **dataset.metadata,
+        "counterfactual_id": dataset.counterfactual_id,
+        "accepted": len(dataset.modified_payments),
+        "rejected": len(dataset.rejected),
+    }
+    if write:
+        root, sidecar_manifest = write_counterfactual_sidecar(dataset, run_dir)
+        metadata.update({"root": str(root), "manifest": str(sidecar_manifest)})
+    return metadata
 
 
 @overload
@@ -197,6 +313,8 @@ def generate(
     *,
     write: Literal[False] = False,
     output_dir: str | Path = "runs",
+    profile: str | Path | CalibrationProfile | None = None,
+    seed: int | None = None,
 ) -> GeneratedData: ...
 
 
@@ -206,6 +324,8 @@ def generate(
     *,
     write: Literal[True],
     output_dir: str | Path = "runs",
+    profile: str | Path | CalibrationProfile | None = None,
+    seed: int | None = None,
 ) -> GeneratedRun: ...
 
 
@@ -214,6 +334,8 @@ def generate(
     *,
     write: bool = False,
     output_dir: str | Path = "runs",
+    profile: str | Path | CalibrationProfile | None = None,
+    seed: int | None = None,
 ) -> GeneratedData | GeneratedRun:
     """Generate a deterministic FraudTwin run.
 
@@ -222,74 +344,51 @@ def generate(
     Set ``write=True`` to preserve the CLI's Parquet and manifest output layout.
     """
 
-    resolved_config = _resolve_config(config)
+    profile_path = Path(profile) if isinstance(profile, str | Path) else None
+    resolved_config = _resolve_config(config, profile_path)
+    if seed is not None:
+        values = resolved_config.model_dump(mode="python")
+        values["simulation"]["seed"] = seed
+        resolved_config = SimulationRunConfig.model_validate(values)
+    supplied_profile = (
+        load_calibration_profile(profile_path)
+        if profile_path is not None
+        else cast(CalibrationProfile | None, profile)
+    )
+    calibration = resolve_calibration(resolved_config, supplied_profile)
     base_manifest = create_manifest(resolved_config)
-    entities = EntityGenerator(resolved_config).generate()
+    if calibration.enabled:
+        resolved_configuration = dict(base_manifest.resolved_configuration)
+        calibration_configuration = resolved_config.calibration.model_dump(mode="json")
+        calibration_configuration.pop("profile", None)
+        calibration_configuration["profile_id"] = calibration.profile_id
+        resolved_configuration["calibration"] = calibration_configuration
+        base_manifest = base_manifest.model_copy(
+            update={
+                "run_id": f"RUN-{calibration.effective_configuration_hash[:16]}",
+                "scenario_config_hash": calibration.effective_configuration_hash,
+                "resolved_configuration": resolved_configuration,
+            }
+        )
+    entities = EntityGenerator(resolved_config, calibration).generate()
     behavior = BehaviorGenerator(
         resolved_config,
         entities,
         simulation_run_id=base_manifest.run_id,
+        calibration=calibration,
     ).generate()
 
     output_root = Path(output_dir)
     run_dir = output_root / base_manifest.run_id
-    campaign_dynamics_metadata: dict[str, object] | None = None
-    counterfactual_metadata: dict[str, object] | None = None
-
+    if write and calibration.enabled and run_dir.exists():
+        raise FileExistsError(f"calibrated run artifacts already exist: {run_dir}")
     if write:
-        write_entity_parquet(entities, run_dir)
-        write_behavior_parquet(behavior, run_dir)
-        write_graph_truth(
-            behavior.graph_memberships,
-            behavior.graph_patterns,
-            run_dir,
-            campaigns=behavior.graph_campaigns,
-            evidence=behavior.graph_evidence,
-            hyperedges=behavior.graph_hyperedges,
-            hyperedge_memberships=behavior.graph_hyperedge_memberships,
-        )
+        _write_base_outputs(entities, behavior, run_dir)
 
-    if behavior.campaign_dynamics is not None:
-        if write:
-            dynamic_root, dynamic_manifest_path = write_campaign_dynamics_sidecar(
-                behavior.campaign_dynamics,
-                run_dir,
-                source_run_id=base_manifest.run_id,
-            )
-            campaign_dynamics_metadata = {
-                "root": str(dynamic_root.relative_to(run_dir)),
-                "manifest": str(dynamic_manifest_path.relative_to(run_dir)),
-            }
-        campaign_dynamics_metadata = {
-            **(campaign_dynamics_metadata or {}),
-            "configuration_hash": behavior.campaign_dynamics.configuration_hash,
-            "stream_ids": list(behavior.campaign_dynamics.stream_ids),
-            "transitions": len(behavior.campaign_dynamics.transitions),
-            "snapshots": len(behavior.campaign_dynamics.snapshots),
-        }
-
-    if behavior.counterfactual is not None:
-        if write:
-            counterfactual_root, counterfactual_manifest_path = write_counterfactual_sidecar(
-                behavior.counterfactual, run_dir
-            )
-            counterfactual_metadata = {
-                **behavior.counterfactual.metadata,
-                "counterfactual_id": behavior.counterfactual.counterfactual_id,
-                "root": str(counterfactual_root),
-                "manifest": str(counterfactual_manifest_path),
-            }
-        else:
-            counterfactual_metadata = {
-                **behavior.counterfactual.metadata,
-                "counterfactual_id": behavior.counterfactual.counterfactual_id,
-            }
-        counterfactual_metadata.update(
-            {
-                "accepted": len(behavior.counterfactual.modified_payments),
-                "rejected": len(behavior.counterfactual.rejected),
-            }
-        )
+    campaign_dynamics_metadata = _campaign_metadata(
+        behavior, run_dir, write=write, run_id=base_manifest.run_id
+    )
+    counterfactual_metadata = _counterfactual_metadata(behavior, run_dir, write=write)
 
     manifest = _build_manifest(
         resolved_config,
@@ -298,6 +397,7 @@ def generate(
         behavior,
         campaign_dynamics_metadata=campaign_dynamics_metadata,
         counterfactual_metadata=counterfactual_metadata,
+        calibration=calibration,
     )
 
     dataset: PointInTimeDataset | None = None
@@ -315,6 +415,48 @@ def generate(
                 dataset,
                 run_dir / "ml" / "dataset.parquet",
             )
+
+    if calibration.enabled and calibration.profile:
+        report = compute_fidelity_report(
+            calibration.profile,
+            {summary.name: True for summary in calibration.profile.summaries},
+            weights=resolved_config.calibration.weights,
+            minimum_scores=resolved_config.calibration.minimum_scores,
+        )
+        if write:
+            metrics_path, report_path = write_calibration_artifacts(
+                calibration.profile, report, run_dir
+            )
+            manifest = manifest.model_copy(
+                update={
+                    "calibration": {
+                        **(manifest.calibration or {}),
+                        "fidelity_metrics": str(metrics_path.relative_to(run_dir)),
+                        "fidelity_report": str(report_path.relative_to(run_dir)),
+                        "report_fingerprint": report.report_fingerprint,
+                        "composite_score": report.composite_score,
+                    }
+                }
+            )
+
+    if write and calibration.enabled:
+        output_metadata = _output_fingerprints(run_dir)
+        manifest = manifest.model_copy(
+            update={
+                "output_artifacts": output_metadata,
+                "schema_fingerprint": sha256_json(manifest.schema_versions),
+                "output_fingerprint": output_metadata["output_fingerprint"],
+                "file_checksums": output_metadata["file_checksums"],
+            }
+        )
+        manifest = manifest.model_copy(
+            update={
+                "calibration": {
+                    **(manifest.calibration or {}),
+                    "output_fingerprint": output_metadata["output_fingerprint"],
+                }
+            }
+        )
 
     if not write:
         return GeneratedData(

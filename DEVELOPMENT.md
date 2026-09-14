@@ -24,6 +24,11 @@ poetry build
 git diff --check
 ```
 
+Calibration development uses a strict canonical Parquet reference with `amount`,
+UTC `event_time`, and `customer_id` columns. Fit profiles in a temporary
+directory, compare repeated profile and generated-run fingerprints, and verify
+that only aggregate calibration artifacts are emitted.
+
 For focused tests, generated-run smoke checks, architecture notes, and the contribution workflow, see the [development guide](docs/development.md).
 
 ## Documentation map
