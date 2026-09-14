@@ -424,6 +424,7 @@ class TemporalSplitConfig(_StrictModel):
     train_fraction: float = Field(default=0.7, gt=0, lt=1)
     validation_fraction: float = Field(default=0.15, gt=0, lt=1)
     test_fraction: float = Field(default=0.15, gt=0, lt=1)
+    label_delay_gap_seconds: Annotated[int, Field(ge=0)] | None = None
     train_end: datetime | None = None
     validation_end: datetime | None = None
     test_end: datetime | None = None
@@ -516,6 +517,15 @@ class SimulationRunConfig(_StrictModel):
     outputs: OutputsConfig
     dataset: PointInTimeDatasetConfig = Field(default_factory=PointInTimeDatasetConfig)
 
+    def effective_label_delay_seconds(self) -> int:
+        """Return the dataset label delay, falling back to workflow settings."""
+
+        return (
+            self.dataset.label_delay_seconds
+            if self.dataset.label_delay_seconds is not None
+            else self.fraud_workflow.label_delay_seconds
+        )
+
     @model_validator(mode="after")
     def card_lifecycle_must_fit_simulation_window(self) -> "SimulationRunConfig":
         window_seconds = self.simulation.duration_days * 24 * 60 * 60
@@ -554,6 +564,21 @@ class SimulationRunConfig(_StrictModel):
                 raise ValueError(f"dataset split {boundary_name} must fit the dataset range")
         if self.dataset.splits.test_end is not None and self.dataset.splits.test_end != dataset_end:
             raise ValueError("dataset test_end must equal the dataset end")
+        label_delay_gap = self.dataset.splits.label_delay_gap_seconds
+        if label_delay_gap is None:
+            label_delay_gap = self.effective_label_delay_seconds()
+        dataset_duration = (dataset_end - dataset_start).total_seconds()
+        if 2 * label_delay_gap >= dataset_duration:
+            raise ValueError("temporal label-delay gaps must fit the dataset range")
+        if self.dataset.splits.train_end is not None:
+            validation_end = self.dataset.splits.validation_end
+            test_end = self.dataset.splits.test_end or dataset_end
+            if validation_end is None:
+                raise ValueError("explicit temporal splits require validation_end")
+            if self.dataset.splits.train_end + timedelta(seconds=label_delay_gap) >= validation_end:
+                raise ValueError("train-to-validation label-delay gap leaves no validation range")
+            if validation_end + timedelta(seconds=label_delay_gap) >= test_end:
+                raise ValueError("validation-to-test label-delay gap leaves no test range")
         return self
 
 

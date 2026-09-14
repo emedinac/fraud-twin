@@ -49,6 +49,11 @@ class DatasetManifest(BaseModel):
     reproducibility: dict[str, object]
     row_counts: dict[str, int]
     schema_version: str
+    row_grain: str
+    prediction_entity: str
+    date_range: dict[str, str]
+    schema_fingerprint: str
+    output_fingerprint: str
 
 
 def _git_commit() -> str:

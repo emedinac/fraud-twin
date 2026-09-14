@@ -89,7 +89,7 @@ poetry run fraudtwin ml build-dataset configs/minimal.yaml \
   --run-id <run-id> --output-dir runs
 ```
 
-The dataset manifest records the source run, configuration parameters, feature and label definitions, temporal split boundaries, stable schema columns, row hash, and deterministic ordering. Use `--label-delay-aware` to exclude unresolved labels.
+The dataset manifest records the source run, configuration parameters, feature and label definitions, temporal split boundaries, stable schema columns, row hash, schema fingerprint, output fingerprint, and deterministic ordering. Historical windows are anchored to each row's `prediction_time`; source events and ledger entries must be available by that cutoff, while labels must satisfy `label_available_at <= prediction_time`. Use `--label-delay-aware` to exclude unresolved labels.
 
 M9 settings live under `dataset`:
 
@@ -103,6 +103,7 @@ dataset:
     train_fraction: 0.70
     validation_fraction: 0.15
     test_fraction: 0.15
+    label_delay_gap_seconds: 3600  # defaults to the configured label delay
 ```
 
 Feature windows are explicit positive-second values keyed by the documented

@@ -17,7 +17,7 @@ poetry run fraudtwin config validate configs/minimal.yaml
 poetry run fraudtwin generate configs/minimal.yaml
 ```
 
-The behavior smoke tests intentionally use the minimal 100-payment fixture so hey remain fast in local development and CI:
+The behavior smoke tests intentionally use the minimal 100-payment fixture so they remain fast in local development and CI:
 
 ```bash
 poetry run pytest tests/test_behavior.py
@@ -119,7 +119,10 @@ poetry run fraudtwin ml build-dataset configs/minimal.yaml \
 ```
 
 M9 dataset rows are ordered by stable payment ID. Features are computed from
-prior business events after filtering on source availability, and labels are
-filtered by label availability and configured delay. Dataset manifests make
-the source run, parameters, split boundaries, schema, and row hash explicit.
+prior business events at each row's prediction timestamp after filtering on
+business time and source availability; labels are filtered by label
+availability and configured delay. Temporal split gaps default to the label
+delay and are excluded from all partitions. Dataset manifests make the source
+run, parameters, split boundaries, schema, row and output fingerprints, and
+feature/label policies explicit.
 M10 replay and rolling backtests are intentionally not part of this release.
