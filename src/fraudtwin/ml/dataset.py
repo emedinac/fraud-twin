@@ -35,6 +35,7 @@ from fraudtwin.domain import (
     DelayedFraudLabel,
     Device,
     EntityStateChange,
+    FinalObservedLabel,
     FraudAlert,
     FraudCase,
     FraudCaseConfirmation,
@@ -46,6 +47,8 @@ from fraudtwin.domain import (
     GraphHyperedgeMembership,
     GraphPattern,
     Institution,
+    LabelObservation,
+    LabelVersion,
     LedgerEntry,
     Merchant,
     NetworkEndpoint,
@@ -54,6 +57,7 @@ from fraudtwin.domain import (
     PixKey,
     validate_fraud_workflow,
 )
+from fraudtwin.label_observation import validate_label_observation, visible_label_at
 from fraudtwin.manifest import DatasetManifest, RunManifest
 from fraudtwin.reproducibility import as_utc, canonical_json, sha256_json
 from fraudtwin.simulation.behavior import BehaviorDataset
@@ -328,6 +332,50 @@ def _validate_behavior_workflow(entities: EntityDataset, behavior: BehaviorDatas
     )
 
 
+def _read_label_observations(run_dir: Path, manifest: RunManifest) -> tuple[LabelObservation, ...]:
+    metadata = manifest.label_observation
+    if not metadata or not metadata.get("root"):
+        return ()
+    root = run_dir / str(metadata["root"])
+    history_path = root / "oracle" / "label_history.parquet"
+    if not history_path.is_file():
+        raise ValueError(f"label observation history is missing: {history_path}")
+    versions = tuple(_read_models(history_path, LabelVersion))
+    grouped: dict[str, list[LabelVersion]] = {}
+    for version in versions:
+        grouped.setdefault(version.fraud_record_id, []).append(version)
+    policy_hash = str(metadata.get("configuration_hash", ""))
+    raw_stream_ids = metadata.get("stream_ids", [])
+    if not isinstance(raw_stream_ids, list):
+        raise ValueError("label observation stream_ids must be a list")
+    stream_ids = tuple(str(item) for item in raw_stream_ids)
+    return tuple(
+        LabelObservation(
+            observation_id=f"OBS-{fraud_record_id}",
+            fraud_record_id=fraud_record_id,
+            payment_id=items[0].payment_id,
+            truth_label=items[0].truth_label,
+            investigation_selected=items[0].investigation_selected,
+            versions=tuple(sorted(items, key=lambda item: item.label_version)),
+            final_label_version=max(item.label_version for item in items),
+            policy_hash=policy_hash,
+            stream_ids=stream_ids,
+            simulation_run_id=items[0].simulation_run_id,
+        )
+        for fraud_record_id, items in sorted(grouped.items())
+    )
+
+
+def _read_final_observed_labels(
+    run_dir: Path, manifest: RunManifest
+) -> tuple[FinalObservedLabel, ...]:
+    metadata = manifest.label_observation
+    if not metadata or not metadata.get("root"):
+        return ()
+    path = run_dir / str(metadata["root"]) / "observable" / "observed_labels.parquet"
+    return tuple(_read_models(path, FinalObservedLabel)) if path.is_file() else ()
+
+
 def load_generated_run(
     run_dir: Path,
     *,
@@ -391,6 +439,8 @@ def load_generated_run(
             fallback_delivery=allow_missing_delivery,
         ),
         fraud_labels=_read_run_table(run_dir, "fraud", "fraud_labels", DelayedFraudLabel),
+        label_observations=_read_label_observations(run_dir, manifest),
+        final_observed_labels=_read_final_observed_labels(run_dir, manifest),
         graph_memberships=(
             _read_models(
                 run_dir / "oracle" / "graph" / "campaign_memberships.parquet",
@@ -601,6 +651,11 @@ class PointInTimeDatasetBuilder:
         self.labels = _deduplicate(behavior.fraud_labels, "label_id")
         self.events_by_payment = self._initial_events_by_payment()
         self.labels_by_payment = self._labels_by_payment()
+        self.observations_by_payment = {
+            item.payment_id: item for item in behavior.label_observations
+        }
+        if self.observations_by_payment:
+            validate_label_observation(tuple(self.observations_by_payment.values()))
         self.accounts = {account.account_id: account for account in entities.accounts}
         self.cards = {card.card_id: card for card in entities.cards}
         self.merchants = {merchant.merchant_id: merchant for merchant in entities.merchants}
@@ -850,10 +905,26 @@ class PointInTimeDatasetBuilder:
                     f"payment {payment.payment_id} is not available at its prediction timestamp"
                 )
             label = self.labels_by_payment.get(payment.payment_id)
-            mature = label is not None and label.label_available_at <= prediction_time
+            observed_version: LabelVersion | None = None
+            observation = self.observations_by_payment.get(payment.payment_id)
+            if observation is not None:
+                observed_version = visible_label_at(observation, prediction_time)
+                mature = observed_version.label_version > 0
+            else:
+                mature = label is not None and label.label_available_at <= prediction_time
             if not mature and self.settings.unresolved_labels == "exclude":
                 continue
-            rows.append(self._row(payment, event, prediction_time, label, mature, "all"))
+            rows.append(
+                self._row(
+                    payment,
+                    event,
+                    prediction_time,
+                    label,
+                    mature,
+                    "all",
+                    observed_version=observed_version,
+                )
+            )
         return tuple(rows)
 
     def build(self, prediction_times: Mapping[str, datetime] | None = None) -> PointInTimeDataset:
@@ -1154,6 +1225,7 @@ class PointInTimeDatasetBuilder:
         label: DelayedFraudLabel | None,
         label_is_mature: bool,
         split: str,
+        observed_version: LabelVersion | None = None,
     ) -> dict[str, Any]:
         prior = self._prior_events(event, prediction_time)
         all_prior = self._prior_events(event, prediction_time, same_customer=False)
@@ -1236,10 +1308,24 @@ class PointInTimeDatasetBuilder:
             "event_time": event.event_time,
             "source_available_at": event.source_available_at,
             "feature_available_at": feature_available_at,
-            "label_available_at": label.label_available_at if label is not None else None,
-            "label": label.label if label is not None and label_is_mature else None,
+            "label_available_at": (
+                observed_version.label_available_at
+                if observed_version is not None
+                else label.label_available_at
+                if label is not None
+                else None
+            ),
+            "label": (
+                observed_version.observed_label
+                if observed_version is not None and label_is_mature
+                else label.label
+                if label is not None and label_is_mature
+                else None
+            ),
             "fraud_truth": (
-                self.fraud_truth_by_record.get(label.fraud_record_id)
+                None
+                if observed_version is not None
+                else self.fraud_truth_by_record.get(label.fraud_record_id)
                 if label is not None and label_is_mature
                 else None
             ),

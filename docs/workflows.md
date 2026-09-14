@@ -16,6 +16,8 @@ Source events and ledger entries are filtered by source availability. Labels are
 
 The dataset manifest records the source run, feature and label definitions, split boundaries, stable schema, row hash, and output fingerprint.
 
+When M17 is enabled, inspect `label_observations/<id>/observable/observed_labels.parquet` for the operational projection and the corresponding oracle history for audit. Dataset construction filters each version by `label_available_at`; it never exposes future corrections or latent truth.
+
 ## Replay a historical window
 
 Replay is read-only. It selects records from an existing run over a half-open interval and preserves their source identities and timestamps:

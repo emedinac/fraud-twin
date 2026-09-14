@@ -1,4 +1,4 @@
-__version__ = "0.19.0"
+__version__ = "0.22.0"
 
 from fraudtwin.calibration import (  # noqa: E402
     CalibrationMetric,
@@ -71,6 +71,13 @@ from fraudtwin.graph import (  # noqa: E402
     validate_graph_scenarios,
     write_graph,
 )
+from fraudtwin.label_observation import (  # noqa: E402
+    apply_label_observation,
+    reconstruct_label_history,
+    resolve_label_observation,
+    validate_label_observation,
+    visible_label_at,
+)
 
 __all__ = [
     "__version__",
@@ -99,6 +106,11 @@ __all__ = [
     "GeneratedData",
     "GeneratedRun",
     "generate",
+    "apply_label_observation",
+    "reconstruct_label_history",
+    "resolve_label_observation",
+    "validate_label_observation",
+    "visible_label_at",
     "DynamicCampaignDataset",
     "evolve_campaigns",
     "register_intensity_model",

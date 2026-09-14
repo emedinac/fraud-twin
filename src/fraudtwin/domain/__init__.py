@@ -42,6 +42,16 @@ from fraudtwin.domain.graph import (
     GraphPatternType,
     NetworkEndpoint,
 )
+from fraudtwin.domain.labels import (
+    CaseReopening,
+    FinalObservedLabel,
+    LabelCorrection,
+    LabelObservation,
+    LabelState,
+    LabelVersion,
+    ObservationProvenance,
+    ObservedLabelValue,
+)
 from fraudtwin.domain.payments import (
     CARD_LIFECYCLE_EVENT_TYPES,
     PAYMENT_EVENT_CONTRACT_VERSION,
@@ -114,4 +124,12 @@ __all__ = [
     "validate_payment_lifecycle",
     "validate_ledger",
     "validate_fraud_workflow",
+    "FinalObservedLabel",
+    "CaseReopening",
+    "LabelCorrection",
+    "LabelObservation",
+    "LabelState",
+    "LabelVersion",
+    "ObservationProvenance",
+    "ObservedLabelValue",
 ]

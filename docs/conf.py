@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 project = "FraudTwin"
 copyright = "2026, FraudTwin contributors"
 author = "FraudTwin contributors"
-release = "0.21.0"
+release = "0.22.0"
 
 extensions = [
     "myst_parser",
@@ -18,4 +18,7 @@ extensions = [
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+# The Markdown hub links to repository-level files that are intentionally not
+# Sphinx source documents.
+suppress_warnings = ["myst.xref_missing"]
 html_theme = "furo"

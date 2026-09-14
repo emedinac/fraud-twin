@@ -36,6 +36,7 @@ from fraudtwin.simulation.parquet import (
     write_counterfactual_sidecar,
     write_entity_parquet,
     write_graph_truth,
+    write_label_observation_sidecar,
 )
 
 
@@ -156,6 +157,7 @@ def _build_manifest(
     *,
     campaign_dynamics_metadata: dict[str, object] | None,
     counterfactual_metadata: dict[str, object] | None,
+    label_observation_metadata: dict[str, object] | None,
     calibration: ResolvedCalibration | None = None,
 ) -> RunManifest:
     entity_counts = {**entities.counts, "behavior_profiles": len(behavior.profiles)}
@@ -177,6 +179,7 @@ def _build_manifest(
                 "case_confirmations": "1",
                 "customer_disputes": "1",
                 "fraud_labels": "1",
+                **({"label_observations": "1"} if config.labels.enabled else {}),
                 **(
                     {"counterfactual_change_sets": "1"}
                     if counterfactual_metadata is not None
@@ -230,6 +233,7 @@ def _build_manifest(
                 if calibration is not None and calibration.enabled
                 else None
             ),
+            "label_observation": label_observation_metadata,
         }
     )
 
@@ -304,6 +308,42 @@ def _counterfactual_metadata(
     if write:
         root, sidecar_manifest = write_counterfactual_sidecar(dataset, run_dir)
         metadata.update({"root": str(root), "manifest": str(sidecar_manifest)})
+    return metadata
+
+
+def _label_observation_metadata(
+    behavior: BehaviorDataset, run_dir: Path, *, write: bool, run_id: str
+) -> dict[str, object] | None:
+    if not behavior.label_observations:
+        return None
+    first = behavior.label_observations[0]
+    stream_ids = tuple(
+        dict.fromkeys(
+            stream_id for item in behavior.label_observations for stream_id in item.stream_ids
+        )
+    )
+    metadata: dict[str, object] = {
+        "enabled": True,
+        "configuration_hash": first.policy_hash,
+        "stream_ids": list(stream_ids),
+        "observations": len(behavior.label_observations),
+        "versions": sum(len(item.versions) for item in behavior.label_observations),
+    }
+    if write:
+        root, sidecar_manifest = write_label_observation_sidecar(
+            behavior.label_observations,
+            behavior.final_observed_labels,
+            run_dir,
+            source_run_id=run_id,
+            policy_hash=first.policy_hash,
+            stream_ids=stream_ids,
+        )
+        metadata.update(
+            {
+                "root": str(root.relative_to(run_dir)),
+                "manifest": str(sidecar_manifest.relative_to(run_dir)),
+            }
+        )
     return metadata
 
 
@@ -385,6 +425,10 @@ def generate(
     if write:
         _write_base_outputs(entities, behavior, run_dir)
 
+    label_observation_metadata = _label_observation_metadata(
+        behavior, run_dir, write=write, run_id=base_manifest.run_id
+    )
+
     campaign_dynamics_metadata = _campaign_metadata(
         behavior, run_dir, write=write, run_id=base_manifest.run_id
     )
@@ -397,6 +441,7 @@ def generate(
         behavior,
         campaign_dynamics_metadata=campaign_dynamics_metadata,
         counterfactual_metadata=counterfactual_metadata,
+        label_observation_metadata=label_observation_metadata,
         calibration=calibration,
     )
 
@@ -439,7 +484,7 @@ def generate(
                 }
             )
 
-    if write and calibration.enabled:
+    if write and (calibration.enabled or resolved_config.labels.enabled):
         output_metadata = _output_fingerprints(run_dir)
         manifest = manifest.model_copy(
             update={
@@ -449,14 +494,15 @@ def generate(
                 "file_checksums": output_metadata["file_checksums"],
             }
         )
-        manifest = manifest.model_copy(
-            update={
-                "calibration": {
-                    **(manifest.calibration or {}),
-                    "output_fingerprint": output_metadata["output_fingerprint"],
+        if calibration.enabled:
+            manifest = manifest.model_copy(
+                update={
+                    "calibration": {
+                        **(manifest.calibration or {}),
+                        "output_fingerprint": output_metadata["output_fingerprint"],
+                    }
                 }
-            }
-        )
+            )
 
     if not write:
         return GeneratedData(

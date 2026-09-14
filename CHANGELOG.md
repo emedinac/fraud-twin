@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.22.0 — Label Observation Engine
+
+- Added deterministic, opt-in label observation with selective investigation, missing fraud, preliminary errors, corrections, reopenings, immutable history, and PIT-safe version resolution.
+- Added typed observation APIs, append-only observable/oracle artifacts, provenance manifests, and strict configuration validation while preserving disabled-run M1–M16 output identity.
+
+## 0.21.0 — Documentation
+
+- Added a Sphinx/Furo documentation site with a hosted Python API reference and GitHub Pages deployment.
+
 ## 0.20.0 — Tutorial and Baseline Evaluation Workflows
 
 - Added numbered tutorials covering configuration, payment lifecycles, fraud and delayed labels, point-in-time datasets, stress testing, and simple fraud scoring.

@@ -11,6 +11,8 @@ These references informed FraudTwin’s design. The repository does not bundle c
 
 - [Fraud Detection Handbook simulator](https://fraud-detection-handbook.github.io/fraud-detection-handbook/Chapter_3_GettingStarted/SimulatedDataset.html) *(handbook)* - informed deterministic customer profiles, temporal payment behavior, rule-based fraud scenarios, and the legitimate baseline used for hard negatives.
 - [Fraud Detection Handbook validation strategies](https://fraud-detection-handbook.github.io/fraud-detection-handbook/Chapter_5_ModelValidationAndSelection/ValidationStrategies.html) *(handbook)* - informed point-in-time features, delayed-label gaps, future-only evaluation windows, and rolling backtests.
+- Vasquez et al., [The Hidden Cost of Fraud](https://proceedings.mlr.press/v183/vasquez22a.html) *(paper)* - motivated positive-unlabeled handling for fraud that remains undetected.
+- He et al., [Identifying Labeling Mechanism in Positive-Unlabeled Learning under Unknown Class Prior](https://proceedings.mlr.press/v337/he26a.html) *(paper)* - informed selection-dependent labeling controls.
 - [PaySim](https://github.com/EdgarLopezPhD/PaySim) *(repository and simulator)* - provided comparison points for synthetic mobile-money behavior and aggregate calibration without importing its schemas or data.
 - [SynthFin Core](https://github.com/afborda/synthfin-core) *(repository)* - provided practical comparison points for behavioral enrichment, fraud scenarios, and fraud-pattern generation.
 

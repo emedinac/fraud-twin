@@ -160,6 +160,7 @@ class FraudCase(_EntityModel):
     causation_id: str
     simulation_run_id: str | None
     affected_entity_ids: tuple[str, ...]
+    case_reopened_at: datetime | None = None
 
 
 class FraudCaseConfirmation(_EntityModel):
