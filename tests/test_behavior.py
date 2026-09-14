@@ -28,6 +28,7 @@ def test_profiles_vary_between_customers_and_are_deterministic() -> None:
     second = BehaviorGenerator(first_config, first_entities).generate()
 
     assert first == second
+    assert first.campaign_dynamics is None
     assert len(first.profiles) == len(first_entities.customers)
     assert len({profile.spending_level for profile in first.profiles}) > 1
     assert len({profile.typical_payment_hours for profile in first.profiles}) > 1

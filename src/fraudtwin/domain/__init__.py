@@ -1,6 +1,16 @@
 """Immutable domain entities used by the simulator."""
 
 from fraudtwin.domain.behavior import BehaviorProfile
+from fraudtwin.domain.campaign_dynamics import (
+    CampaignActorMembershipChange,
+    CampaignIntensityDecision,
+    CampaignLineage,
+    CampaignPhaseChange,
+    CampaignSourceSnapshot,
+    CampaignStateSnapshot,
+    CampaignTopologyMutation,
+    CampaignTransition,
+)
 from fraudtwin.domain.cases import (
     CustomerDispute,
     DelayedFraudLabel,
@@ -53,6 +63,14 @@ from fraudtwin.domain.payments import (
 
 __all__ = [
     "Account",
+    "CampaignActorMembershipChange",
+    "CampaignIntensityDecision",
+    "CampaignLineage",
+    "CampaignPhaseChange",
+    "CampaignSourceSnapshot",
+    "CampaignStateSnapshot",
+    "CampaignTopologyMutation",
+    "CampaignTransition",
     "Card",
     "Customer",
     "Device",

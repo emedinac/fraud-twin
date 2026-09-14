@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -18,11 +19,14 @@ from fraudtwin.domain import (
     GraphHyperedgeMembership,
     GraphPattern,
 )
+from fraudtwin.reproducibility import sha256_json
 from fraudtwin.simulation.generator import EntityDataset
 
 if TYPE_CHECKING:
+    from fraudtwin.campaign_dynamics import DynamicCampaignDataset
     from fraudtwin.simulation.behavior import BehaviorDataset
 
+from fraudtwin.calibration import CalibrationProfile, FidelityReport
 from fraudtwin.counterfactual import CounterfactualDataset
 
 _UTC_TIMESTAMP = pl.Datetime(time_zone="UTC")
@@ -509,6 +513,108 @@ GRAPH_TRUTH_SCHEMAS: dict[str, dict[str, Any]] = {
     },
 }
 
+CAMPAIGN_DYNAMIC_SCHEMAS: dict[str, dict[str, Any]] = {
+    "snapshots": {
+        "snapshot_id": pl.Utf8,
+        "campaign_id": pl.Utf8,
+        "phase": pl.Utf8,
+        "intensity": pl.Float64,
+        "active_actor_ids": pl.List(pl.Utf8),
+        "active_device_ids": pl.List(pl.Utf8),
+        "valid_from": _UTC_TIMESTAMP,
+        "valid_to": _UTC_TIMESTAMP,
+        "transition_id": pl.Utf8,
+    },
+    "transitions": {
+        "transition_id": pl.Utf8,
+        "campaign_id": pl.Utf8,
+        "from_phase": pl.Utf8,
+        "to_phase": pl.Utf8,
+        "occurred_at": _UTC_TIMESTAMP,
+        "reason": pl.Utf8,
+        "model_name": pl.Utf8,
+        "source_snapshot_id": pl.Utf8,
+        "stream_id": pl.Utf8,
+    },
+    "phase_changes": {
+        "phase_change_id": pl.Utf8,
+        "campaign_id": pl.Utf8,
+        "transition_id": pl.Utf8,
+        "phase": pl.Utf8,
+        "valid_from": _UTC_TIMESTAMP,
+        "valid_to": _UTC_TIMESTAMP,
+    },
+    "membership_changes": {
+        "membership_change_id": pl.Utf8,
+        "campaign_id": pl.Utf8,
+        "actor_id": pl.Utf8,
+        "actor_type": pl.Utf8,
+        "role": pl.Utf8,
+        "action": pl.Utf8,
+        "occurred_at": _UTC_TIMESTAMP,
+        "valid_from": _UTC_TIMESTAMP,
+        "valid_to": _UTC_TIMESTAMP,
+        "source_entity_id": pl.Utf8,
+    },
+    "intensity_decisions": {
+        "intensity_decision_id": pl.Utf8,
+        "campaign_id": pl.Utf8,
+        "phase": pl.Utf8,
+        "decision_at": _UTC_TIMESTAMP,
+        "event_rate": pl.Float64,
+        "mark": pl.Float64,
+        "model_name": pl.Utf8,
+        "stream_id": pl.Utf8,
+    },
+    "topology_mutations": {
+        "topology_mutation_id": pl.Utf8,
+        "campaign_id": pl.Utf8,
+        "mutation_type": pl.Utf8,
+        "occurred_at": _UTC_TIMESTAMP,
+        "source_member_ids": pl.List(pl.Utf8),
+        "derived_member_ids": pl.List(pl.Utf8),
+        "source_payment_ids": pl.List(pl.Utf8),
+        "derived_payment_ids": pl.List(pl.Utf8),
+        "reason": pl.Utf8,
+    },
+    "lineage": {
+        "lineage_id": pl.Utf8,
+        "campaign_id": pl.Utf8,
+        "parent_campaign_ids": pl.List(pl.Utf8),
+        "source_entity_ids": pl.List(pl.Utf8),
+        "source_event_ids": pl.List(pl.Utf8),
+        "source_payment_ids": pl.List(pl.Utf8),
+        "derived_entity_ids": pl.List(pl.Utf8),
+        "derived_event_ids": pl.List(pl.Utf8),
+        "derived_payment_ids": pl.List(pl.Utf8),
+        "derived_at": _UTC_TIMESTAMP,
+        "reason": pl.Utf8,
+    },
+    "source_snapshots": {
+        "source_snapshot_id": pl.Utf8,
+        "campaign_id": pl.Utf8,
+        "source_run_id": pl.Utf8,
+        "captured_at": _UTC_TIMESTAMP,
+        "source_campaign_ids": pl.List(pl.Utf8),
+        "source_entity_ids": pl.List(pl.Utf8),
+        "source_event_ids": pl.List(pl.Utf8),
+        "source_payment_ids": pl.List(pl.Utf8),
+        "configuration_hash": pl.Utf8,
+        "schema_fingerprint": pl.Utf8,
+    },
+}
+
+CALIBRATION_METRIC_SCHEMA: dict[str, Any] = {
+    "name": pl.Utf8,
+    "version": pl.Utf8,
+    "status": pl.Utf8,
+    "score": pl.Float64,
+    "weight": pl.Float64,
+    "reference_summary_fingerprint": pl.Utf8,
+    "generated_summary_fingerprint": pl.Utf8,
+    "details": pl.Utf8,
+}
+
 
 def _write_table(
     records: Iterable[BaseModel],
@@ -725,6 +831,128 @@ def write_graph_truth(
             _write_table(records, GRAPH_TRUTH_SCHEMAS[name], path)
             written[name] = path
     return written
+
+
+def write_calibration_artifacts(
+    profile: CalibrationProfile,
+    report: FidelityReport,
+    run_dir: Path,
+) -> tuple[Path, Path]:
+    """Write aggregate-only M16 fidelity artifacts under an immutable sidecar."""
+
+    root = run_dir / "calibration" / profile.profile_id
+    if root.exists():
+        raise FileExistsError(f"calibration sidecar already exists: {root}")
+    root.mkdir(parents=True)
+    rows = [
+        {
+            **item.model_dump(mode="python"),
+            "details": json.dumps(item.details, sort_keys=True),
+        }
+        for item in report.metrics
+    ]
+    metrics_path = root / "fidelity_metrics.parquet"
+    pl.DataFrame(rows, schema=CALIBRATION_METRIC_SCHEMA).write_parquet(metrics_path)
+    report_path = root / "fidelity_report.json"
+    report_path.write_text(report.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    return metrics_path, report_path
+
+
+def write_campaign_dynamics_sidecar(
+    dataset: DynamicCampaignDataset,
+    run_dir: Path,
+    *,
+    source_run_id: str,
+) -> tuple[Path, Path]:
+    """Write immutable observable/oracle M15 records and its manifest."""
+
+    if not dataset.active:
+        raise ValueError("cannot write an inactive campaign dynamics sidecar")
+    root = run_dir / "campaign_dynamics" / _sidecar_id(dataset)
+    if root.exists():
+        raise FileExistsError(f"campaign dynamics sidecar already exists: {root}")
+    observable = root / "observable"
+    oracle = root / "oracle"
+    observable.mkdir(parents=True)
+    oracle.mkdir()
+    dynamic_payments = tuple(
+        item for item in dataset.graph.payments if item.payment_id.startswith("M15-")
+    )
+    dynamic_events = tuple(
+        item for item in dataset.graph.payment_events if item.payment_id.startswith("M15-")
+    )
+    dynamic_entries = tuple(
+        item for item in dataset.graph.ledger_entries if item.payment_id.startswith("M15-")
+    )
+    _write_table(dynamic_payments, PAYMENT_SCHEMA, observable / "payments.parquet")
+    _write_table(dynamic_events, PAYMENT_EVENT_SCHEMA, observable / "payment_events.parquet")
+    _write_table(dynamic_entries, LEDGER_ENTRY_SCHEMA, observable / "ledger_entries.parquet")
+    values: dict[str, tuple[BaseModel, ...]] = {
+        "snapshots": dataset.snapshots,
+        "transitions": dataset.transitions,
+        "phase_changes": dataset.phase_changes,
+        "membership_changes": dataset.membership_changes,
+        "intensity_decisions": dataset.intensity_decisions,
+        "topology_mutations": dataset.topology_mutations,
+        "lineage": dataset.lineage,
+        "source_snapshots": dataset.source_snapshots,
+    }
+    for name, records in values.items():
+        _write_table(records, CAMPAIGN_DYNAMIC_SCHEMAS[name], oracle / f"{name}.parquet")
+    graph_dir = oracle / "graph"
+    graph_dir.mkdir()
+    for name, records in {
+        "campaigns": dataset.graph.campaigns,
+        "campaign_memberships": dataset.graph.memberships,
+        "patterns": dataset.graph.patterns,
+        "graph_evidence": dataset.graph.evidence,
+        "hyperedges": dataset.graph.hyperedges,
+        "hyperedge_memberships": dataset.graph.hyperedge_memberships,
+    }.items():
+        if records:
+            _write_table(records, GRAPH_TRUTH_SCHEMAS[name], graph_dir / f"{name}.parquet")
+    files = sorted(path for path in root.rglob("*") if path.is_file())
+    checksums = {
+        str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in files
+    }
+    payload = {
+        "version": "1",
+        "source_run_id": source_run_id,
+        "configuration_hash": dataset.configuration_hash,
+        "seed_stream_ids": list(dataset.stream_ids),
+        "schema_fingerprint": sha256_json(
+            {name: list(schema) for name, schema in CAMPAIGN_DYNAMIC_SCHEMAS.items()}
+        ),
+        "output_fingerprint": sha256_json(checksums),
+        "counts": {
+            "payments": len(dynamic_payments),
+            "payment_events": len(dynamic_events),
+            "ledger_entries": len(dynamic_entries),
+            "snapshots": len(dataset.snapshots),
+            "transitions": len(dataset.transitions),
+            "phase_changes": len(dataset.phase_changes),
+            "membership_changes": len(dataset.membership_changes),
+            "intensity_decisions": len(dataset.intensity_decisions),
+            "topology_mutations": len(dataset.topology_mutations),
+            "lineage": len(dataset.lineage),
+        },
+        "checksums": checksums,
+    }
+    manifest_path = root / "campaign_dynamics_manifest.json"
+    manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return root, manifest_path
+
+
+def _sidecar_id(dataset: DynamicCampaignDataset) -> str:
+    return (
+        "M15-"
+        + sha256_json(
+            {
+                "configuration_hash": dataset.configuration_hash,
+                "campaign_ids": [item.campaign_id for item in dataset.graph.campaigns],
+            }
+        )[:16]
+    )
 
 
 def write_counterfactual_sidecar(

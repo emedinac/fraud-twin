@@ -1,10 +1,42 @@
-__version__ = "0.15.0"
+__version__ = "0.19.0"
 
+from fraudtwin.calibration import (  # noqa: E402
+    CalibrationMetric,
+    CalibrationModel,
+    CalibrationProfile,
+    CalibrationProvenance,
+    FeatureDependency,
+    FidelityMetric,
+    FidelityReport,
+    FittedDistribution,
+    ReferenceDataset,
+    ResolvedCalibration,
+    StatisticalSummary,
+    apply_calibration_profile,
+    compute_fidelity_report,
+    fit_calibration_profile,
+    load_calibration_profile,
+    load_reference_data,
+    register_calibration_metric,
+    register_calibration_model,
+    resolve_calibration,
+    resolve_calibration_configuration,
+    validate_calibration_output,
+    write_calibration_profile,
+)
 from fraudtwin.camouflage import (  # noqa: E402
     CamouflagePlan,
     ResolvedCamouflage,
     apply_camouflage,
     resolve_camouflage,
+)
+from fraudtwin.campaign_dynamics import (  # noqa: E402
+    DynamicCampaignDataset,
+    evolve_campaigns,
+    register_intensity_model,
+    register_transition_model,
+    resolve_campaign_dynamics,
+    validate_campaign_dynamics,
 )
 from fraudtwin.counterfactual import (  # noqa: E402
     CounterfactualChangeSet,
@@ -24,6 +56,7 @@ from fraudtwin.difficulty import (  # noqa: E402
     apply_difficulty,
     resolve_difficulty,
 )
+from fraudtwin.generation import GeneratedData, GeneratedRun, generate  # noqa: E402
 from fraudtwin.graph import (  # noqa: E402
     GraphCampaign,
     GraphDataset,
@@ -41,6 +74,37 @@ from fraudtwin.graph import (  # noqa: E402
 
 __all__ = [
     "__version__",
+    "CalibrationMetric",
+    "CalibrationModel",
+    "CalibrationProfile",
+    "CalibrationProvenance",
+    "FeatureDependency",
+    "FidelityMetric",
+    "FidelityReport",
+    "FittedDistribution",
+    "ReferenceDataset",
+    "ResolvedCalibration",
+    "StatisticalSummary",
+    "apply_calibration_profile",
+    "compute_fidelity_report",
+    "fit_calibration_profile",
+    "load_calibration_profile",
+    "load_reference_data",
+    "register_calibration_metric",
+    "register_calibration_model",
+    "resolve_calibration",
+    "resolve_calibration_configuration",
+    "validate_calibration_output",
+    "write_calibration_profile",
+    "GeneratedData",
+    "GeneratedRun",
+    "generate",
+    "DynamicCampaignDataset",
+    "evolve_campaigns",
+    "register_intensity_model",
+    "register_transition_model",
+    "resolve_campaign_dynamics",
+    "validate_campaign_dynamics",
     "ResolvedDifficulty",
     "ResolvedCamouflage",
     "CamouflagePlan",

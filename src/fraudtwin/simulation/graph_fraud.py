@@ -1,7 +1,10 @@
 """Deterministic, opt-in M11 scenario generation over existing entities."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import UTC, timedelta
+from typing import TYPE_CHECKING
 
 from fraudtwin.config import GraphScenarioConfig, SimulationRunConfig
 from fraudtwin.difficulty import apply_difficulty, resolve_difficulty
@@ -26,6 +29,9 @@ from fraudtwin.domain import (
 from fraudtwin.simulation.fraud import FraudDataset
 from fraudtwin.simulation.graph_planner import GraphScenarioPlanner, PlannedScenario
 from fraudtwin.simulation.payments import PaymentDataset, PaymentGenerator
+
+if TYPE_CHECKING:
+    from fraudtwin.campaign_dynamics import DynamicCampaignDataset
 
 SCENARIO_CODES = {
     "MULE_NETWORK": "G01",
@@ -56,6 +62,7 @@ class GraphFraudDataset:
     evidence: tuple[GraphEvidence, ...] = ()
     hyperedges: tuple[GraphHyperedge, ...] = ()
     hyperedge_memberships: tuple[GraphHyperedgeMembership, ...] = ()
+    dynamic: DynamicCampaignDataset | None = None
 
 
 class GraphFraudGenerator:

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
@@ -800,6 +801,125 @@ GraphModifierType = Literal[
     "SEMANTIC_HYPEREDGE",
 ]
 
+CampaignDynamicsProfile = Literal["linear", "rotating_ring", "adaptive_network", "custom"]
+CampaignPhase = Literal["compromise", "setup", "transfer", "cash_out", "dormant", "closed"]
+CampaignIntensityModel = Literal["marked_hawkes_v1", "piecewise_rate_v1"]
+
+CalibrationSummaryName = Literal[
+    "amount_distribution",
+    "inter_arrival",
+    "seasonality",
+    "merchant_frequency",
+    "customer_activity",
+    "feature_dependencies",
+    "account_balance",
+    "transaction_count",
+    "graph_statistics",
+    "campaign_statistics",
+]
+
+
+class CalibrationConfig(_StrictModel):
+    """Strict opt-in controls for Milestone 16 reference calibration."""
+
+    enabled: bool = False
+    profile: Path | None = None
+    model_names: tuple[str, ...] = ("builtin",)
+    summary_names: tuple[CalibrationSummaryName, ...] = (
+        "amount_distribution",
+        "inter_arrival",
+        "seasonality",
+        "merchant_frequency",
+        "customer_activity",
+        "feature_dependencies",
+        "account_balance",
+        "transaction_count",
+        "graph_statistics",
+        "campaign_statistics",
+    )
+    weights: dict[CalibrationSummaryName, float] = Field(default_factory=dict)
+    minimum_scores: dict[str, float] = Field(default_factory=dict)
+
+    @field_validator("model_names")
+    @classmethod
+    def model_names_must_be_unique(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if not value or any(not item.strip() for item in value) or len(set(value)) != len(value):
+            raise ValueError("calibration model_names must be non-empty and unique")
+        return value
+
+    @field_validator("summary_names")
+    @classmethod
+    def summary_names_must_be_unique(
+        cls, value: tuple[CalibrationSummaryName, ...]
+    ) -> tuple[CalibrationSummaryName, ...]:
+        if not value or len(set(value)) != len(value):
+            raise ValueError("calibration summary_names must be non-empty and unique")
+        return value
+
+    @field_validator("weights")
+    @classmethod
+    def weights_must_be_finite_positive(
+        cls, value: dict[CalibrationSummaryName, float]
+    ) -> dict[CalibrationSummaryName, float]:
+        if any(not math.isfinite(weight) or weight <= 0 for weight in value.values()):
+            raise ValueError("calibration weights must be finite and positive")
+        return value
+
+    @field_validator("minimum_scores")
+    @classmethod
+    def thresholds_must_be_valid(cls, value: dict[str, float]) -> dict[str, float]:
+        if any(not math.isfinite(score) or score < 0 or score > 1 for score in value.values()):
+            raise ValueError("calibration minimum_scores must be finite values in [0, 1]")
+        return value
+
+    @model_validator(mode="after")
+    def active_profile_requirements(self) -> "CalibrationConfig":
+        if self.enabled and self.profile is None:
+            raise ValueError("calibration.enabled requires calibration.profile")
+        if not self.enabled and self.profile is not None:
+            raise ValueError("calibration.profile requires calibration.enabled=true")
+        if set(self.weights) - set(self.summary_names):
+            raise ValueError("calibration weights may only target selected summaries")
+        if set(self.minimum_scores) - set(self.summary_names):
+            raise ValueError("calibration minimum_scores may only target selected summaries")
+        return self
+
+
+_DYNAMIC_PROFILE_TEMPLATES: dict[str, str] = {
+    "linear": "MULE_NETWORK",
+    "rotating_ring": "CYCLIC_RING",
+    "adaptive_network": "DENSE_CAMPAIGN",
+}
+_DYNAMIC_PHASES: tuple[str, ...] = (
+    "compromise",
+    "setup",
+    "transfer",
+    "cash_out",
+    "dormant",
+    "closed",
+)
+
+
+def _default_dynamic_phase_durations() -> dict[CampaignPhase, int]:
+    return {
+        "compromise": 3_600,
+        "setup": 3_600,
+        "transfer": 7_200,
+        "cash_out": 7_200,
+        "dormant": 3_600,
+    }
+
+
+def _default_dynamic_transitions() -> dict[CampaignPhase, dict[CampaignPhase, float]]:
+    return {
+        "compromise": {"setup": 1.0},
+        "setup": {"transfer": 1.0},
+        "transfer": {"cash_out": 0.8, "dormant": 0.2},
+        "cash_out": {"dormant": 0.8, "closed": 0.2},
+        "dormant": {"setup": 0.5, "closed": 0.5},
+    }
+
+
 CounterfactualObjective = Literal[
     "F01",
     "F02",
@@ -1249,7 +1369,7 @@ class GraphScenarioConfig(_StrictModel):
             for key in self.model_fields_set
             if key not in common | allowed_by_type[self.type]
             and getattr(self, key) is not None
-            and getattr(self, key) != self.model_fields[key].default
+            and getattr(self, key) != type(self).model_fields[key].default
         )
         if unsupported:
             raise ValueError(
@@ -1412,6 +1532,109 @@ class GraphConfig(_StrictModel):
         return self
 
 
+class CampaignDynamicsBinding(_StrictModel):
+    """One deterministic M15 profile applied to every matching M11 campaign."""
+
+    profile: CampaignDynamicsProfile
+    template: GraphScenarioType | None = None
+    transition_model: str = Field(default="phase_transition_v1", min_length=1)
+    intensity_model: str = "marked_hawkes_v1"
+    phases: tuple[CampaignPhase, ...] = _DYNAMIC_PHASES  # type: ignore[assignment]
+    phase_durations: dict[CampaignPhase, int] = Field(
+        default_factory=_default_dynamic_phase_durations
+    )
+    transition_probabilities: dict[CampaignPhase, dict[CampaignPhase, float]] = Field(
+        default_factory=_default_dynamic_transitions
+    )
+    allowed_rails: tuple[Rail, ...] = ("ACCOUNT_TRANSFER", "PIX", "CARD")
+    max_actions: int = Field(default=24, ge=1)
+    max_actor_joins: int = Field(default=2, ge=0)
+    max_actor_leaves: int = Field(default=2, ge=0)
+    max_mule_rotations: int = Field(default=2, ge=0)
+    max_device_rotations: int = Field(default=2, ge=0)
+    max_splits: int = Field(default=1, ge=0)
+    max_merges: int = Field(default=1, ge=0)
+    max_active_members: int = Field(default=32, ge=2)
+    hawkes_baseline: float = Field(default=0.25, ge=0)
+    hawkes_excitation: float = Field(default=0.35, ge=0)
+    hawkes_decay: float = Field(default=0.5, gt=0)
+    phase_marks: dict[CampaignPhase, float] = Field(default_factory=dict)
+
+    @field_validator("phase_durations", mode="before")
+    @classmethod
+    def durations_are_positive_seconds(cls, value: Any) -> dict[str, int]:
+        if not isinstance(value, dict):
+            raise ValueError("phase_durations must be a mapping")
+        return {str(key): _parse_duration_seconds(item) for key, item in value.items()}
+
+    @field_validator("intensity_model")
+    @classmethod
+    def intensity_model_name_is_supported(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("intensity_model must not be empty")
+        return value
+
+    @model_validator(mode="after")
+    def validate_binding(self) -> "CampaignDynamicsBinding":
+        expected = _DYNAMIC_PROFILE_TEMPLATES.get(self.profile)
+        if self.profile == "custom" and self.template is None:
+            raise ValueError("custom campaign dynamics profiles require template")
+        if expected is not None and self.template is not None and self.template != expected:
+            raise ValueError(f"profile {self.profile} requires template {expected}")
+        if len(set(self.phases)) != len(self.phases) or "closed" not in self.phases:
+            raise ValueError("campaign phases must be unique and include closed")
+        if self.phases[-1] != "closed":
+            raise ValueError("closed must be the final campaign phase")
+        if any(rail not in self.allowed_rails for rail in self.allowed_rails):
+            raise ValueError("allowed_rails contains an unsupported rail")
+        if len(set(self.allowed_rails)) != len(self.allowed_rails) or not self.allowed_rails:
+            raise ValueError("allowed_rails must be non-empty and unique")
+        unknown_duration = set(self.phase_durations) - set(self.phases)
+        if unknown_duration:
+            raise ValueError("phase_durations contains a phase that is not enabled")
+        required_durations = set(self.phases) - {"closed"}
+        if required_durations - set(self.phase_durations):
+            raise ValueError("phase_durations must cover every non-closed phase")
+        if any(value <= 0 or value != int(value) for value in self.phase_durations.values()):
+            raise ValueError("phase durations must be positive whole seconds")
+        for source, destinations in self.transition_probabilities.items():
+            if source not in self.phases:
+                raise ValueError(f"transition source phase is not enabled: {source}")
+            if source == "closed" and destinations:
+                raise ValueError("closed phase cannot have outbound transitions")
+            if any(destination not in self.phases for destination in destinations):
+                raise ValueError("transition destination phase is not enabled")
+            if any(probability < 0 or probability > 1 for probability in destinations.values()):
+                raise ValueError("transition probabilities must be between 0 and 1")
+            if source != "closed" and abs(sum(destinations.values()) - 1.0) > 1e-9:
+                raise ValueError("outgoing transition probabilities must sum to 1.0")
+        if any(value < 0 for value in self.phase_marks.values()):
+            raise ValueError("phase marks must be non-negative")
+        return self
+
+
+class CampaignDynamicsConfig(_StrictModel):
+    """Strict opt-in controls for Milestone 15 campaign evolution."""
+
+    enabled: bool = False
+    bindings: tuple[CampaignDynamicsBinding, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_dynamics(self) -> "CampaignDynamicsConfig":
+        templates = [
+            item.template or _DYNAMIC_PROFILE_TEMPLATES.get(item.profile) for item in self.bindings
+        ]
+        if len(set(templates)) != len(templates):
+            raise ValueError("campaign dynamics may bind each graph template at most once")
+        if self.enabled and not self.bindings:
+            raise ValueError("enabled campaign dynamics requires at least one binding")
+        return self
+
+    @property
+    def active(self) -> bool:
+        return self.enabled
+
+
 class SimulationRunConfig(_StrictModel):
     """Top-level configuration accepted by the CLI."""
 
@@ -1431,6 +1654,8 @@ class SimulationRunConfig(_StrictModel):
     benchmark: BenchmarkConfig = Field(default_factory=BenchmarkConfig)
     stress: StressConfig = Field(default_factory=StressConfig)
     counterfactual: CounterfactualConfig = Field(default_factory=CounterfactualConfig)
+    campaign_dynamics: CampaignDynamicsConfig = Field(default_factory=CampaignDynamicsConfig)
+    calibration: CalibrationConfig = Field(default_factory=CalibrationConfig)
 
     def effective_label_delay_seconds(self) -> int:
         """Return the dataset label delay, falling back to workflow settings."""
@@ -1523,6 +1748,49 @@ class SimulationRunConfig(_StrictModel):
                 if scenario.type == "BENEFICIARY_NETWORK"
             ):
                 raise ValueError("beneficiary graph scenarios require at least one PIX key")
+        if self.campaign_dynamics.enabled:
+            if not self.graph.enabled:
+                raise ValueError("campaign dynamics requires graph.enabled=true")
+            graph_templates = {scenario.type for scenario in self.graph.scenarios if scenario.count}
+            configured_rails = {rail for rail, weight in self.payments.rails.items() if weight > 0}
+            for binding in self.campaign_dynamics.bindings:
+                template = binding.template or _DYNAMIC_PROFILE_TEMPLATES.get(binding.profile)
+                if template not in graph_templates:
+                    raise ValueError(f"campaign dynamics template {template} has no graph scenario")
+                missing_rails = set(binding.allowed_rails) - configured_rails
+                if missing_rails:
+                    raise ValueError(
+                        "campaign dynamics rails are absent from payments.rails: "
+                        f"{', '.join(sorted(missing_rails))}"
+                    )
+                if "CARD" in binding.allowed_rails and (
+                    self.population.cards == 0 or self.population.merchants == 0
+                ):
+                    raise ValueError("CARD campaign dynamics requires cards and merchants")
+                if "PIX" in binding.allowed_rails and self.population.pix_keys == 0:
+                    raise ValueError("PIX campaign dynamics requires PIX keys")
+                static_members = sum(
+                    scenario.count * graph_account_capacity(scenario)
+                    for scenario in self.graph.scenarios
+                    if scenario.type == template
+                )
+                initial_members = max(
+                    (
+                        graph_account_capacity(scenario)
+                        for scenario in self.graph.scenarios
+                        if scenario.type == template and scenario.count
+                    ),
+                    default=0,
+                )
+                if self.population.accounts < static_members + binding.max_actor_joins:
+                    raise ValueError(
+                        f"campaign dynamics {template} exceeds account capacity for joins"
+                    )
+                if initial_members > binding.max_active_members:
+                    raise ValueError(
+                        f"campaign dynamics {template} initial membership exceeds "
+                        "max_active_members"
+                    )
         stress_active = self.stress.active
         benchmark_camouflage_active = self.benchmark.camouflage_active
         if stress_active and benchmark_camouflage_active:
@@ -1639,7 +1907,11 @@ class SimulationRunConfig(_StrictModel):
         return self
 
 
-def load_config(path: Path) -> SimulationRunConfig:
+def load_config(
+    path: Path,
+    *,
+    calibration_profile_override: Path | None = None,
+) -> SimulationRunConfig:
     """Load and validate a YAML configuration file."""
 
     if not path.is_file():
@@ -1650,7 +1922,24 @@ def load_config(path: Path) -> SimulationRunConfig:
 
     if not isinstance(raw_config, dict):
         raise ValueError("configuration root must be a mapping")
-    return SimulationRunConfig.model_validate(raw_config)
+    if calibration_profile_override is not None:
+        calibration_values = raw_config.setdefault("calibration", {})
+        if not isinstance(calibration_values, dict):
+            raise ValueError("calibration configuration must be a mapping")
+        calibration_values["enabled"] = True
+        calibration_values["profile"] = str(calibration_profile_override)
+    elif isinstance(raw_config.get("calibration"), dict):
+        profile_value = raw_config["calibration"].get("profile")
+        if profile_value is not None:
+            profile_path = Path(str(profile_value))
+            if not profile_path.is_absolute():
+                raw_config["calibration"]["profile"] = str(path.parent / profile_path)
+    config = SimulationRunConfig.model_validate(raw_config)
+    if config.calibration.enabled:
+        from fraudtwin.calibration import resolve_calibration
+
+        resolve_calibration(config)
+    return config
 
 
 def config_hash(
@@ -1705,6 +1994,17 @@ def _canonical_config(
     # M14 is opt-in; its neutral section must not alter legacy identities.
     if not config.counterfactual.active:
         payload.pop("counterfactual", None)
+    if not config.campaign_dynamics.active:
+        payload.pop("campaign_dynamics", None)
+    if not config.calibration.enabled:
+        payload.pop("calibration", None)
+    else:
+        # A profile path is an access detail.  The calibrated run identity is
+        # anchored by the resolved profile ID, so equivalent profiles remain
+        # reproducible when copied to a different location.
+        calibration_payload = payload.get("calibration")
+        if isinstance(calibration_payload, dict):
+            calibration_payload.pop("profile", None)
     # Keep run identities backward-compatible when newly optional methodology
     # controls remain at their neutral defaults.
     neutral_defaults: dict[str, dict[str, object]] = {
@@ -1740,9 +2040,8 @@ def _canonical_config(
         payload["backtest"] = {"regimes": payload["backtest"]["regimes"]}
     else:
         payload.pop("backtest", None)
-    canonical = json.dumps(
+    return json.dumps(
         payload,
         sort_keys=True,
         separators=(",", ":"),
     )
-    return canonical

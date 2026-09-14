@@ -26,6 +26,8 @@ FraudTwin generates a small, coherent payment world: customers have accounts, ca
 - Optional graph-fraud campaigns with observable/oracle views, Neo4j artifacts, and PyG export.
 - Difficulty and camouflage controls for cases that remain valid but are harder to separate.
 - Opt-in counterfactual fraud trajectories with minimum-change budgets and audit lineage.
+- Opt-in dynamic fraud campaigns with phase evolution, rail movement, topology mutations, and oracle sidecars.
+- Reference calibration profiles that tune aggregate amounts, timing, balances, activity, and merchant behavior without copying reference rows.
 
 FraudTwin is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and timing before introducing a larger streaming or production stack.
 
@@ -37,6 +39,14 @@ Requirements: Python 3.12 and Poetry 2.x.
 poetry install
 poetry run fraudtwin config validate configs/minimal.yaml
 poetry run fraudtwin generate configs/minimal.yaml
+```
+
+To fit and reuse an aggregate-only calibration profile:
+
+```bash
+poetry run fraudtwin calibrate reference.parquet --output calibrated-profile.yaml
+poetry run fraudtwin generate configs/minimal.yaml \
+  --profile calibrated-profile.yaml --seed 42
 ```
 
 The command prints the run ID and output location. To keep generated files out of the repository, set an output directory:
@@ -82,9 +92,15 @@ runs/<run_id>/
     ├── observable/{original,modified}/
     ├── oracle/change_sets.parquet
     └── counterfactual_manifest.json
+└── campaign_dynamics/<m15_id>/
+    ├── observable/
+    ├── oracle/
+    └── campaign_dynamics_manifest.json
 ```
 
 The manifest records the seed, configuration, schemas, counts, fingerprints, and quality diagnostics. Graph and benchmark runs may also contain `oracle/`, graph exports, and backtest folds. No real personal data or payment credentials are generated.
+
+Calibration profiles contain only deterministic statistical summaries and provenance fingerprints. Reference rows, source identifiers, and fitting data are not written to profiles, generated tables, fidelity reports, or manifests.
 
 ## Design principles
 

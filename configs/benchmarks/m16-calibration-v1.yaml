@@ -1,0 +1,30 @@
+simulation:
+  seed: 1616
+  start: 2026-01-01T00:00:00Z
+  duration_days: 7
+  speed: batch
+population:
+  customers: 120
+  institutions: 6
+  accounts: 120
+  cards: 80
+  merchants: 20
+  devices: 30
+  pix_keys: 40
+payments:
+  daily_target: 100
+  rails: {CARD: 0.5, PIX: 0.3, ACCOUNT_TRANSFER: 0.2}
+fraud:
+  enabled: false
+  target_rate: 0.002
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 1.0
+  customer_dispute_probability: 1.0
+quality: {profile: clean}
+dataset: {enabled: true, unresolved_labels: include}
+outputs: {parquet: true, postgres: false, kafka: false}
+calibration:
+  enabled: false

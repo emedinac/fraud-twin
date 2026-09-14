@@ -4,16 +4,23 @@ FraudTwin is easiest to understand as a small, deterministic payment world. Star
 
 ## Start here
 
-- [Quickstart](quickstart.md) — install FraudTwin and generate your first run.
-- [Configuration](configuration.md) — shape populations, behavior, payment rails, fraud, and quality.
-- [Workflows](workflows.md) — build point-in-time datasets, replay runs, and backtest models.
-- [Graph and benchmark workflows](graph-and-benchmarks.md) — export graph views and create harder cases.
-- [Development guide](development.md) — run checks, target tests, and contribute safely.
+- [Getting Started tutorial](tutorials/01-getting-started.ipynb) - generate and inspect a first run in a notebook.
+- [Configure a Simulation tutorial](tutorials/02-configure-a-simulation.ipynb) - edit a YAML configuration and generate a reproducible run.
+- [Explore Payments and Lifecycle Events tutorial](tutorials/03-explore-payments-and-lifecycles.ipynb) - follow entities, payments, events, and ledger effects.
+- [Explore Fraud and Delayed Labels tutorial](tutorials/04-explore-fraud-and-delayed-labels.ipynb) - compare fraud truth, hard negatives, workflow artifacts, and label availability.
+- [From Events to an ML Dataset tutorial](tutorials/05-from-events-to-ml-dataset.ipynb) - handle imperfect events and build a point-in-time dataset.
+- [Stress-Test Fraud Scenarios tutorial](tutorials/06-stress-test-fraud-scenarios.ipynb) - replay runs, inspect graphs, increase difficulty, and test counterfactuals.
+- [Build a Simple Fraud Scoring Model tutorial](tutorials/07-train-a-simple-fraud-model.ipynb) - score point-in-time features with a transparent formula.
+- [Quickstart](quickstart.md) - install FraudTwin and generate your first run.
+- [Configuration](configuration.md) - shape populations, behavior, payment rails, fraud, and quality.
+- [Workflows](workflows.md) - build point-in-time datasets, replay runs, and backtest models.
+- [Graph and benchmark workflows](graph-and-benchmarks.md) - export graph views and create harder cases.
+- [Development guide](development.md) - run checks, target tests, and contribute safely.
 
 ## Reference material
 
-- [Release notes](../CHANGELOG.md) — milestone history and notable changes.
-- [Contributor entry point](../DEVELOPMENT.md) — the short version of the development workflow.
+- [Release notes](../CHANGELOG.md) - milestone history and notable changes.
+- [Contributor entry point](../DEVELOPMENT.md) - the short version of the development workflow.
 
 ## A useful mental model
 

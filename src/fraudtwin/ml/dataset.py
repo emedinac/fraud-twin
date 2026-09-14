@@ -16,10 +16,19 @@ import polars as pl
 from pydantic import BaseModel
 
 from fraudtwin import __version__
+from fraudtwin.campaign_dynamics import DynamicCampaignDataset
 from fraudtwin.config import SimulationRunConfig, _default_feature_windows, config_hash
 from fraudtwin.domain import (
     Account,
     BehaviorProfile,
+    CampaignActorMembershipChange,
+    CampaignIntensityDecision,
+    CampaignLineage,
+    CampaignPhaseChange,
+    CampaignSourceSnapshot,
+    CampaignStateSnapshot,
+    CampaignTopologyMutation,
+    CampaignTransition,
     Card,
     Customer,
     CustomerDispute,
@@ -49,6 +58,7 @@ from fraudtwin.manifest import DatasetManifest, RunManifest
 from fraudtwin.reproducibility import as_utc, canonical_json, sha256_json
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
+from fraudtwin.simulation.graph_fraud import GraphFraudDataset
 
 PIT_DATASET_SCHEMA: dict[str, Any] = {
     "dataset_row_id": pl.Utf8,
@@ -212,6 +222,44 @@ def _deduplicate(records: Iterable[T], identifier: str) -> tuple[T, ...]:
     return tuple(by_id.values())
 
 
+def _merge_records(
+    existing: tuple[T, ...],
+    additions: tuple[T, ...],
+    *,
+    identifier: str | None = None,
+    prefer_additions: bool = False,
+) -> tuple[T, ...]:
+    """Merge sidecar records in stable order, optionally overlaying updates."""
+
+    if prefer_additions and additions:
+        if identifier is None:
+            return _merge_records(existing, additions)
+        unique_additions = _deduplicate(additions, identifier)
+        additions_by_id = {str(getattr(record, identifier)): record for record in unique_additions}
+        overlay: list[T] = []
+        existing_ids: set[str] = set()
+        for record in existing:
+            record_id = str(getattr(record, identifier))
+            existing_ids.add(record_id)
+            overlay.append(additions_by_id.pop(record_id, record))
+        overlay.extend(
+            record
+            for record in unique_additions
+            if str(getattr(record, identifier)) not in existing_ids
+        )
+        return tuple(overlay)
+    if identifier is not None:
+        return _deduplicate((*existing, *additions), identifier)
+    seen: set[str] = set()
+    merged: list[T] = []
+    for record in (*existing, *additions):
+        key = _record_key(record)
+        if key not in seen:
+            seen.add(key)
+            merged.append(record)
+    return tuple(merged)
+
+
 def _read_models(
     path: Path,
     model: type[T],
@@ -246,6 +294,12 @@ def _read_run_table(
         model,
         fallback_delivery=fallback_delivery,
     )
+
+
+def _read_optional_models(path: Path, model: type[T]) -> tuple[T, ...]:
+    """Read an optional sidecar table when it is present."""
+
+    return _read_models(path, model) if path.is_file() else ()
 
 
 def _validate_behavior_workflow(entities: EntityDataset, behavior: BehaviorDataset) -> None:
@@ -374,6 +428,116 @@ def load_generated_run(
             else ()
         ),
     )
+    dynamic_roots = (
+        sorted((run_dir / "campaign_dynamics").glob("M15-*/oracle"))
+        if (run_dir / "campaign_dynamics").is_dir()
+        else []
+    )
+    if dynamic_roots:
+        dynamic_oracle = dynamic_roots[-1]
+        dynamic_observable = dynamic_oracle.parent / "observable"
+        dynamic_payments = _read_optional_models(dynamic_observable / "payments.parquet", Payment)
+        dynamic_events = _read_optional_models(
+            dynamic_observable / "payment_events.parquet", PaymentEvent
+        )
+        dynamic_entries = _read_optional_models(
+            dynamic_observable / "ledger_entries.parquet", LedgerEntry
+        )
+        dynamic_graph_dir = dynamic_oracle / "graph"
+        dynamic_memberships = _read_optional_models(
+            dynamic_graph_dir / "campaign_memberships.parquet", GraphCampaignMembership
+        )
+        dynamic_campaigns = _read_optional_models(
+            dynamic_graph_dir / "campaigns.parquet", GraphCampaign
+        )
+        dynamic_patterns = _read_optional_models(
+            dynamic_graph_dir / "patterns.parquet", GraphPattern
+        )
+        dynamic_evidence = _read_optional_models(
+            dynamic_graph_dir / "graph_evidence.parquet", GraphEvidence
+        )
+        dynamic_hyperedges = _read_optional_models(
+            dynamic_graph_dir / "hyperedges.parquet", GraphHyperedge
+        )
+        dynamic_hyperedge_memberships = _read_optional_models(
+            dynamic_graph_dir / "hyperedge_memberships.parquet", GraphHyperedgeMembership
+        )
+        behavior = replace(
+            behavior,
+            payments=_merge_records(behavior.payments, dynamic_payments, identifier="payment_id"),
+            payment_events=_merge_records(
+                behavior.payment_events, dynamic_events, identifier="event_id"
+            ),
+            ledger_entries=_merge_records(
+                behavior.ledger_entries, dynamic_entries, identifier="ledger_entry_id"
+            ),
+            graph_memberships=_merge_records(
+                behavior.graph_memberships, dynamic_memberships, prefer_additions=True
+            ),
+            graph_campaigns=_merge_records(
+                behavior.graph_campaigns,
+                dynamic_campaigns,
+                identifier="campaign_id",
+                prefer_additions=True,
+            ),
+            graph_patterns=_merge_records(
+                behavior.graph_patterns,
+                dynamic_patterns,
+                identifier="pattern_id",
+                prefer_additions=True,
+            ),
+            graph_evidence=_merge_records(
+                behavior.graph_evidence,
+                dynamic_evidence,
+                identifier="evidence_id",
+                prefer_additions=True,
+            ),
+            graph_hyperedges=_merge_records(
+                behavior.graph_hyperedges,
+                dynamic_hyperedges,
+                identifier="hyperedge_id",
+                prefer_additions=True,
+            ),
+            graph_hyperedge_memberships=_merge_records(
+                behavior.graph_hyperedge_memberships,
+                dynamic_hyperedge_memberships,
+                prefer_additions=True,
+            ),
+        )
+        dynamic_graph = GraphFraudDataset(
+            behavior.payments,
+            behavior.payment_events,
+            behavior.ledger_entries,
+            behavior.fraud_records,
+            behavior.graph_memberships,
+            behavior.graph_patterns,
+            behavior.graph_campaigns,
+            behavior.graph_evidence,
+            behavior.graph_hyperedges,
+            behavior.graph_hyperedge_memberships,
+        )
+        dynamic = DynamicCampaignDataset(
+            graph=dynamic_graph,
+            snapshots=_read_models(dynamic_oracle / "snapshots.parquet", CampaignStateSnapshot),
+            transitions=_read_models(dynamic_oracle / "transitions.parquet", CampaignTransition),
+            phase_changes=_read_models(
+                dynamic_oracle / "phase_changes.parquet", CampaignPhaseChange
+            ),
+            membership_changes=_read_models(
+                dynamic_oracle / "membership_changes.parquet", CampaignActorMembershipChange
+            ),
+            intensity_decisions=_read_models(
+                dynamic_oracle / "intensity_decisions.parquet", CampaignIntensityDecision
+            ),
+            topology_mutations=_read_models(
+                dynamic_oracle / "topology_mutations.parquet", CampaignTopologyMutation
+            ),
+            lineage=_read_models(dynamic_oracle / "lineage.parquet", CampaignLineage),
+            source_snapshots=_read_models(
+                dynamic_oracle / "source_snapshots.parquet", CampaignSourceSnapshot
+            ),
+        )
+        behavior = replace(behavior, campaign_dynamics=dynamic)
     if manifest.difficulty is not None:
         oracle_models: dict[str, tuple[type[BaseModel], str, str]] = {
             "behavior_profiles": (BehaviorProfile, "oracle/behavior", "behavior_profiles"),

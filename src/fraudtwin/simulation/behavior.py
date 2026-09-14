@@ -1,12 +1,15 @@
-# ruff: noqa: E501
 """Customer behavior profiles and their generated payment dataset."""
 
+from __future__ import annotations
+
+# ruff: noqa: E501
 from dataclasses import dataclass, field, replace
 from random import Random
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel
 
+from fraudtwin.calibration import ResolvedCalibration
 from fraudtwin.camouflage import resolve_camouflage, transform_generated_data
 from fraudtwin.config import SimulationRunConfig
 from fraudtwin.counterfactual import CounterfactualDataset, generate_counterfactuals
@@ -37,13 +40,16 @@ from fraudtwin.simulation.fraud import (
     scenario_events,
 )
 from fraudtwin.simulation.generator import EntityDataset
-from fraudtwin.simulation.graph_fraud import GraphFraudGenerator
+from fraudtwin.simulation.graph_fraud import GraphFraudDataset, GraphFraudGenerator
 from fraudtwin.simulation.payments import (
     PaymentGenerator,
     count_card_lifecycle_events,
     count_pix_lifecycle_events,
 )
 from fraudtwin.simulation.quality import QualityFaultInjector
+
+if TYPE_CHECKING:
+    from fraudtwin.campaign_dynamics import DynamicCampaignDataset
 
 _PROFILE_ID_WIDTH = 6
 _COUNTRIES = ("BR", "US", "GB", "DE")
@@ -81,6 +87,7 @@ class BehaviorDataset:
         default_factory=dict, repr=False
     )
     counterfactual: CounterfactualDataset | None = field(default=None, repr=False)
+    campaign_dynamics: DynamicCampaignDataset | None = field(default=None, repr=False)
 
     def tables(self) -> dict[str, tuple[BaseModel, ...]]:
         """Return all behavior tables in their stable export order."""
@@ -210,10 +217,12 @@ class BehaviorGenerator:
         config: SimulationRunConfig,
         entities: EntityDataset,
         simulation_run_id: str | None = None,
+        calibration: ResolvedCalibration | None = None,
     ) -> None:
         self.config = config
         self.entities = entities
         self.simulation_run_id = simulation_run_id
+        self.calibration = calibration
         self.merchant_categories = tuple(
             sorted({merchant.merchant_category_code for merchant in entities.merchants})
         )
@@ -323,6 +332,7 @@ class BehaviorGenerator:
             self.entities.devices,
             self.entities.pix_keys,
             simulation_run_id=self.simulation_run_id,
+            calibration=self.calibration,
         ).generate(profiles)
         counterfactual_dataset = (
             generate_counterfactuals(
@@ -357,6 +367,14 @@ class BehaviorGenerator:
             merchants=self.entities.merchants,
             pix_keys=self.entities.pix_keys,
         ).generate()
+        dynamic_dataset: DynamicCampaignDataset | None = None
+        if self.config.campaign_dynamics.active:
+            from fraudtwin.campaign_dynamics import evolve_campaigns
+
+            dynamic_dataset = evolve_campaigns(
+                self.config, self.entities, graph_dataset, self.simulation_run_id or "in-memory"
+            )
+            graph_dataset = dynamic_dataset.graph
         (
             camo_payments,
             camo_events,
@@ -380,6 +398,25 @@ class BehaviorGenerator:
             graph_dataset.patterns,
             graph_dataset.evidence,
         )
+        if dynamic_dataset is not None:
+            from fraudtwin.campaign_dynamics import validate_campaign_dynamics
+
+            dynamic_dataset = replace(
+                dynamic_dataset,
+                graph=GraphFraudDataset(
+                    camo_payments,
+                    camo_events,
+                    camo_ledger,
+                    camo_records,
+                    camo_memberships,
+                    camo_patterns,
+                    camo_campaigns,
+                    camo_evidence,
+                    graph_dataset.hyperedges,
+                    graph_dataset.hyperedge_memberships,
+                ),
+            )
+            validate_campaign_dynamics(self.config, self.entities, dynamic_dataset)
         workflow_source = FraudDataset(
             payments=camo_payments,
             payment_events=camo_events,
@@ -410,6 +447,7 @@ class BehaviorGenerator:
             graph_hyperedge_memberships=graph_dataset.hyperedge_memberships,
             camouflage_metadata=camouflage_metadata,
             counterfactual=counterfactual_dataset,
+            campaign_dynamics=dynamic_dataset,
         )
         dataset = QualityFaultInjector(self.config).apply(dataset)
         if resolve_difficulty(self.config).enabled or resolve_camouflage(self.config).enabled:

@@ -7,6 +7,11 @@ from datetime import UTC, date, datetime, time, timedelta
 from random import Random
 from typing import Literal, TypeVar, cast
 
+from fraudtwin.calibration import (
+    CALIBRATED_AMOUNT_STREAM_ID,
+    CALIBRATED_TIMING_STREAM_ID,
+    ResolvedCalibration,
+)
 from fraudtwin.config import (
     ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS,
     CARD_EVENT_ENVELOPE_DELAY_SECONDS,
@@ -161,6 +166,7 @@ class PaymentGenerator:
         devices: tuple[Device, ...],
         pix_keys: tuple[PixKey, ...] = (),
         simulation_run_id: str | None = None,
+        calibration: ResolvedCalibration | None = None,
     ) -> None:
         self.config = config
         self.start = config.simulation.start.astimezone(UTC)
@@ -168,6 +174,7 @@ class PaymentGenerator:
         self.accounts = accounts
         self.merchants = merchants
         self.simulation_run_id = simulation_run_id or self._stable_run_id()
+        self.calibration = calibration
         self.accounts_by_customer = _group_by(accounts, lambda account: account.customer_id)
         self.accounts_by_institution = _group_by(accounts, lambda account: account.institution_id)
         self.cards_by_customer = _group_by(cards, lambda card: card.customer_id)
@@ -180,6 +187,16 @@ class PaymentGenerator:
         self._pix_max_delay_seconds = config.pix_lifecycle.maximum_delay_seconds
         self._card_daily_spend: dict[tuple[str, date], float] = {}
         self._account_spend: dict[str, float] = {}
+        self._calibrated_amount_rng = (
+            create_stream_rng(self.config.simulation.seed, CALIBRATED_AMOUNT_STREAM_ID)
+            if calibration is not None and calibration.enabled
+            else None
+        )
+        self._calibrated_time_rng = (
+            create_stream_rng(self.config.simulation.seed, CALIBRATED_TIMING_STREAM_ID)
+            if calibration is not None and calibration.enabled
+            else None
+        )
 
     def _stable_run_id(self) -> str:
         # Lifecycle settings must not change the base payment stream ID.
@@ -301,7 +318,23 @@ class PaymentGenerator:
         if not valid_hours:
             valid_hours = tuple(self._valid_hours_by_day[current_day])
         hour_weights = tuple(profile.hour_weights[hour] for hour in valid_hours)
-        hour = _weighted_choice(rng, valid_hours, hour_weights)
+        if self.calibration is not None and self.calibration.enabled and self.calibration.profile:
+            seasonality = next(
+                (item for item in self.calibration.profile.summaries if item.name == "seasonality"),
+                None,
+            )
+            calibrated_hours = (
+                cast(tuple[float, ...], seasonality.parameters["hour_weights"])
+                if seasonality and "hour_weights" in seasonality.parameters
+                else ()
+            )
+            if calibrated_hours and sum(calibrated_hours[hour] for hour in valid_hours) > 0:
+                hour_weights = tuple(
+                    calibrated_hours[hour] * max(weight, 0.01)
+                    for hour, weight in zip(valid_hours, hour_weights, strict=True)
+                )
+        timing_rng = self._calibrated_time_rng or rng
+        hour = _weighted_choice(timing_rng, valid_hours, hour_weights)
         event_time = datetime.combine(current_day, time(hour), tzinfo=UTC) + timedelta(
             minutes=rng.randrange(60)
         )
@@ -312,6 +345,21 @@ class PaymentGenerator:
         return event_time
 
     def _sample_amount(self, profile: BehaviorProfile, rng: Random) -> float:
+        if self.calibration is not None and self.calibration.enabled and self.calibration.profile:
+            distribution = next(
+                (item for item in self.calibration.profile.distributions if item.name == "amount"),
+                None,
+            )
+            if distribution and distribution.quantiles:
+                assert self._calibrated_amount_rng is not None
+                sampled = self._calibrated_amount_rng.choice(distribution.quantiles)
+                return round(
+                    min(
+                        self.config.behavior.amount_max,
+                        max(self.config.behavior.amount_min, sampled),
+                    ),
+                    2,
+                )
         daily_budget = profile.monthly_spending_budget / 30.0
         median_by_level = {
             "LOW": daily_budget * 0.35,

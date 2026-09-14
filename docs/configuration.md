@@ -22,9 +22,34 @@ Start from [`configs/minimal.yaml`](../configs/minimal.yaml) and change only the
 | `graph` | Opt-in fraud-network campaigns and graph export inputs |
 | `benchmark` / `stress` | Difficulty and camouflage controls |
 | `counterfactual` | Opt-in minimum-change fraud trajectories and lineage sidecars |
+| `calibration` | Opt-in reference-derived aggregate parameters and fidelity controls |
 | `outputs` | Parquet and optional integration outputs |
 
 Unknown fields and invalid ranges are rejected during validation. That strict boundary is intentional: a run should fail before it produces ambiguous data.
+
+## Reference calibration
+
+Calibration is disabled by default and does not change legacy hashes or output
+bytes. Fit a reusable profile from a canonical Parquet transaction table:
+
+```bash
+fraudtwin calibrate reference.parquet --output calibrated-profile.yaml
+fraudtwin generate configs/minimal.yaml --profile calibrated-profile.yaml --seed 42
+```
+
+The reference must contain finite positive `amount`, timezone-aware UTC
+`event_time`, and non-empty `customer_id` columns. Optional canonical columns
+are `merchant_category`, `account_balance`, `payer_account_id`,
+`payee_account_id`, and `campaign_id`. Missing optional columns are recorded as
+unavailable; they are never inferred from arbitrary fields.
+
+Profiles contain aggregate distributions, frequencies, dependencies, bounded
+graph/campaign summaries, fingerprints, versions, and seed-stream metadata.
+They never contain reference rows or source entity identifiers. Generated runs
+store append-only `calibration/<profile_id>/fidelity_metrics.parquet` and
+`fidelity_report.json` sidecars. Fidelity is report-only unless explicit
+thresholds are configured. Existing lifecycle, ledger, graph, fraud, PIT, and
+observable/oracle boundaries remain authoritative.
 
 ## Customer behavior
 
@@ -168,6 +193,23 @@ stress:
 ```
 
 Use either the versioned fixtures under `configs/benchmarks/` or a copied YAML file when comparing runs. The resolved controls, constraints, cohort choices, and effective configuration hash are recorded with the output.
+
+## Dynamic campaign evolution
+
+M15 is disabled by default and does not change legacy IDs, hashes, schemas, or files. Enable it with an M11 graph run:
+
+```yaml
+campaign_dynamics:
+  enabled: true
+  bindings:
+    - {profile: linear}
+    - {profile: rotating_ring}
+    - {profile: adaptive_network}
+```
+
+The built-ins target `MULE_NETWORK`, `CYCLIC_RING`, and `DENSE_CAMPAIGN`. Bindings validate phase durations and transitions before generation and support `marked_hawkes_v1` (default) or `piecewise_rate_v1`. CARD actions are merchant purchases with the normal card lifecycle; PIX and account-transfer actions preserve account-to-account ledger rules. Rail, template, model, phase, and capacity incompatibilities are rejected deterministically.
+
+M15 runs after M11 and before M13. M14 still selects pristine legitimate sources before all fraud, graph, dynamic, and camouflage processing. Dynamic state, reasons, membership history, intensity decisions, topology mutations, and lineage are oracle-only append-only Parquet artifacts under `campaign_dynamics/<m15_id>/`; observable output uses established payment, event, and ledger schemas. Custom deterministic transition and intensity models can be registered through the public API. `fraudtwin campaign evolve` appends a sidecar to a clean static graph run without modifying its existing artifacts.
 
 ## Reproducibility
 
