@@ -1250,6 +1250,7 @@ class PointInTimeDatasetBuilder:
             output_fingerprint=output_fingerprint,
             difficulty=(self.source_manifest.difficulty if self.source_manifest else None),
             camouflage=(self.source_manifest.camouflage if self.source_manifest else None),
+            counterfactual=(self.source_manifest.counterfactual if self.source_manifest else None),
         )
 
     def _source_manifest_hash(self) -> str:

@@ -11,7 +11,7 @@ from fraudtwin.config import SimulationRunConfig, config_hash
 def _drop_inactive_metadata(data: dict[str, object]) -> dict[str, object]:
     """Keep optional methodology sections out of inactive manifests."""
 
-    for field in ("difficulty", "camouflage"):
+    for field in ("difficulty", "camouflage", "counterfactual"):
         if data.get(field) is None:
             data.pop(field, None)
     return data
@@ -44,6 +44,7 @@ class RunManifest(BaseModel):
     graph: dict[str, object] = Field(default_factory=dict)
     difficulty: dict[str, object] | None = None
     camouflage: dict[str, object] | None = None
+    counterfactual: dict[str, object] | None = None
 
     @model_serializer(mode="wrap")
     def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
@@ -73,6 +74,7 @@ class GraphManifest(BaseModel):
     export_parameters: dict[str, object] = Field(default_factory=dict)
     difficulty: dict[str, object] | None = None
     camouflage: dict[str, object] | None = None
+    counterfactual: dict[str, object] | None = None
 
     @model_serializer(mode="wrap")
     def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
@@ -106,6 +108,7 @@ class DatasetManifest(BaseModel):
     output_fingerprint: str
     difficulty: dict[str, object] | None = None
     camouflage: dict[str, object] | None = None
+    counterfactual: dict[str, object] | None = None
 
     @model_serializer(mode="wrap")
     def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
@@ -185,6 +188,8 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         resolved.pop("benchmark", None)
     if not config.stress.active:
         resolved.pop("stress", None)
+    if not config.counterfactual.active:
+        resolved.pop("counterfactual", None)
     return RunManifest(
         run_id=f"RUN-{run_hash}",
         generator_version=__version__,

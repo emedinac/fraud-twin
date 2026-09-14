@@ -1,5 +1,16 @@
 # Release notes
 
+## 0.15.0 — Milestone 14 Counterfactual Fraud Generation
+
+- Added strict opt-in counterfactual configuration with deterministic source
+  selection, weighted distance budgets, immutable source lineage, and explicit
+  infeasibility records.
+- Added M6 and M11 objective requests, isolated M14 streams, derived IDs, and
+  original/modified observable plus oracle sidecar artifacts.
+- Added integrated and standalone counterfactual CLI workflows, the M14
+  benchmark fixture, public resolver/generator APIs, and reproducibility
+  metadata without changing inactive M1–M13 identities.
+
 ## 0.14.0 — Milestone 13 Camouflage Engine
 
 - Added strict opt-in feature and relation camouflage controls with global,

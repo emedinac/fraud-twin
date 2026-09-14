@@ -4,6 +4,9 @@ FraudTwin is released under the [Apache License 2.0](../LICENSE).
 
 These references informed FraudTwin’s design. The repository does not bundle copied proprietary source code or external datasets; generated records are synthetic and produced by FraudTwin. Third-party dependencies and referenced works remain subject to their own licenses and terms.
 
+- Mothilal, Sharma & Tan, [*Explaining Machine Learning Classifiers through Diverse Counterfactual Explanations*](https://doi.org/10.1145/3351095.3372850) *(design reference only)* — informed proximity, feasibility, and constrained counterfactual search; no source code, data, or models are copied.
+- [DiCE reference implementation](https://github.com/interpretml/DiCE) *(design reference only)* — informed pluggable distance and feasibility concepts; FraudTwin does not import or depend on the repository.
+
 ## Synthetic data and fraud workflows
 
 - [Fraud Detection Handbook simulator](https://fraud-detection-handbook.github.io/fraud-detection-handbook/Chapter_3_GettingStarted/SimulatedDataset.html) *(handbook)* — informed deterministic customer profiles, temporal payment behavior, rule-based fraud scenarios, and the legitimate baseline used for hard negatives.

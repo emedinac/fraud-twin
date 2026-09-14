@@ -1,10 +1,22 @@
-__version__ = "0.14.0"
+__version__ = "0.15.0"
 
 from fraudtwin.camouflage import (  # noqa: E402
     CamouflagePlan,
     ResolvedCamouflage,
     apply_camouflage,
     resolve_camouflage,
+)
+from fraudtwin.counterfactual import (  # noqa: E402
+    CounterfactualChangeSet,
+    CounterfactualDataset,
+    CounterfactualScope,
+    DistanceFunction,
+    ResolvedCounterfactual,
+    SourceTrajectory,
+    generate_counterfactuals,
+    register_distance_function,
+    resolve_counterfactual,
+    select_source_trajectories,
 )
 from fraudtwin.difficulty import (  # noqa: E402
     ResolvedDifficulty,
@@ -49,4 +61,14 @@ __all__ = [
     "validate_graph",
     "validate_graph_scenarios",
     "write_graph",
+    "CounterfactualChangeSet",
+    "CounterfactualDataset",
+    "CounterfactualScope",
+    "DistanceFunction",
+    "ResolvedCounterfactual",
+    "SourceTrajectory",
+    "generate_counterfactuals",
+    "register_distance_function",
+    "resolve_counterfactual",
+    "select_source_trajectories",
 ]

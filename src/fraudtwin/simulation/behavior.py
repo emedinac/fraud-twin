@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Customer behavior profiles and their generated payment dataset."""
 
 from dataclasses import dataclass, field, replace
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 
 from fraudtwin.camouflage import resolve_camouflage, transform_generated_data
 from fraudtwin.config import SimulationRunConfig
+from fraudtwin.counterfactual import CounterfactualDataset, generate_counterfactuals
 from fraudtwin.difficulty import resolve_difficulty
 from fraudtwin.domain import (
     BehaviorProfile,
@@ -74,6 +76,7 @@ class BehaviorDataset:
     camouflage_metadata: dict[str, object] = field(default_factory=dict)
     # M8 keeps an immutable in-memory oracle before intentional corruption.
     oracle_tables: dict[str, tuple[BaseModel, ...]] = field(default_factory=dict, repr=False)
+    counterfactual: CounterfactualDataset | None = field(default=None, repr=False)
 
     def tables(self) -> dict[str, tuple[BaseModel, ...]]:
         """Return all behavior tables in their stable export order."""
@@ -317,6 +320,19 @@ class BehaviorGenerator:
             self.entities.pix_keys,
             simulation_run_id=self.simulation_run_id,
         ).generate(profiles)
+        counterfactual_dataset = (
+            generate_counterfactuals(
+                self.config,
+                self.entities,
+                payment_dataset,
+                counterfactual_id=(
+                    f"CF-{self.simulation_run_id}" if self.simulation_run_id else None
+                ),
+                run_id=self.simulation_run_id,
+            )
+            if self.config.counterfactual.active
+            else None
+        )
         fraud_dataset = FraudScenarioGenerator(
             self.config,
             self.entities.accounts,
@@ -389,6 +405,7 @@ class BehaviorGenerator:
             graph_hyperedges=graph_dataset.hyperedges,
             graph_hyperedge_memberships=graph_dataset.hyperedge_memberships,
             camouflage_metadata=camouflage_metadata,
+            counterfactual=counterfactual_dataset,
         )
         dataset = QualityFaultInjector(self.config).apply(dataset)
         if resolve_difficulty(self.config).enabled or resolve_camouflage(self.config).enabled:

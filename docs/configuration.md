@@ -21,6 +21,7 @@ Start from [`configs/minimal.yaml`](../configs/minimal.yaml) and change only the
 | `backtest` | Rolling train, validation, test, and stress windows |
 | `graph` | Opt-in fraud-network campaigns and graph export inputs |
 | `benchmark` / `stress` | Difficulty and camouflage controls |
+| `counterfactual` | Opt-in minimum-change fraud trajectories and lineage sidecars |
 | `outputs` | Parquet and optional integration outputs |
 
 Unknown fields and invalid ranges are rejected during validation. That strict boundary is intentional: a run should fail before it produces ambiguous data.
@@ -40,6 +41,54 @@ behavior:
 ```
 
 The same payment can be ordinary for one customer and unusual for another. That distinction is the foundation for hard negatives and behavior-aware fraud cases.
+
+## Counterfactual fraud generation
+
+M14 is disabled by default and has no effect on legacy hashes or output files.
+Enable it with explicit M6/M11 objective requests:
+
+```yaml
+counterfactual:
+  enabled: true
+  budget: 2.0
+  requests:
+    - {objective: F01, count: 1}
+    - {objective: F04, count: 1}
+```
+
+The resolver applies request, objective, family, global, and default controls
+in that order. `scenario` is accepted as an alias for `objective`, and
+`max_distance` for `budget`; supplying both names is rejected. Dimension costs
+cover beneficiary, device, timing, amount, merchant, geography, payment rail,
+and graph relationships. The built-in weighted distance can be replaced by a
+registered deterministic distance function.
+
+Sources are selected chronologically from the pre-fraud legitimate stream.
+Eligibility uses only records available at the source decision timestamp, and
+stable IDs make repeated runs identical. M14 searches for a feasible minimum
+change, applies the resolved M12 amount/timing constraints, and uses isolated
+M13 camouflage controls at the M14 boundary. Every request records its budget,
+costs, changed fields, objective result, constraints, source mapping, and either
+a modified trajectory or a deterministic rejection.
+
+Generated originals and modifications live in separate append-only sidecars;
+ordinary payment/event schemas remain unchanged. Observable sidecars omit latent
+fraud truth, while oracle change sets retain it for evaluation. A standalone
+workflow is available for legitimate-only source runs:
+
+```bash
+fraudtwin counterfactual generate \
+  --config configs/benchmarks/m14-counterfactual-v1.yaml \
+  --source-run-id RUN-... \
+  --output-dir /tmp/fraudtwin-run
+```
+
+Rail conversion is reported as inapplicable when changing rails would require
+an unsafe lifecycle-vocabulary conversion. The graph adapter emits a closed
+campaign/pattern lineage for each selected trajectory; requests requiring
+multi-trajectory campaign evolution are recorded as limited. F02/F05 burst
+objectives remain bounded to the selected trajectory and are never silently
+expanded into additional payments.
 
 ## Fraud scenarios and workflow
 
