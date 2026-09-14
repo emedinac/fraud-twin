@@ -8,6 +8,15 @@ from fraudtwin import __version__
 from fraudtwin.config import SimulationRunConfig, config_hash
 
 
+def _drop_inactive_metadata(data: dict[str, object]) -> dict[str, object]:
+    """Keep optional methodology sections out of inactive manifests."""
+
+    for field in ("difficulty", "camouflage"):
+        if data.get(field) is None:
+            data.pop(field, None)
+    return data
+
+
 class RunManifest(BaseModel):
     """Metadata required to reproduce and audit a generated run."""
 
@@ -34,13 +43,11 @@ class RunManifest(BaseModel):
     output_artifacts: dict[str, object] = Field(default_factory=dict)
     graph: dict[str, object] = Field(default_factory=dict)
     difficulty: dict[str, object] | None = None
+    camouflage: dict[str, object] | None = None
 
     @model_serializer(mode="wrap")
-    def _serialize_without_inactive_difficulty(self, handler):  # type: ignore[no-untyped-def]
-        data = handler(self)
-        if data.get("difficulty") is None:
-            data.pop("difficulty", None)
-        return data
+    def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
+        return _drop_inactive_metadata(handler(self))
 
 
 class GraphManifest(BaseModel):
@@ -65,13 +72,11 @@ class GraphManifest(BaseModel):
     file_checksums: dict[str, str] = Field(default_factory=dict)
     export_parameters: dict[str, object] = Field(default_factory=dict)
     difficulty: dict[str, object] | None = None
+    camouflage: dict[str, object] | None = None
 
     @model_serializer(mode="wrap")
-    def _serialize_without_inactive_difficulty(self, handler):  # type: ignore[no-untyped-def]
-        data = handler(self)
-        if data.get("difficulty") is None:
-            data.pop("difficulty", None)
-        return data
+    def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
+        return _drop_inactive_metadata(handler(self))
 
 
 class DatasetManifest(BaseModel):
@@ -100,13 +105,11 @@ class DatasetManifest(BaseModel):
     schema_fingerprint: str
     output_fingerprint: str
     difficulty: dict[str, object] | None = None
+    camouflage: dict[str, object] | None = None
 
     @model_serializer(mode="wrap")
-    def _serialize_without_inactive_difficulty(self, handler):  # type: ignore[no-untyped-def]
-        data = handler(self)
-        if data.get("difficulty") is None:
-            data.pop("difficulty", None)
-        return data
+    def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
+        return _drop_inactive_metadata(handler(self))
 
 
 class ReplayManifest(BaseModel):
@@ -178,8 +181,10 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
     resolved = config.model_dump(mode="json")
     if not config.graph.enabled:
         resolved.pop("graph", None)
-    if not config.benchmark.enabled:
+    if not config.benchmark.enabled and not config.benchmark.camouflage_active:
         resolved.pop("benchmark", None)
+    if not config.stress.active:
+        resolved.pop("stress", None)
     return RunManifest(
         run_id=f"RUN-{run_hash}",
         generator_version=__version__,

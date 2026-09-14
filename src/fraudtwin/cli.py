@@ -189,6 +189,7 @@ def generate(
                 base_manifest.run_id,
             )
             or None,
+            "camouflage": behavior_dataset.camouflage_metadata or None,
         }
     )
     dataset_path: Path | None = None

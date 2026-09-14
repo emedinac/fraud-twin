@@ -740,6 +740,22 @@ DifficultyControlName = Literal[
     "graph_structural_subtlety",
 ]
 
+CamouflageFeatureName = Literal[
+    "amount",
+    "timing",
+    "merchant",
+    "device",
+    "geography",
+    "frequency",
+]
+CamouflageRelationName = Literal[
+    "transferred_to",
+    "transacted_with",
+    "shares_device",
+    "shares_ip",
+]
+CamouflageFamilyName = Literal["fraud", "graph"]
+
 
 class DifficultyControls(_StrictModel):
     """Optional per-dimension M12 difficulty overrides.
@@ -774,6 +790,16 @@ class BenchmarkConfig(_StrictModel):
 
     difficulty: Annotated[int, Field(ge=1, le=10)] | None = None
     controls: DifficultyControls = Field(default_factory=DifficultyControls)
+    # M13 compatibility alias.  The canonical surface is ``stress``.
+    camouflage: float | None = Field(default=None, ge=0, le=1)
+    feature_camouflage: float | None = Field(default=None, ge=0, le=1)
+    relation_camouflage: float | None = Field(default=None, ge=0, le=1)
+    camouflage_cohort: "CamouflageCohortConfig" = Field(
+        default_factory=lambda: CamouflageCohortConfig()
+    )
+    camouflage_families: dict[CamouflageFamilyName, "CamouflageFamilyConfig"] = Field(
+        default_factory=dict
+    )
 
     @model_validator(mode="after")
     def level_required_for_overrides(self) -> "BenchmarkConfig":
@@ -786,6 +812,101 @@ class BenchmarkConfig(_StrictModel):
         """Whether M12 should alter generation or artifacts."""
 
         return self.difficulty is not None
+
+    @property
+    def camouflage_active(self) -> bool:
+        return (
+            any(
+                value is not None and value > 0
+                for value in (
+                    self.camouflage,
+                    self.feature_camouflage,
+                    self.relation_camouflage,
+                )
+            )
+            or any(family.active for family in self.camouflage_families.values())
+            or self.camouflage_cohort != CamouflageCohortConfig()
+        )
+
+
+class CamouflageCohortConfig(_StrictModel):
+    """Deterministic legitimate peer selection for M13."""
+
+    strategy: Literal["same_rail_and_profile", "same_rail", "global_legitimate"] = (
+        "same_rail_and_profile"
+    )
+    profile_dimensions: tuple[
+        Literal[
+            "spending_level",
+            "country",
+            "merchant_category",
+            "typical_payment_hour",
+            "trusted_device",
+        ],
+        ...,
+    ] = (
+        "spending_level",
+        "country",
+        "merchant_category",
+        "typical_payment_hour",
+        "trusted_device",
+    )
+    minimum_size: Annotated[int, Field(ge=1)] = 3
+    fallback: Literal["same_rail", "global_legitimate", "reject"] = "same_rail"
+
+
+class CamouflageFamilyConfig(_StrictModel):
+    """Optional M13 controls for the fraud or graph generator family."""
+
+    camouflage: float | None = Field(default=None, ge=0, le=1)
+    feature_camouflage: float | None = Field(default=None, ge=0, le=1)
+    relation_camouflage: float | None = Field(default=None, ge=0, le=1)
+    features: dict[CamouflageFeatureName, Annotated[float, Field(ge=0, le=1)]] = Field(
+        default_factory=dict
+    )
+    relations: dict[CamouflageRelationName, Annotated[float, Field(ge=0, le=1)]] = Field(
+        default_factory=dict
+    )
+
+    @property
+    def active(self) -> bool:
+        return (
+            any(
+                value is not None and value > 0
+                for value in (
+                    self.camouflage,
+                    self.feature_camouflage,
+                    self.relation_camouflage,
+                )
+            )
+            or any(value > 0 for value in self.features.values())
+            or any(value > 0 for value in self.relations.values())
+        )
+
+
+class StressConfig(_StrictModel):
+    """Opt-in M13 camouflage controls."""
+
+    camouflage: float | None = Field(default=None, ge=0, le=1)
+    feature_camouflage: float | None = Field(default=None, ge=0, le=1)
+    relation_camouflage: float | None = Field(default=None, ge=0, le=1)
+    cohort: CamouflageCohortConfig = Field(default_factory=CamouflageCohortConfig)
+    families: dict[CamouflageFamilyName, CamouflageFamilyConfig] = Field(default_factory=dict)
+
+    @property
+    def active(self) -> bool:
+        return (
+            any(
+                value is not None and value > 0
+                for value in (
+                    self.camouflage,
+                    self.feature_camouflage,
+                    self.relation_camouflage,
+                )
+            )
+            or any(family.active for family in self.families.values())
+            or self.cohort != CamouflageCohortConfig()
+        )
 
 
 class GraphScenarioConfig(_StrictModel):
@@ -1047,6 +1168,7 @@ class SimulationRunConfig(_StrictModel):
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
     graph: GraphConfig = Field(default_factory=GraphConfig)
     benchmark: BenchmarkConfig = Field(default_factory=BenchmarkConfig)
+    stress: StressConfig = Field(default_factory=StressConfig)
 
     def effective_label_delay_seconds(self) -> int:
         """Return the dataset label delay, falling back to workflow settings."""
@@ -1139,6 +1261,43 @@ class SimulationRunConfig(_StrictModel):
                 if scenario.type == "BENEFICIARY_NETWORK"
             ):
                 raise ValueError("beneficiary graph scenarios require at least one PIX key")
+        stress_active = self.stress.active
+        benchmark_camouflage_active = self.benchmark.camouflage_active
+        if stress_active and benchmark_camouflage_active:
+            raise ValueError(
+                "M13 camouflage must be configured under stress or benchmark, not both"
+            )
+        if stress_active or benchmark_camouflage_active:
+            if not (self.fraud.enabled or self.graph.enabled):
+                raise ValueError("camouflage requires fraud or graph generation to be enabled")
+            camouflage_settings = self.stress if stress_active else self.benchmark
+            relation_strength = (
+                camouflage_settings.relation_camouflage
+                if camouflage_settings.relation_camouflage is not None
+                else camouflage_settings.camouflage
+            )
+            feature_strength = (
+                camouflage_settings.feature_camouflage
+                if camouflage_settings.feature_camouflage is not None
+                else camouflage_settings.camouflage
+            )
+            family_items = (
+                camouflage_settings.families.items()
+                if isinstance(camouflage_settings, StressConfig)
+                else camouflage_settings.camouflage_families.items()
+            )
+            family_active = any(family.active for _, family in family_items)
+            if (relation_strength or feature_strength or family_active) and (
+                self.payments.daily_target == 0 or self.population.customers < 2
+            ):
+                raise ValueError("camouflage requires legitimate payment and customer capacity")
+            if (relation_strength or family_active) and self.population.accounts < 2:
+                raise ValueError("relation camouflage requires at least two accounts")
+            for family_name, family in family_items:
+                if family_name == "fraud" and not self.fraud.enabled and family.active:
+                    raise ValueError("fraud camouflage controls require fraud generation")
+                if family_name == "graph" and not self.graph.enabled and family.active:
+                    raise ValueError("graph camouflage controls require graph generation")
         if self.benchmark.enabled and not (self.fraud.enabled or self.graph.enabled):
             raise ValueError(
                 "benchmark difficulty requires fraud or graph generation to be enabled"
@@ -1222,8 +1381,11 @@ def _canonical_config(
         payload.pop("graph", None)
     # M12 is opt-in; a benchmark section with no level must not change legacy
     # run IDs, manifests, or fingerprints.
-    if not config.benchmark.enabled:
+    if not config.benchmark.enabled and not config.benchmark.camouflage_active:
         payload.pop("benchmark", None)
+    # M13 is opt-in; a disabled stress section must not alter legacy identities.
+    if not config.stress.active:
+        payload.pop("stress", None)
     # Keep run identities backward-compatible when newly optional methodology
     # controls remain at their neutral defaults.
     neutral_defaults: dict[str, dict[str, object]] = {

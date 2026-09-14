@@ -1,5 +1,11 @@
-__version__ = "0.13.0"
+__version__ = "0.14.0"
 
+from fraudtwin.camouflage import (  # noqa: E402
+    CamouflagePlan,
+    ResolvedCamouflage,
+    apply_camouflage,
+    resolve_camouflage,
+)
 from fraudtwin.difficulty import (  # noqa: E402
     ResolvedDifficulty,
     ScenarioDifficultyPlan,
@@ -24,9 +30,13 @@ from fraudtwin.graph import (  # noqa: E402
 __all__ = [
     "__version__",
     "ResolvedDifficulty",
+    "ResolvedCamouflage",
+    "CamouflagePlan",
     "ScenarioDifficultyPlan",
     "resolve_difficulty",
     "apply_difficulty",
+    "resolve_camouflage",
+    "apply_camouflage",
     "GraphDataset",
     "GraphCampaign",
     "GraphEdge",

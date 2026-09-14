@@ -1117,6 +1117,7 @@ def write_graph(
         },
         export_parameters={"views": sorted(datasets), "formats": list(formats)},
         difficulty=source_manifest.difficulty,
+        camouflage=source_manifest.camouflage,
     )
     manifest_path = graph_dir / "graph_manifest.json"
     manifest_path.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")

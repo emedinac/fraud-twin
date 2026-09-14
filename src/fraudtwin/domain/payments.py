@@ -342,10 +342,7 @@ def validate_ledger(
             "CARD_REFUNDED",
             "CARD_CHARGEBACK_RESOLVED",
         }
-        and (
-            event.event_type not in {"CARD_SETTLED", "CARD_REFUNDED", "CARD_CHARGEBACK_RESOLVED"}
-            or payment_by_id[event.payment_id].payee_account_id is not None
-        )
+        and payment_by_id[event.payment_id].payee_account_id is not None
     }
     if set(entries_by_event) != expected_events:
         raise ValueError("posted transfer events and ledger events do not reconcile")
