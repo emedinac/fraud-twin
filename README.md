@@ -10,7 +10,7 @@ FraudTwin creates a small, coherent financial world that behaves more like a rea
 
 The project is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and temporal patterns before introducing data-quality faults, streaming, or production infrastructure.
 
-## Current release: 0.11.0 — Methodology completion for Milestones 1–8
+## Current release: 0.12.0 — Graph Fraud (Milestone 11)
 
 Milestones 1 through 10 are complete. Every generated customer receives a deterministic
 behavior profile, and payments reflect customer-specific preferences for:
@@ -25,6 +25,8 @@ behavior profile, and payments reflect customer-specific preferences for:
 The current release generates legitimate CARD, PIX-like, and account-transfer payments, plus explicit F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack scenarios when fraud generation is enabled. Fraud events retain the existing event envelope and carry scenario ID, type, trigger, reason, and affected entities. The fraud record table contains scenario-linked truth records and legitimate hard negatives. M7 derives fraud alerts, cases, confirmations, customer dispute events, and delayed labels from those records. Confirmed-case losses reflect realized settled payment or net ledger activity; declined, reversed, and refunded attempts contribute no loss. Latent truth remains in the oracle `fraud_records.parquet` table; operational M7 projections write copied truth fields as null, and unresolved cases do not produce labels. M8 adds deterministic duplicates, missing optional fields, invalid values, late and out-of-order events, source delay, source outages, scheduled schema changes, fraud spikes, traffic spikes, and measured quality-fault counts. Card chargebacks are supported as a configurable lifecycle.
 
 M9 adds a local point-in-time dataset builder over those generated records. Historical features use only source records whose `source_available_at` is no later than the row's `prediction_time`; business `event_time` remains separate from feature availability. Labels are included only after their configured `label_available_at` and label delay, or can be retained as unresolved rows for inspection. M10 adds deterministic replay from an existing run, rolling PIT backtests, source-history fraud regimes, and versioned benchmark packs without regenerating the financial world during replay or analysis.
+
+M11 adds an opt-in graph-fraud source mode and a read-only graph exporter. Graphs preserve source IDs and event timestamps, provide separate observable and oracle views, derive shared-device/IP relationships only from supporting events, and write deterministic Parquet and Neo4j artifacts. Enable graph campaigns in a new run with a `graph:` section, then export with `fraudtwin graph export --run-id <run-id> --output-dir runs`.
 
 ## Quick start
 
@@ -295,6 +297,7 @@ in `quality_fault_rates`.
 | Deterministic M8 data-quality faults, outages, schema changes, and measurements | Available |
 | Point-in-time historical ML dataset and delayed labels | Available |
 | Deterministic replay, rolling PIT backtesting, regimes, and benchmark packs | Available |
+| Opt-in M11 graph-fraud scenarios, oracle truth, Parquet and Neo4j exports | Available |
 | Kafka, PostgreSQL, Flink, feature stores, and advanced models | Planned |
 
 FraudTwin is being built milestone by milestone. The priority is a correct, readable, reproducible simulation core before adding distributed systems or advanced modeling.
@@ -320,5 +323,11 @@ See [`DEVELOPMENT.md`](DEVELOPMENT.md) for contributor workflows and
 FraudTwin is released under the [Apache License 2.0](LICENSE).
 
 The project is informed by work such as [SantanderAI/gen-fraud-graph](https://github.com/SantanderAI/gen-fraud-graph) and [synthfin-core](https://github.com/afborda/synthfin-core). FraudTwin's focus is the reproducible system around a payment: entities, behavior, relationships, event timing, and the path toward realistic fraud-data workflows.
+
+M11 is enabled only with a strict `graph.scenarios` list. It provides
+deterministic mule, ring, fan-in/out, layered, shared-infrastructure,
+dense-community, merchant-community, and control topologies. Graph export is
+read-only and writes separate observable and oracle views. Neo4j artifacts are
+dependency-free CSV/Cypher; PyTorch Geometric is optional (`poetry install -E graph`).
 
 For release history, see [`CHANGELOG.md`](CHANGELOG.md).

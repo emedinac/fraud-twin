@@ -9,6 +9,14 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 from pydantic import BaseModel
 
+from fraudtwin.domain import (
+    GraphCampaign,
+    GraphCampaignMembership,
+    GraphEvidence,
+    GraphHyperedge,
+    GraphHyperedgeMembership,
+    GraphPattern,
+)
 from fraudtwin.simulation.generator import EntityDataset
 
 if TYPE_CHECKING:
@@ -117,6 +125,16 @@ ENTITY_SCHEMAS: dict[str, dict[str, Any]] = {
     },
 }
 
+NETWORK_ENDPOINT_SCHEMA: dict[str, Any] = {
+    "endpoint_id": pl.Utf8,
+    "endpoint_type": pl.Utf8,
+    "address_hash": pl.Utf8,
+    "first_seen_at": _UTC_TIMESTAMP,
+    "last_seen_at": _UTC_TIMESTAMP,
+    "valid_from": _UTC_TIMESTAMP,
+    "valid_to": _UTC_TIMESTAMP,
+}
+
 ENTITY_STATE_HISTORY_SCHEMA: dict[str, Any] = {
     "entity_id": pl.Utf8,
     "entity_type": pl.Utf8,
@@ -216,6 +234,35 @@ PAYMENT_EVENT_SCHEMA: dict[str, Any] = {
 # Lifecycle events use the same stable envelope as all payment events. Keeping
 # a named alias makes the contract explicit for consumers and tests.
 PAYMENT_LIFECYCLE_EVENT_SCHEMA = PAYMENT_EVENT_SCHEMA
+GRAPH_PAYMENT_EVENT_SCHEMA = {
+    **PAYMENT_EVENT_SCHEMA,
+    "ip_id": pl.Utf8,
+}
+GRAPH_MEMBERSHIP_SCHEMA = {
+    "campaign_id": pl.Utf8,
+    "pattern_type": pl.Utf8,
+    "member_id": pl.Utf8,
+    "member_type": pl.Utf8,
+    "role": pl.Utf8,
+    "valid_from": _UTC_TIMESTAMP,
+    "valid_to": _UTC_TIMESTAMP,
+    "source_event_id": pl.Utf8,
+    "payment_id": pl.Utf8,
+}
+GRAPH_PATTERN_SCHEMA = {
+    "pattern_id": pl.Utf8,
+    "pattern_type": pl.Utf8,
+    "campaign_id": pl.Utf8,
+    "detected_at": _UTC_TIMESTAMP,
+    "window_from": _UTC_TIMESTAMP,
+    "window_to": _UTC_TIMESTAMP,
+    "member_ids": pl.List(pl.Utf8),
+    "source_event_ids": pl.List(pl.Utf8),
+    "payment_ids": pl.List(pl.Utf8),
+    "threshold": pl.Int64,
+    "observed_value": pl.Float64,
+    "invariant_status": pl.Utf8,
+}
 
 FRAUD_RECORD_SCHEMA: dict[str, Any] = {
     "fraud_record_id": pl.Utf8,
@@ -389,6 +436,47 @@ BEHAVIOR_SCHEMAS: dict[str, dict[str, Any]] = {
     "fraud_labels": FRAUD_LABEL_SCHEMA,
 }
 
+GRAPH_TRUTH_SCHEMAS: dict[str, dict[str, Any]] = {
+    "campaigns": {
+        "campaign_id": pl.Utf8,
+        "scenario_type": pl.Utf8,
+        "scenario_code": pl.Utf8,
+        "truth_label": pl.Utf8,
+        "valid_from": _UTC_TIMESTAMP,
+        "valid_to": _UTC_TIMESTAMP,
+        "participant_ids": pl.List(pl.Utf8),
+        "modifiers": pl.List(pl.Utf8),
+    },
+    "campaign_memberships": GRAPH_MEMBERSHIP_SCHEMA,
+    "patterns": GRAPH_PATTERN_SCHEMA,
+    "graph_evidence": {
+        "evidence_id": pl.Utf8,
+        "edge_id": pl.Utf8,
+        "evidence_type": pl.Utf8,
+        "resource_id": pl.Utf8,
+        "source_event_id": pl.Utf8,
+        "payment_id": pl.Utf8,
+        "observed_at": _UTC_TIMESTAMP,
+        "available_at": _UTC_TIMESTAMP,
+    },
+    "hyperedges": {
+        "hyperedge_id": pl.Utf8,
+        "hyperedge_type": pl.Utf8,
+        "campaign_id": pl.Utf8,
+        "pattern_id": pl.Utf8,
+        "valid_from": _UTC_TIMESTAMP,
+        "valid_to": _UTC_TIMESTAMP,
+        "source_event_ids": pl.List(pl.Utf8),
+        "payment_ids": pl.List(pl.Utf8),
+    },
+    "hyperedge_memberships": {
+        "hyperedge_id": pl.Utf8,
+        "member_id": pl.Utf8,
+        "member_type": pl.Utf8,
+        "role": pl.Utf8,
+    },
+}
+
 
 def _write_table(
     records: Iterable[BaseModel],
@@ -413,7 +501,11 @@ def write_entity_parquet(dataset: EntityDataset, run_dir: Path) -> dict[str, Pat
     entities_dir.mkdir(parents=True, exist_ok=False)
     written: dict[str, Path] = {}
     for entity_name, records in dataset.tables().items():
-        schema = ENTITY_SCHEMAS[entity_name]
+        schema = (
+            NETWORK_ENDPOINT_SCHEMA
+            if entity_name == "network_endpoints"
+            else ENTITY_SCHEMAS[entity_name]
+        )
         path = entities_dir / f"{entity_name}.parquet"
         _write_table(records, schema, path)
         written[entity_name] = path
@@ -477,6 +569,10 @@ def write_behavior_parquet(
     written: dict[str, Path] = {}
     for table_name, records in dataset.tables().items():
         schema = BEHAVIOR_SCHEMAS[table_name]
+        if table_name == "payment_events" and any(
+            getattr(record, "ip_id", None) is not None for record in records
+        ):
+            schema = GRAPH_PAYMENT_EVENT_SCHEMA
         directory = table_directories[table_name]
         path = directory / f"{table_name}.parquet"
         _write_table(records, schema, path, masked_fields=masked_fields.get(table_name, ()))
@@ -489,9 +585,46 @@ def write_behavior_parquet(
             directory.mkdir(parents=True, exist_ok=True)
         for table_name, records in dataset.oracle_tables.items():
             if table_name in BEHAVIOR_SCHEMAS:
+                schema = BEHAVIOR_SCHEMAS[table_name]
+                if table_name == "payment_events" and any(
+                    getattr(record, "ip_id", None) is not None for record in records
+                ):
+                    schema = GRAPH_PAYMENT_EVENT_SCHEMA
                 _write_table(
                     records,
-                    BEHAVIOR_SCHEMAS[table_name],
+                    schema,
                     oracle_directories[table_name] / f"{table_name}.parquet",
                 )
+    return written
+
+
+def write_graph_truth(
+    memberships: tuple[GraphCampaignMembership, ...],
+    patterns: tuple[GraphPattern, ...],
+    run_dir: Path,
+    campaigns: tuple[GraphCampaign, ...] = (),
+    evidence: tuple[GraphEvidence, ...] = (),
+    hyperedges: tuple[GraphHyperedge, ...] = (),
+    hyperedge_memberships: tuple[GraphHyperedgeMembership, ...] = (),
+) -> dict[str, Path]:
+    """Write opt-in M11 oracle metadata without exposing it operationally."""
+
+    values = {
+        "campaigns": campaigns,
+        "campaign_memberships": memberships,
+        "patterns": patterns,
+        "graph_evidence": evidence,
+        "hyperedges": hyperedges,
+        "hyperedge_memberships": hyperedge_memberships,
+    }
+    if not any(values.values()):
+        return {}
+    graph_dir = run_dir / "oracle" / "graph"
+    graph_dir.mkdir(parents=True, exist_ok=True)
+    written: dict[str, Path] = {}
+    for name, records in values.items():
+        if records:
+            path = graph_dir / f"{name}.parquet"
+            _write_table(records, GRAPH_TRUTH_SCHEMAS[name], path)
+            written[name] = path
     return written

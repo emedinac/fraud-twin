@@ -14,7 +14,6 @@ concurrency:
 
 jobs:
   quality:
-    if: github.base_ref == 'main' && github.head_ref == 'feature/dev'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,9 +26,15 @@ jobs:
         run: poetry install
       - name: Ruff lint
         run: poetry run ruff check .
+      - name: Poetry validation
+        run: poetry check --strict
       - name: Ruff format
         run: poetry run ruff format --check .
       - name: Mypy
         run: poetry run mypy src
       - name: Tests
         run: poetry run pytest
+      - name: Build
+        run: poetry build
+      - name: Diff check
+        run: git diff --check

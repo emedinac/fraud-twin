@@ -140,6 +140,7 @@ class PaymentEvent(_EntityModel):
     merchant_id: str | None
     card_id: str | None
     device_id: str | None
+    ip_id: str | None = None
     online: bool
     amount: float = Field(gt=0)
     currency: str

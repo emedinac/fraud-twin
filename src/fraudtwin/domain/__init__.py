@@ -22,6 +22,16 @@ from fraudtwin.domain.entities import (
     PixKey,
 )
 from fraudtwin.domain.fraud import FraudRecord, FraudRecordType, FraudScenarioType
+from fraudtwin.domain.graph import (
+    GraphCampaign,
+    GraphCampaignMembership,
+    GraphEvidence,
+    GraphHyperedge,
+    GraphHyperedgeMembership,
+    GraphPattern,
+    GraphPatternType,
+    NetworkEndpoint,
+)
 from fraudtwin.domain.payments import (
     CARD_LIFECYCLE_EVENT_TYPES,
     PIX_LIFECYCLE_EVENT_TYPES,
@@ -53,6 +63,14 @@ __all__ = [
     "FraudRecord",
     "FraudRecordType",
     "FraudScenarioType",
+    "NetworkEndpoint",
+    "GraphCampaignMembership",
+    "GraphCampaign",
+    "GraphEvidence",
+    "GraphHyperedge",
+    "GraphHyperedgeMembership",
+    "GraphPattern",
+    "GraphPatternType",
     "FraudAlert",
     "FraudCase",
     "FraudCaseConfirmation",

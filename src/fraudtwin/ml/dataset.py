@@ -29,9 +29,16 @@ from fraudtwin.domain import (
     FraudCase,
     FraudCaseConfirmation,
     FraudRecord,
+    GraphCampaign,
+    GraphCampaignMembership,
+    GraphEvidence,
+    GraphHyperedge,
+    GraphHyperedgeMembership,
+    GraphPattern,
     Institution,
     LedgerEntry,
     Merchant,
+    NetworkEndpoint,
     Payment,
     PaymentEvent,
     PixKey,
@@ -289,6 +296,11 @@ def load_generated_run(
         merchants=_read_run_table(run_dir, "entities", "merchants", Merchant),
         devices=_read_run_table(run_dir, "entities", "devices", Device),
         pix_keys=_read_run_table(run_dir, "entities", "pix_keys", PixKey),
+        network_endpoints=(
+            _read_run_table(run_dir, "entities", "network_endpoints", NetworkEndpoint)
+            if (run_dir / "entities" / "network_endpoints.parquet").is_file()
+            else ()
+        ),
         state_history=(
             tuple(
                 EntityStateChange.model_validate(row)
@@ -325,6 +337,42 @@ def load_generated_run(
             fallback_delivery=allow_missing_delivery,
         ),
         fraud_labels=_read_run_table(run_dir, "fraud", "fraud_labels", DelayedFraudLabel),
+        graph_memberships=(
+            _read_models(
+                run_dir / "oracle" / "graph" / "campaign_memberships.parquet",
+                GraphCampaignMembership,
+            )
+            if (run_dir / "oracle" / "graph" / "campaign_memberships.parquet").is_file()
+            else ()
+        ),
+        graph_campaigns=(
+            _read_models(run_dir / "oracle" / "graph" / "campaigns.parquet", GraphCampaign)
+            if (run_dir / "oracle" / "graph" / "campaigns.parquet").is_file()
+            else ()
+        ),
+        graph_patterns=(
+            _read_models(run_dir / "oracle" / "graph" / "patterns.parquet", GraphPattern)
+            if (run_dir / "oracle" / "graph" / "patterns.parquet").is_file()
+            else ()
+        ),
+        graph_evidence=(
+            _read_models(run_dir / "oracle" / "graph" / "graph_evidence.parquet", GraphEvidence)
+            if (run_dir / "oracle" / "graph" / "graph_evidence.parquet").is_file()
+            else ()
+        ),
+        graph_hyperedges=(
+            _read_models(run_dir / "oracle" / "graph" / "hyperedges.parquet", GraphHyperedge)
+            if (run_dir / "oracle" / "graph" / "hyperedges.parquet").is_file()
+            else ()
+        ),
+        graph_hyperedge_memberships=(
+            _read_models(
+                run_dir / "oracle" / "graph" / "hyperedge_memberships.parquet",
+                GraphHyperedgeMembership,
+            )
+            if (run_dir / "oracle" / "graph" / "hyperedge_memberships.parquet").is_file()
+            else ()
+        ),
     )
     _validate_behavior_workflow(entities, behavior)
     return entities, behavior, manifest

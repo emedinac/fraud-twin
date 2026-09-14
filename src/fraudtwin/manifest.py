@@ -32,6 +32,30 @@ class RunManifest(BaseModel):
     resolved_configuration: dict[str, object] = Field(default_factory=dict)
     regime_definitions: list[dict[str, object]] = Field(default_factory=list)
     output_artifacts: dict[str, object] = Field(default_factory=dict)
+    graph: dict[str, object] = Field(default_factory=dict)
+
+
+class GraphManifest(BaseModel):
+    """Lineage and fingerprints for one immutable M11 graph export."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    graph_id: str
+    graph_version: str
+    source_run_id: str
+    source_manifest_hash: str
+    configuration_hash: str
+    parameters: dict[str, object]
+    source_snapshots: dict[str, object]
+    schema_versions: dict[str, str]
+    counts: dict[str, dict[str, int]]
+    schema_fingerprint: str
+    output_fingerprint: str
+    output_artifacts: dict[str, object]
+    ordering: dict[str, object] = Field(default_factory=dict)
+    canonical_content_fingerprint: str | None = None
+    file_checksums: dict[str, str] = Field(default_factory=dict)
+    export_parameters: dict[str, object] = Field(default_factory=dict)
 
 
 class DatasetManifest(BaseModel):
@@ -127,6 +151,9 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
 
     run_hash = config_hash(config)[:16]
     start_time = config.simulation.start
+    resolved = config.model_dump(mode="json")
+    if not config.graph.enabled:
+        resolved.pop("graph", None)
     return RunManifest(
         run_id=f"RUN-{run_hash}",
         generator_version=__version__,
@@ -143,7 +170,7 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         quality_fault_counts={},
         quality_fault_rates={},
         quality_diagnostics={},
-        resolved_configuration=config.model_dump(mode="json"),
+        resolved_configuration=resolved,
         regime_definitions=[regime.model_dump(mode="json") for regime in config.backtest.regimes],
     )
 

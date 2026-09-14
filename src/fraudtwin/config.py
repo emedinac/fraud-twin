@@ -701,6 +701,274 @@ class BacktestConfig(_StrictModel):
         return self
 
 
+GraphViewPolicy = Literal["observable", "oracle", "both"]
+GraphScenarioType = Literal[
+    "MULE_NETWORK",
+    "CYCLIC_RING",
+    "BENEFICIARY_NETWORK",
+    "FAN_OUT",
+    "BIPARTITE_NETWORK",
+    "STACKED_NETWORK",
+    "SCATTER_GATHER",
+    "GATHER_SCATTER",
+    "SHARED_DEVICE_INFRASTRUCTURE",
+    "SHARED_IP_INFRASTRUCTURE",
+    "DENSE_CAMPAIGN",
+    "MERCHANT_CUSTOMER_COMMUNITY",
+    "RANDOM_ALERT_CONTROL",
+]
+GraphModifierType = Literal[
+    "SHORT_DWELL",
+    "CROSS_INSTITUTION",
+    "CAMOUFLAGE_RELATION",
+    "CAMOUFLAGE_FEATURE",
+    "STRUCTURAL_HYPEREDGE",
+    "SEMANTIC_HYPEREDGE",
+]
+
+
+class GraphScenarioConfig(_StrictModel):
+    """One discriminated, deterministic M11 scenario specification."""
+
+    type: GraphScenarioType
+    count: Annotated[int, Field(ge=0)] = 1
+    member_count: int | None = Field(default=None, ge=2)
+    source_count: int | None = Field(default=None, ge=1)
+    destination_count: int | None = Field(default=None, ge=1)
+    originator_count: int | None = Field(default=None, ge=1)
+    intermediary_count: int | None = Field(default=None, ge=1)
+    beneficiary_count: int | None = Field(default=None, ge=1)
+    customer_count: int | None = Field(default=None, ge=1)
+    merchant_count: int | None = Field(default=None, ge=1)
+    edge_count: int | None = Field(default=None, ge=1)
+    repeat_count: int | None = Field(default=None, ge=1)
+    min_amount: float | None = Field(default=None, gt=0)
+    max_amount: float | None = Field(default=None, gt=0)
+    window_seconds: int | None = Field(default=None, gt=0)
+    institution_scope: Literal["ANY", "SINGLE_INSTITUTION", "CROSS_INSTITUTION"] = "ANY"
+    density_threshold: float = Field(default=0.5, ge=0, le=1)
+    modifiers: tuple[GraphModifierType, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_shape(self) -> "GraphScenarioConfig":
+        if (
+            self.max_amount is not None
+            and self.min_amount is not None
+            and self.max_amount < self.min_amount
+        ):
+            raise ValueError("graph scenario max_amount must be >= min_amount")
+        if len(set(self.modifiers)) != len(self.modifiers):
+            raise ValueError("graph scenario modifiers must be unique")
+        required: dict[str, tuple[str, ...]] = {
+            "MULE_NETWORK": ("source_count",),
+            "CYCLIC_RING": ("member_count",),
+            "BENEFICIARY_NETWORK": ("source_count",),
+            "FAN_OUT": ("destination_count",),
+            "BIPARTITE_NETWORK": ("originator_count", "beneficiary_count"),
+            "STACKED_NETWORK": ("originator_count", "intermediary_count", "beneficiary_count"),
+            "SCATTER_GATHER": ("intermediary_count",),
+            "GATHER_SCATTER": ("source_count", "destination_count"),
+            "SHARED_DEVICE_INFRASTRUCTURE": ("member_count",),
+            "SHARED_IP_INFRASTRUCTURE": ("member_count",),
+            "DENSE_CAMPAIGN": ("member_count",),
+            "MERCHANT_CUSTOMER_COMMUNITY": ("customer_count", "merchant_count", "repeat_count"),
+            "RANDOM_ALERT_CONTROL": ("member_count", "edge_count"),
+        }
+        if self.count and any(getattr(self, field) is None for field in required[self.type]):
+            missing = [field for field in required[self.type] if getattr(self, field) is None]
+            raise ValueError(f"graph scenario {self.type} requires {', '.join(missing)}")
+        common = {
+            "type",
+            "count",
+            "min_amount",
+            "max_amount",
+            "window_seconds",
+            "institution_scope",
+            "modifiers",
+        }
+        allowed_by_type: dict[str, set[str]] = {
+            "MULE_NETWORK": {"source_count"},
+            "CYCLIC_RING": {"member_count"},
+            "BENEFICIARY_NETWORK": {"source_count"},
+            "FAN_OUT": {"destination_count"},
+            "BIPARTITE_NETWORK": {"originator_count", "beneficiary_count"},
+            "STACKED_NETWORK": {"originator_count", "intermediary_count", "beneficiary_count"},
+            "SCATTER_GATHER": {"intermediary_count"},
+            "GATHER_SCATTER": {"source_count", "destination_count"},
+            "SHARED_DEVICE_INFRASTRUCTURE": {"member_count"},
+            "SHARED_IP_INFRASTRUCTURE": {"member_count"},
+            "DENSE_CAMPAIGN": {"member_count", "edge_count", "density_threshold"},
+            "MERCHANT_CUSTOMER_COMMUNITY": {"customer_count", "merchant_count", "repeat_count"},
+            "RANDOM_ALERT_CONTROL": {"member_count", "edge_count"},
+        }
+        unsupported = sorted(
+            key
+            for key in self.model_fields_set
+            if key not in common | allowed_by_type[self.type]
+            and getattr(self, key) is not None
+            and getattr(self, key) != self.model_fields[key].default
+        )
+        if unsupported:
+            raise ValueError(
+                f"graph scenario {self.type} does not support field(s): {', '.join(unsupported)}"
+            )
+        if "CROSS_INSTITUTION" in self.modifiers and self.institution_scope == "SINGLE_INSTITUTION":
+            raise ValueError("CROSS_INSTITUTION conflicts with SINGLE_INSTITUTION")
+        if "SHORT_DWELL" in self.modifiers and self.type not in {
+            "MULE_NETWORK",
+            "CYCLIC_RING",
+            "STACKED_NETWORK",
+            "SCATTER_GATHER",
+            "GATHER_SCATTER",
+        }:
+            raise ValueError(f"SHORT_DWELL is not supported for {self.type}")
+        if "CROSS_INSTITUTION" in self.modifiers and self.type in {
+            "SHARED_DEVICE_INFRASTRUCTURE",
+            "SHARED_IP_INFRASTRUCTURE",
+        }:
+            raise ValueError(f"CROSS_INSTITUTION is not supported for {self.type}")
+        if self.type == "DENSE_CAMPAIGN" and self.member_count and self.edge_count is not None:
+            possible = self.member_count * (self.member_count - 1)
+            if self.edge_count < int(self.density_threshold * possible):
+                raise ValueError("dense campaign edge_count does not meet density_threshold")
+        return self
+
+
+class MuleNetworkScenario(GraphScenarioConfig):
+    type: Literal["MULE_NETWORK"] = "MULE_NETWORK"
+
+
+class CyclicRingScenario(GraphScenarioConfig):
+    type: Literal["CYCLIC_RING"] = "CYCLIC_RING"
+
+
+class BeneficiaryNetworkScenario(GraphScenarioConfig):
+    type: Literal["BENEFICIARY_NETWORK"] = "BENEFICIARY_NETWORK"
+
+
+class FanOutScenario(GraphScenarioConfig):
+    type: Literal["FAN_OUT"] = "FAN_OUT"
+
+
+class BipartiteNetworkScenario(GraphScenarioConfig):
+    type: Literal["BIPARTITE_NETWORK"] = "BIPARTITE_NETWORK"
+
+
+class StackedNetworkScenario(GraphScenarioConfig):
+    type: Literal["STACKED_NETWORK"] = "STACKED_NETWORK"
+
+
+class ScatterGatherScenario(GraphScenarioConfig):
+    type: Literal["SCATTER_GATHER"] = "SCATTER_GATHER"
+
+
+class GatherScatterScenario(GraphScenarioConfig):
+    type: Literal["GATHER_SCATTER"] = "GATHER_SCATTER"
+
+
+class SharedDeviceScenario(GraphScenarioConfig):
+    type: Literal["SHARED_DEVICE_INFRASTRUCTURE"] = "SHARED_DEVICE_INFRASTRUCTURE"
+
+
+class SharedIPScenario(GraphScenarioConfig):
+    type: Literal["SHARED_IP_INFRASTRUCTURE"] = "SHARED_IP_INFRASTRUCTURE"
+
+
+class DenseCampaignScenario(GraphScenarioConfig):
+    type: Literal["DENSE_CAMPAIGN"] = "DENSE_CAMPAIGN"
+
+
+class MerchantCustomerCommunityScenario(GraphScenarioConfig):
+    type: Literal["MERCHANT_CUSTOMER_COMMUNITY"] = "MERCHANT_CUSTOMER_COMMUNITY"
+
+
+class RandomAlertControlScenario(GraphScenarioConfig):
+    type: Literal["RANDOM_ALERT_CONTROL"] = "RANDOM_ALERT_CONTROL"
+
+
+type GraphScenario = Annotated[
+    MuleNetworkScenario
+    | CyclicRingScenario
+    | BeneficiaryNetworkScenario
+    | FanOutScenario
+    | BipartiteNetworkScenario
+    | StackedNetworkScenario
+    | ScatterGatherScenario
+    | GatherScatterScenario
+    | SharedDeviceScenario
+    | SharedIPScenario
+    | DenseCampaignScenario
+    | MerchantCustomerCommunityScenario
+    | RandomAlertControlScenario,
+    Field(discriminator="type"),
+]
+
+
+def graph_account_capacity(scenario: GraphScenarioConfig) -> int:
+    """Return the number of distinct accounts required by one scenario instance."""
+
+    special_cases = {
+        "MULE_NETWORK": (scenario.source_count or 1) + 2,
+        "BENEFICIARY_NETWORK": (scenario.source_count or 1) + 1,
+        "FAN_OUT": (scenario.destination_count or 1) + 1,
+        "SCATTER_GATHER": (scenario.intermediary_count or 1) + 2,
+        "GATHER_SCATTER": (scenario.source_count or 1) + (scenario.destination_count or 1) + 1,
+    }
+    if scenario.type in special_cases:
+        return special_cases[scenario.type]
+    return max(
+        scenario.member_count or 0,
+        scenario.source_count or 0,
+        scenario.destination_count or 0,
+        (scenario.originator_count or 0)
+        + (scenario.intermediary_count or 0)
+        + (scenario.beneficiary_count or 0),
+        scenario.customer_count or 0,
+        2,
+    )
+
+
+class GraphConfig(_StrictModel):
+    """Strict controls for M11 graph construction and export (schema v2)."""
+
+    schema_version: Literal["2"] = "2"
+    enabled: bool = False
+    scenarios: tuple[GraphScenario, ...] = ()
+    relationship_window_seconds: int = Field(default=30 * 86_400, gt=0)
+    pattern_window_seconds: int = Field(default=24 * 3_600, gt=0)
+    ring_min_size: int = Field(default=3, ge=3, le=7)
+    ring_max_size: int = Field(default=7, ge=3, le=7)
+    fan_threshold: int = Field(default=3, ge=2)
+    shared_threshold: int = Field(default=2, ge=2)
+    dwell_threshold_seconds: int = Field(default=3_600, gt=0)
+    amount_retention_tolerance: float = Field(default=0.20, ge=0, lt=1)
+    export_policy: GraphViewPolicy = "both"
+
+    @field_validator(
+        "relationship_window_seconds",
+        "pattern_window_seconds",
+        "dwell_threshold_seconds",
+        mode="before",
+    )
+    @classmethod
+    def graph_durations_must_be_positive(cls, value: Any) -> int:
+        return _parse_duration_seconds(value)
+
+    @model_validator(mode="after")
+    def graph_bounds_must_be_ordered(self) -> "GraphConfig":
+        if self.ring_max_size < self.ring_min_size:
+            raise ValueError("graph ring_max_size must be at least ring_min_size")
+        if self.enabled and not any(item.count for item in self.scenarios):
+            raise ValueError("enabled graph configuration requires at least one scenario")
+        for scenario in self.scenarios:
+            if (
+                scenario.window_seconds is not None
+                and scenario.window_seconds > self.pattern_window_seconds
+            ):
+                raise ValueError("scenario window_seconds cannot exceed pattern_window_seconds")
+        return self
+
+
 class SimulationRunConfig(_StrictModel):
     """Top-level configuration accepted by the CLI."""
 
@@ -716,6 +984,7 @@ class SimulationRunConfig(_StrictModel):
     outputs: OutputsConfig
     dataset: PointInTimeDatasetConfig = Field(default_factory=PointInTimeDatasetConfig)
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
+    graph: GraphConfig = Field(default_factory=GraphConfig)
 
     def effective_label_delay_seconds(self) -> int:
         """Return the dataset label delay, falling back to workflow settings."""
@@ -786,6 +1055,28 @@ class SimulationRunConfig(_StrictModel):
                 raise ValueError("train-to-validation label-delay gap leaves no validation range")
             if validation_end + timedelta(seconds=label_delay_gap) >= test_end:
                 raise ValueError("validation-to-test label-delay gap leaves no test range")
+        if self.graph.enabled:
+            required_accounts = sum(
+                scenario.count * graph_account_capacity(scenario)
+                for scenario in self.graph.scenarios
+            )
+            if self.population.accounts < required_accounts:
+                raise ValueError(
+                    "graph scenarios require more disjoint accounts than population.accounts"
+                )
+            required_devices = sum(
+                scenario.count
+                for scenario in self.graph.scenarios
+                if scenario.type == "SHARED_DEVICE_INFRASTRUCTURE"
+            )
+            if self.population.devices < required_devices:
+                raise ValueError("shared-device graph scenarios require enough devices")
+            if self.population.pix_keys < sum(
+                scenario.count
+                for scenario in self.graph.scenarios
+                if scenario.type == "BENEFICIARY_NETWORK"
+            ):
+                raise ValueError("beneficiary graph scenarios require at least one PIX key")
         return self
 
 
@@ -842,6 +1133,9 @@ def _canonical_config(
         payload.pop("pix_lifecycle", None)
     if not include_dataset:
         payload.pop("dataset", None)
+    # M11 is opt-in; a disabled graph section must not change legacy run IDs.
+    if not config.graph.enabled:
+        payload.pop("graph", None)
     # Keep run identities backward-compatible when newly optional methodology
     # controls remain at their neutral defaults.
     neutral_defaults: dict[str, dict[str, object]] = {

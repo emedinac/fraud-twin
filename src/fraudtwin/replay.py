@@ -20,6 +20,7 @@ from fraudtwin.simulation.parquet import (
     ENTITY_SCHEMAS,
     write_behavior_parquet,
     write_entity_parquet,
+    write_graph_truth,
 )
 
 ReplayOrder = Literal["event_time_order", "original_delivery"]
@@ -32,6 +33,7 @@ _ENTITY_ID_FIELDS = {
     "merchants": "merchant_id",
     "devices": "device_id",
     "pix_keys": "pix_key_id",
+    "network_endpoints": "endpoint_id",
 }
 _WORKFLOW_ENTITY_ID_FIELDS = {
     "customers": "customer_id",
@@ -170,6 +172,7 @@ def _referenced_entities(source: EntityDataset, behavior: BehaviorDataset) -> En
         add(event.merchant_id, "merchants")
         add(event.card_id, "cards")
         add(event.device_id, "devices")
+        add(event.ip_id, "network_endpoints")
     for entry in behavior.ledger_entries:
         add(entry.account_id, "accounts")
 
@@ -236,6 +239,11 @@ def _referenced_entities(source: EntityDataset, behavior: BehaviorDataset) -> En
             item for item in source.devices if item.device_id in referenced_ids["devices"]
         ),
         pix_keys=selected_pix_keys,
+        network_endpoints=tuple(
+            item
+            for item in source.network_endpoints
+            if item.endpoint_id in referenced_ids["network_endpoints"]
+        ),
         state_history=tuple(
             item for item in source.state_history if item.entity_id in referenced_entity_ids
         ),
@@ -301,6 +309,24 @@ def replay_run(
         case_confirmations=confirmations,
         customer_disputes=disputes,
         fraud_labels=labels,
+        graph_memberships=tuple(
+            item
+            for item in source.graph_memberships
+            if not item.payment_id or item.payment_id in payment_ids
+        ),
+        graph_campaigns=source.graph_campaigns,
+        graph_patterns=tuple(
+            item
+            for item in source.graph_patterns
+            if not item.payment_ids or set(item.payment_ids) & payment_ids
+        ),
+        graph_evidence=tuple(
+            item
+            for item in source.graph_evidence
+            if not item.payment_id or item.payment_id in payment_ids
+        ),
+        graph_hyperedges=source.graph_hyperedges,
+        graph_hyperedge_memberships=source.graph_hyperedge_memberships,
     )
     selected_entities = _referenced_entities(entities, selected_source)
     selected_customer_ids = {item.customer_id for item in selected_entities.customers}
@@ -317,6 +343,12 @@ def replay_run(
         case_confirmations=_restore_latent_truth(confirmations, truth_by_record),
         customer_disputes=disputes,
         fraud_labels=_restore_latent_truth(labels, truth_by_record),
+        graph_memberships=selected_source.graph_memberships,
+        graph_campaigns=selected_source.graph_campaigns,
+        graph_patterns=selected_source.graph_patterns,
+        graph_evidence=selected_source.graph_evidence,
+        graph_hyperedges=selected_source.graph_hyperedges,
+        graph_hyperedge_memberships=selected_source.graph_hyperedge_memberships,
     )
 
     candidates = [
@@ -432,6 +464,15 @@ def write_replay(result: ReplayResult, output_dir: Path) -> tuple[Path, Path]:
     replay_dir.mkdir(parents=True, exist_ok=False)
     write_entity_parquet(result.entities, replay_dir)
     write_behavior_parquet(result.behavior, replay_dir, mask_fraud_truth=False)
+    write_graph_truth(
+        result.behavior.graph_memberships,
+        result.behavior.graph_patterns,
+        replay_dir,
+        campaigns=result.behavior.graph_campaigns,
+        evidence=result.behavior.graph_evidence,
+        hyperedges=result.behavior.graph_hyperedges,
+        hyperedge_memberships=result.behavior.graph_hyperedge_memberships,
+    )
     envelope_path = replay_dir / "replay_events.parquet"
     result.frame.write_parquet(envelope_path)
     manifest_path = replay_dir / "replay_manifest.json"

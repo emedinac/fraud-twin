@@ -1,13 +1,15 @@
-from datetime import datetime
+import json
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 
 import polars as pl
 import typer
 
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
-from fraudtwin.manifest import create_manifest, write_manifest
+from fraudtwin.graph import GraphDataset, build_graph, validate_graph, write_graph
+from fraudtwin.manifest import RunManifest, create_manifest, write_manifest
 from fraudtwin.ml import (
     BenchmarkPack,
     PointInTimeDatasetBuilder,
@@ -18,14 +20,23 @@ from fraudtwin.ml import (
     write_point_in_time_dataset,
 )
 from fraudtwin.replay import ReplayOrder, replay_run, write_replay
+from fraudtwin.reproducibility import sha256_json
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
-from fraudtwin.simulation.parquet import write_behavior_parquet, write_entity_parquet
+from fraudtwin.simulation.behavior import BehaviorDataset
+from fraudtwin.simulation.generator import EntityDataset
+from fraudtwin.simulation.parquet import (
+    write_behavior_parquet,
+    write_entity_parquet,
+    write_graph_truth,
+)
 
 app = typer.Typer(help="Synthetic financial-system and fraud digital twin.")
 config_app = typer.Typer(help="Validate simulation configuration.")
 ml_app = typer.Typer(help="Build local point-in-time ML datasets.")
 app.add_typer(config_app, name="config")
 app.add_typer(ml_app, name="ml")
+graph_app = typer.Typer(help="Build deterministic temporal graph views.")
+app.add_typer(graph_app, name="graph")
 
 
 def _load_or_exit(path: Path) -> SimulationRunConfig:
@@ -34,6 +45,73 @@ def _load_or_exit(path: Path) -> SimulationRunConfig:
     except (FileNotFoundError, ValueError) as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
+
+
+def _graph_metadata(
+    config: SimulationRunConfig,
+    entities: EntityDataset,
+    behavior: BehaviorDataset,
+    manifest: RunManifest,
+) -> dict[str, object]:
+    """Build optional source-manifest metadata for an enabled graph run."""
+
+    if not config.graph.enabled:
+        return {}
+    metadata: dict[str, object] = {
+        "enabled": True,
+        "configuration_hash": config_hash(config),
+        "schema_version": "2",
+        "node_count": sum(entities.counts.values()),
+        "edge_count": 0,
+        "pattern_count": len(behavior.graph_patterns),
+        "campaign_membership_count": len(behavior.graph_memberships),
+        "campaign_count": len(behavior.graph_campaigns),
+        "evidence_count": len(behavior.graph_evidence),
+        "hyperedge_count": len(behavior.graph_hyperedges),
+        "hyperedge_membership_count": len(behavior.graph_hyperedge_memberships),
+        "source_snapshot": {
+            "start": config.simulation.start.isoformat(),
+            "end": (
+                config.simulation.start + timedelta(days=config.simulation.duration_days)
+            ).isoformat(),
+        },
+    }
+    source_graph = build_graph(config, entities, behavior, manifest, view="oracle")
+    metadata.update(
+        {
+            "node_count": len(source_graph.nodes),
+            "edge_count": len(source_graph.edges),
+            "pattern_count": len(source_graph.patterns),
+            "output_fingerprint": source_graph.output_fingerprint,
+            "schema_fingerprint": sha256_json(
+                {
+                    "graph_schema_version": "2",
+                    "source_tables": entities.counts,
+                    "events": behavior.event_counts,
+                }
+            ),
+            "oracle_artifact_fingerprint": sha256_json(
+                {
+                    name: [item.model_dump(mode="json") for item in records]
+                    for name, records in (
+                        ("campaigns", behavior.graph_campaigns),
+                        ("patterns", behavior.graph_patterns),
+                        ("campaign_memberships", behavior.graph_memberships),
+                        ("evidence", behavior.graph_evidence),
+                        ("hyperedges", behavior.graph_hyperedges),
+                        ("hyperedge_memberships", behavior.graph_hyperedge_memberships),
+                    )
+                }
+            ),
+        }
+    )
+    return metadata
+
+
+def _parse_optional_timestamp(value: str | None) -> datetime | None:
+    """Parse an optional CLI timestamp, preserving ``None`` for omitted filters."""
+
+    return datetime.fromisoformat(value) if value is not None else None
 
 
 @config_app.command("validate")
@@ -67,10 +145,20 @@ def generate(
     run_dir = output_dir / base_manifest.run_id
     write_entity_parquet(entity_dataset, run_dir)
     write_behavior_parquet(behavior_dataset, run_dir)
+    write_graph_truth(
+        behavior_dataset.graph_memberships,
+        behavior_dataset.graph_patterns,
+        run_dir,
+        campaigns=behavior_dataset.graph_campaigns,
+        evidence=behavior_dataset.graph_evidence,
+        hyperedges=behavior_dataset.graph_hyperedges,
+        hyperedge_memberships=behavior_dataset.graph_hyperedge_memberships,
+    )
     entity_counts = {**entity_dataset.counts, "behavior_profiles": len(behavior_dataset.profiles)}
     if entity_dataset.state_history:
         entity_counts["state_history"] = len(entity_dataset.state_history)
     event_counts = behavior_dataset.event_counts
+    graph_metadata = _graph_metadata(config, entity_dataset, behavior_dataset, base_manifest)
     manifest = base_manifest.model_copy(
         update={
             "entity_counts": entity_counts,
@@ -92,6 +180,7 @@ def generate(
             "quality_fault_counts": behavior_dataset.quality_fault_counts,
             "quality_fault_rates": behavior_dataset.quality_fault_rates,
             "quality_diagnostics": behavior_dataset.quality_diagnostics,
+            "graph": graph_metadata,
         }
     )
     dataset_path: Path | None = None
@@ -150,6 +239,120 @@ def validate_ledger_command(
         typer.echo(f"Ledger validation failed: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"Ledger is valid for run {run_id}.")
+
+
+@graph_app.command("export")
+def export_graph_command(
+    run_id: Annotated[str, typer.Option("--run-id", help="Existing generated run identifier.")],
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory containing generated runs.")
+    ] = Path("runs"),
+    as_of: Annotated[
+        str | None, typer.Option("--as-of", help="Optional point-in-time ISO-8601 snapshot.")
+    ] = None,
+    from_time: Annotated[
+        str | None, typer.Option("--from", help="Inclusive ISO-8601 event range start.")
+    ] = None,
+    to_time: Annotated[
+        str | None, typer.Option("--to", help="Exclusive ISO-8601 event range end.")
+    ] = None,
+    view: Annotated[str, typer.Option("--view", help="observable, oracle, or both.")] = "both",
+    formats: Annotated[
+        str, typer.Option("--format", help="Comma-separated formats: parquet,neo4j,pyg.")
+    ] = "parquet,neo4j",
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Emit machine-readable JSON.")
+    ] = False,
+) -> None:
+    """Export observable and/or oracle graph views from one immutable run."""
+
+    run_dir = output_dir / run_id
+    try:
+        entities, behavior, source_manifest = load_generated_run(run_dir)
+        config = SimulationRunConfig.model_validate(source_manifest.resolved_configuration)
+        selected_view = view.lower()
+        if selected_view not in {"observable", "oracle", "both"}:
+            raise ValueError("--view must be observable, oracle, or both")
+        format_values = tuple(
+            dict.fromkeys(item.strip().lower() for item in formats.split(",") if item.strip())
+        )
+        if not format_values or any(
+            item not in {"parquet", "neo4j", "pyg"} for item in format_values
+        ):
+            raise ValueError("--format must contain only parquet, neo4j, or pyg")
+
+        start = _parse_optional_timestamp(from_time)
+        end = _parse_optional_timestamp(to_time)
+        snapshot = _parse_optional_timestamp(as_of)
+        views: tuple[Literal["observable", "oracle"], ...] = (
+            ("observable", "oracle")
+            if selected_view == "both"
+            else (cast(Literal["observable", "oracle"], selected_view),)
+        )
+        datasets: dict[Literal["observable", "oracle"], GraphDataset] = {
+            item: build_graph(
+                config,
+                entities,
+                behavior,
+                source_manifest,
+                view=item,
+                as_of=snapshot,
+                from_time=start,
+                to_time=end,
+                memberships=behavior.graph_memberships,
+            )
+            for item in views
+        }
+        destination, manifest = write_graph(
+            datasets,
+            run_dir / "graphs",
+            source_manifest=source_manifest,
+            config=config,
+            formats=format_values,
+        )
+    except ValueError as exc:
+        typer.echo(f"Graph export failed: {exc}", err=True)
+        raise typer.Exit(
+            code=3 if "graph" in str(exc).lower() or "pattern" in str(exc).lower() else 2
+        ) from exc
+    except (FileNotFoundError, OSError, RuntimeError) as exc:
+        typer.echo(f"Graph export failed: {exc}", err=True)
+        raise typer.Exit(code=4) from exc
+    if json_output:
+        typer.echo(
+            json.dumps(
+                {
+                    "graph_id": manifest.graph_id,
+                    "output": str(destination),
+                    "manifest": str(destination / "graph_manifest.json"),
+                },
+                sort_keys=True,
+            )
+        )
+        return
+    typer.echo(f"Graph exported: {manifest.graph_id}")
+    typer.echo(f"Output: {destination}")
+    typer.echo(f"Manifest: {destination / 'graph_manifest.json'}")
+
+
+@graph_app.command("validate")
+def validate_graph_command(
+    run_id: Annotated[str, typer.Option("--run-id")],
+    output_dir: Annotated[Path, typer.Option("--output-dir")] = Path("runs"),
+) -> None:
+    """Validate observable and oracle graph projections for a run."""
+    try:
+        entities, behavior, manifest = load_generated_run(output_dir / run_id)
+        config = SimulationRunConfig.model_validate(manifest.resolved_configuration)
+        for view in ("observable", "oracle"):
+            validate_graph(build_graph(config, entities, behavior, manifest, view=view))
+    except ValueError as exc:
+        typer.echo(f"Graph validation failed: {exc}", err=True)
+        raise typer.Exit(code=3) from exc
+    except (FileNotFoundError, OSError) as exc:
+        typer.echo(f"Graph validation failed: {exc}", err=True)
+        raise typer.Exit(code=4) from exc
+    typer.echo(f"Graph is valid for run {run_id}.")
 
 
 @ml_app.command("build-dataset")

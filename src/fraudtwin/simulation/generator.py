@@ -14,6 +14,7 @@ from fraudtwin.domain import (
     EntityStateChange,
     Institution,
     Merchant,
+    NetworkEndpoint,
     PixKey,
 )
 from fraudtwin.seed import create_legacy_entity_stream_rng
@@ -27,7 +28,17 @@ _CARD_VALIDITY_DAYS = 3 * 365
 _COUNTRIES = ("BR", "US", "GB", "DE")
 _CITIES = ("Aurora", "Boreal", "Cascata", "Dourado")
 _RISK_SEGMENTS = ("LOW", "MEDIUM", "HIGH")
-Entity = Account | Card | Customer | Device | EntityStateChange | Institution | Merchant | PixKey
+Entity = (
+    Account
+    | Card
+    | Customer
+    | Device
+    | EntityStateChange
+    | Institution
+    | Merchant
+    | PixKey
+    | NetworkEndpoint
+)
 InstitutionType = Literal[
     "BANK", "PSP", "ISSUER", "ACQUIRER", "DIGITAL_BANK", "PAYMENT_INSTITUTION"
 ]
@@ -82,12 +93,13 @@ class EntityDataset:
     devices: tuple[Device, ...]
     pix_keys: tuple[PixKey, ...]
     state_history: tuple[EntityStateChange, ...] = ()
+    network_endpoints: tuple[NetworkEndpoint, ...] = ()
 
     @property
     def counts(self) -> dict[str, int]:
         """Return output counts using the population configuration names."""
 
-        return {
+        counts = {
             "customers": len(self.customers),
             "institutions": len(self.institutions),
             "accounts": len(self.accounts),
@@ -96,18 +108,26 @@ class EntityDataset:
             "devices": len(self.devices),
             "pix_keys": len(self.pix_keys),
         }
+        if self.network_endpoints:
+            counts["network_endpoints"] = len(self.network_endpoints)
+        return counts
 
     @property
     def reference_ids(self) -> dict[str, frozenset[str]]:
         """Return the stable IDs used by relationship validators."""
 
-        return {
+        result = {
             "customers": frozenset(item.customer_id for item in self.customers),
             "accounts": frozenset(item.account_id for item in self.accounts),
             "cards": frozenset(item.card_id for item in self.cards),
             "devices": frozenset(item.device_id for item in self.devices),
             "merchants": frozenset(item.merchant_id for item in self.merchants),
         }
+        if self.network_endpoints:
+            result["network_endpoints"] = frozenset(
+                item.endpoint_id for item in self.network_endpoints
+            )
+        return result
 
     @property
     def all_ids(self) -> frozenset[str]:
@@ -124,7 +144,7 @@ class EntityDataset:
     def tables(self) -> dict[str, tuple[Entity, ...]]:
         """Return entities keyed by their stable output table names."""
 
-        return {
+        tables: dict[str, tuple[Entity, ...]] = {
             "customers": self.customers,
             "institutions": self.institutions,
             "accounts": self.accounts,
@@ -133,6 +153,9 @@ class EntityDataset:
             "devices": self.devices,
             "pix_keys": self.pix_keys,
         }
+        if self.network_endpoints:
+            tables["network_endpoints"] = self.network_endpoints
+        return tables
 
     def all_tables(self) -> dict[str, tuple[Entity, ...]]:
         """Return base entity tables plus optional effective-dated history."""
@@ -193,8 +216,38 @@ class EntityGenerator:
                         ),
                     )
                 )
+        endpoints: tuple[NetworkEndpoint, ...] = ()
+        ip_campaigns = (
+            sum(
+                item.count
+                for item in self.config.graph.scenarios
+                if item.type == "SHARED_IP_INFRASTRUCTURE"
+            )
+            if self.config.graph.enabled
+            else 0
+        )
+        if ip_campaigns:
+            endpoints = tuple(
+                NetworkEndpoint(
+                    endpoint_id=_entity_id("IP", number),
+                    address_hash=f"synthetic-ip-{number:0{_ID_WIDTH}d}",
+                    first_seen_at=self.start,
+                    last_seen_at=simulation_end,
+                    valid_from=self.start,
+                    valid_to=None,
+                )
+                for number in range(1, ip_campaigns + 1)
+            )
         return EntityDataset(
-            customers, institutions, accounts, cards, merchants, devices, pix_keys, tuple(history)
+            customers,
+            institutions,
+            accounts,
+            cards,
+            merchants,
+            devices,
+            pix_keys,
+            tuple(history),
+            endpoints,
         )
 
     def _customers(self) -> tuple[Customer, ...]:

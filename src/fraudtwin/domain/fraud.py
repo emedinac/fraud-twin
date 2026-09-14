@@ -17,7 +17,7 @@ class FraudRecord(_EntityModel):
     fraud_record_id: str
     record_type: FraudRecordType
     scenario_id: str
-    scenario_type: FraudScenarioType
+    scenario_type: str
     fraud_truth: bool
     trigger: str
     reason: str

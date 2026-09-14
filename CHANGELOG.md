@@ -1,5 +1,16 @@
 # Release notes
 
+## 0.12.0 — Milestone 11 Graph Fraud
+
+- Added schema-v2 opt-in deterministic graph scenarios: mule, cyclic ring,
+  beneficiary, fan-in/out, bipartite, stacked, scatter/gather, shared
+  infrastructure, dense and merchant communities, and labelled controls.
+- Added temporal observable/oracle graph construction, evidence and hyperedge
+  incidence artifacts, structural validation, typed Parquet output, bulk-ready
+  Neo4j CSV/Cypher artifacts, and optional PyTorch Geometric export.
+- Added graph configuration, source/export manifest metadata, M11 fixture
+  configuration, CLI workflow, public graph APIs, and focused regression tests.
+
 ## 0.11.0 — Methodology completion for Milestones 1–8
 
 - **Milestone 1:** added optional effective-dated customer/account state history

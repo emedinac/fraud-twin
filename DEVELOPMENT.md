@@ -2,6 +2,14 @@
 
 Requirements: Python 3.12 and Poetry 2.x.
 
+## Pull request checks
+
+GitHub Actions CI is intentionally limited to pull requests from
+`feature/dev` into `main`; pushes to branches do not start CI. In the
+repository settings, protect `main` and require the `CI / quality` status
+check before merging. This makes a failed check block the merge until the
+problem is fixed and a new commit passes CI.
+
 ```bash
 poetry install
 poetry run pytest
@@ -149,3 +157,28 @@ label-maturity gap, enforce train/validation/test/stress order, and apply the
 gap at the train/validation and validation/test transitions. Regimes may use
 `label_observation_policy: unobserved` to retain latent fraud and workflow
 history without emitting an observed label.
+The focused M11 graph checks are:
+
+```bash
+poetry run fraudtwin graph export --run-id <run-id> --output-dir /tmp/fraudtwin-m11
+poetry run pytest tests/test_graph.py
+```
+
+Graph export is read-only over the source run. It writes separate observable
+and oracle views, applies point-in-time/source-availability filtering, and
+uses append-only content-addressed output directories.
+## M11 expanded graph scenarios
+
+Use the self-contained benchmark fixture and validate both graph views:
+
+```bash
+poetry run fraudtwin generate configs/benchmarks/m11-graph-v2.yaml --output-dir /tmp/fraudtwin-m11
+poetry run fraudtwin graph export --run-id <run-id> --output-dir /tmp/fraudtwin-m11 --format parquet,neo4j --json
+poetry run fraudtwin graph validate --run-id <run-id> --output-dir /tmp/fraudtwin-m11
+```
+
+Exports are append-only and content-addressed. Observable graphs contain only
+source-supported relationships available at the selected cutoff; oracle graphs
+add campaign, pattern, evidence, and optional hyperedge incidence records.
+Neo4j artifacts contain deterministic bulk-import CSV/Cypher files. PyTorch
+Geometric remains optional via `poetry install -E graph`.

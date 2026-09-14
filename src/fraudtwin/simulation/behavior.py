@@ -16,16 +16,24 @@ from fraudtwin.domain import (
     FraudCase,
     FraudCaseConfirmation,
     FraudRecord,
+    GraphCampaign,
+    GraphCampaignMembership,
+    GraphEvidence,
+    GraphHyperedge,
+    GraphHyperedgeMembership,
+    GraphPattern,
 )
 from fraudtwin.domain.payments import LedgerEntry, Payment, PaymentEvent
 from fraudtwin.seed import create_stream_rng
 from fraudtwin.simulation.cases import FraudWorkflowGenerator
 from fraudtwin.simulation.fraud import (
+    FraudDataset,
     FraudScenarioGenerator,
     count_true_fraud_records,
     scenario_events,
 )
 from fraudtwin.simulation.generator import EntityDataset
+from fraudtwin.simulation.graph_fraud import GraphFraudGenerator
 from fraudtwin.simulation.payments import (
     PaymentGenerator,
     count_card_lifecycle_events,
@@ -55,6 +63,12 @@ class BehaviorDataset:
     quality_fault_counts: dict[str, int] = field(default_factory=dict)
     quality_fault_rates: dict[str, float] = field(default_factory=dict)
     quality_diagnostics: dict[str, object] = field(default_factory=dict)
+    graph_memberships: tuple[GraphCampaignMembership, ...] = ()
+    graph_campaigns: tuple[GraphCampaign, ...] = ()
+    graph_patterns: tuple[GraphPattern, ...] = ()
+    graph_evidence: tuple[GraphEvidence, ...] = ()
+    graph_hyperedges: tuple[GraphHyperedge, ...] = ()
+    graph_hyperedge_memberships: tuple[GraphHyperedgeMembership, ...] = ()
     # M8 keeps an immutable in-memory oracle before intentional corruption.
     oracle_tables: dict[str, tuple[BaseModel, ...]] = field(default_factory=dict, repr=False)
 
@@ -289,20 +303,44 @@ class BehaviorGenerator:
             payment_dataset,
             simulation_run_id=self.simulation_run_id,
         ).generate()
+        graph_dataset = GraphFraudGenerator(
+            self.config,
+            self.entities.accounts,
+            self.entities.devices,
+            self.entities.network_endpoints,
+            fraud_dataset,
+            simulation_run_id=self.simulation_run_id,
+            merchants=self.entities.merchants,
+            pix_keys=self.entities.pix_keys,
+        ).generate()
+        workflow_source = FraudDataset(
+            payments=graph_dataset.payments,
+            payment_events=graph_dataset.payment_events,
+            ledger_entries=graph_dataset.ledger_entries,
+            fraud_records=fraud_dataset.fraud_records + graph_dataset.fraud_records,
+        )
         workflow_dataset = FraudWorkflowGenerator(
-            self.config, self.entities, fraud_dataset
+            self.config,
+            self.entities,
+            workflow_source,
         ).generate()
         dataset = BehaviorDataset(
             profiles=profiles,
-            payments=fraud_dataset.payments,
-            payment_events=fraud_dataset.payment_events,
-            ledger_entries=fraud_dataset.ledger_entries,
-            fraud_records=fraud_dataset.fraud_records,
+            payments=graph_dataset.payments,
+            payment_events=graph_dataset.payment_events,
+            ledger_entries=graph_dataset.ledger_entries,
+            fraud_records=fraud_dataset.fraud_records + graph_dataset.fraud_records,
             alerts=workflow_dataset.alerts,
             fraud_cases=workflow_dataset.cases,
             case_confirmations=workflow_dataset.confirmations,
             customer_disputes=workflow_dataset.disputes,
             fraud_labels=workflow_dataset.labels,
+            graph_memberships=graph_dataset.memberships,
+            graph_campaigns=graph_dataset.campaigns,
+            graph_patterns=graph_dataset.patterns,
+            graph_evidence=graph_dataset.evidence,
+            graph_hyperedges=graph_dataset.hyperedges,
+            graph_hyperedge_memberships=graph_dataset.hyperedge_memberships,
         )
         return QualityFaultInjector(self.config).apply(dataset)
 
