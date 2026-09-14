@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Customer behavior profiles and their generated payment dataset."""
 
 from dataclasses import dataclass, field, replace
@@ -6,7 +7,9 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from fraudtwin.camouflage import resolve_camouflage, transform_generated_data
 from fraudtwin.config import SimulationRunConfig
+from fraudtwin.counterfactual import CounterfactualDataset, generate_counterfactuals
 from fraudtwin.difficulty import resolve_difficulty
 from fraudtwin.domain import (
     BehaviorProfile,
@@ -70,8 +73,14 @@ class BehaviorDataset:
     graph_evidence: tuple[GraphEvidence, ...] = ()
     graph_hyperedges: tuple[GraphHyperedge, ...] = ()
     graph_hyperedge_memberships: tuple[GraphHyperedgeMembership, ...] = ()
+    camouflage_metadata: dict[str, object] = field(default_factory=dict)
     # M8 keeps an immutable in-memory oracle before intentional corruption.
     oracle_tables: dict[str, tuple[BaseModel, ...]] = field(default_factory=dict, repr=False)
+    quality_raw_faults: tuple[dict[str, object], ...] = field(default_factory=tuple, repr=False)
+    schema_evolution_rows: dict[str, tuple[dict[str, object], ...]] = field(
+        default_factory=dict, repr=False
+    )
+    counterfactual: CounterfactualDataset | None = field(default=None, repr=False)
 
     def tables(self) -> dict[str, tuple[BaseModel, ...]]:
         """Return all behavior tables in their stable export order."""
@@ -315,6 +324,19 @@ class BehaviorGenerator:
             self.entities.pix_keys,
             simulation_run_id=self.simulation_run_id,
         ).generate(profiles)
+        counterfactual_dataset = (
+            generate_counterfactuals(
+                self.config,
+                self.entities,
+                payment_dataset,
+                counterfactual_id=(
+                    f"CF-{self.simulation_run_id}" if self.simulation_run_id else None
+                ),
+                run_id=self.simulation_run_id,
+            )
+            if self.config.counterfactual.active
+            else None
+        )
         fraud_dataset = FraudScenarioGenerator(
             self.config,
             self.entities.accounts,
@@ -335,11 +357,34 @@ class BehaviorGenerator:
             merchants=self.entities.merchants,
             pix_keys=self.entities.pix_keys,
         ).generate()
+        (
+            camo_payments,
+            camo_events,
+            camo_ledger,
+            camo_records,
+            camo_memberships,
+            camo_campaigns,
+            camo_patterns,
+            camo_evidence,
+            camouflage_metadata,
+        ) = transform_generated_data(
+            self.config,
+            self.entities,
+            profiles,
+            graph_dataset.payments,
+            graph_dataset.payment_events,
+            graph_dataset.ledger_entries,
+            fraud_dataset.fraud_records + graph_dataset.fraud_records,
+            graph_dataset.memberships,
+            graph_dataset.campaigns,
+            graph_dataset.patterns,
+            graph_dataset.evidence,
+        )
         workflow_source = FraudDataset(
-            payments=graph_dataset.payments,
-            payment_events=graph_dataset.payment_events,
-            ledger_entries=graph_dataset.ledger_entries,
-            fraud_records=fraud_dataset.fraud_records + graph_dataset.fraud_records,
+            payments=camo_payments,
+            payment_events=camo_events,
+            ledger_entries=camo_ledger,
+            fraud_records=camo_records,
         )
         workflow_dataset = FraudWorkflowGenerator(
             self.config,
@@ -348,24 +393,26 @@ class BehaviorGenerator:
         ).generate()
         dataset = BehaviorDataset(
             profiles=profiles,
-            payments=graph_dataset.payments,
-            payment_events=graph_dataset.payment_events,
-            ledger_entries=graph_dataset.ledger_entries,
-            fraud_records=fraud_dataset.fraud_records + graph_dataset.fraud_records,
+            payments=camo_payments,
+            payment_events=camo_events,
+            ledger_entries=camo_ledger,
+            fraud_records=camo_records,
             alerts=workflow_dataset.alerts,
             fraud_cases=workflow_dataset.cases,
             case_confirmations=workflow_dataset.confirmations,
             customer_disputes=workflow_dataset.disputes,
             fraud_labels=workflow_dataset.labels,
-            graph_memberships=graph_dataset.memberships,
-            graph_campaigns=graph_dataset.campaigns,
-            graph_patterns=graph_dataset.patterns,
-            graph_evidence=graph_dataset.evidence,
+            graph_memberships=camo_memberships,
+            graph_campaigns=camo_campaigns,
+            graph_patterns=camo_patterns,
+            graph_evidence=camo_evidence,
             graph_hyperedges=graph_dataset.hyperedges,
             graph_hyperedge_memberships=graph_dataset.hyperedge_memberships,
+            camouflage_metadata=camouflage_metadata,
+            counterfactual=counterfactual_dataset,
         )
         dataset = QualityFaultInjector(self.config).apply(dataset)
-        if resolve_difficulty(self.config).enabled:
+        if resolve_difficulty(self.config).enabled or resolve_camouflage(self.config).enabled:
             dataset = _mask_difficulty_event_truth(dataset)
         return dataset
 

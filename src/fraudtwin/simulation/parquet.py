@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import json
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -21,6 +22,8 @@ from fraudtwin.simulation.generator import EntityDataset
 
 if TYPE_CHECKING:
     from fraudtwin.simulation.behavior import BehaviorDataset
+
+from fraudtwin.counterfactual import CounterfactualDataset
 
 _UTC_TIMESTAMP = pl.Datetime(time_zone="UTC")
 
@@ -221,6 +224,7 @@ PAYMENT_EVENT_SCHEMA: dict[str, Any] = {
     "merchant_id": pl.Utf8,
     "card_id": pl.Utf8,
     "device_id": pl.Utf8,
+    "transport_partition": pl.Int64,
     "online": pl.Boolean,
     "amount": pl.Float64,
     "currency": pl.Utf8,
@@ -436,6 +440,34 @@ BEHAVIOR_SCHEMAS: dict[str, dict[str, Any]] = {
     "fraud_labels": FRAUD_LABEL_SCHEMA,
 }
 
+COUNTERFACTUAL_CHANGE_SCHEMA: dict[str, Any] = {
+    "change_set_id": pl.Utf8,
+    "request_index": pl.Int64,
+    "objective": pl.Utf8,
+    "status": pl.Utf8,
+    "source_payment_id": pl.Utf8,
+    "derived_payment_id": pl.Utf8,
+    "requested_budget": pl.Float64,
+    "resolved_budget": pl.Float64,
+    "effective_distance": pl.Float64,
+    "per_dimension_costs": pl.Utf8,
+    "changed_fields": pl.Utf8,
+    "inapplicable_dimensions": pl.List(pl.Utf8),
+    "feasibility_constraints": pl.List(pl.Utf8),
+    "objective_satisfaction": pl.Utf8,
+    "rejection_reason": pl.Utf8,
+    "source_to_counterfactual": pl.Utf8,
+}
+
+COUNTERFACTUAL_WORKFLOW_SCHEMAS: dict[str, dict[str, Any]] = {
+    "fraud_alerts": FRAUD_ALERT_SCHEMA,
+    "fraud_cases": FRAUD_CASE_SCHEMA,
+    "case_confirmations": CASE_CONFIRMATION_SCHEMA,
+    "customer_disputes": CUSTOMER_DISPUTE_SCHEMA,
+    "fraud_labels": FRAUD_LABEL_SCHEMA,
+}
+COUNTERFACTUAL_MASKED_WORKFLOW_FIELDS = {"fraud_cases", "case_confirmations", "fraud_labels"}
+
 GRAPH_TRUTH_SCHEMAS: dict[str, dict[str, Any]] = {
     "campaigns": {
         "campaign_id": pl.Utf8,
@@ -492,6 +524,78 @@ def _write_table(
             row[field] = None
         rows.append(row)
     pl.DataFrame(rows, schema=schema, orient="row").write_parquet(path)
+
+
+def _behavior_schema(table_name: str, records: tuple[BaseModel, ...]) -> dict[str, Any]:
+    """Select the stable event schema, including optional graph columns."""
+
+    schema = BEHAVIOR_SCHEMAS[table_name]
+    if table_name == "payment_events" and any(
+        getattr(record, "ip_id", None) is not None for record in records
+    ):
+        return GRAPH_PAYMENT_EVENT_SCHEMA
+    return schema
+
+
+def _write_json_lines(rows: Iterable[Mapping[str, object]], path: Path) -> None:
+    """Write deterministic JSONL rows used by quality sidecar artifacts."""
+
+    path.write_text(
+        "".join(json.dumps(row, sort_keys=True, default=str) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+
+def _write_json_document(value: object, path: Path) -> None:
+    """Write one deterministic, human-readable JSON artifact."""
+
+    path.write_text(
+        json.dumps(value, sort_keys=True, indent=2, default=str) + "\n", encoding="utf-8"
+    )
+
+
+def _write_quality_artifacts(dataset: BehaviorDataset, run_dir: Path) -> None:
+    """Write optional M8 artifacts without affecting typed Parquet tables."""
+
+    if not (
+        dataset.quality_raw_faults or dataset.schema_evolution_rows or dataset.quality_diagnostics
+    ):
+        return
+    quality_dir = run_dir / "quality"
+    quality_dir.mkdir(parents=True, exist_ok=True)
+    _write_json_document(
+        dataset.quality_diagnostics.get("fault_audit", []), quality_dir / "fault_audit.json"
+    )
+    if dataset.quality_raw_faults:
+        _write_json_lines(dataset.quality_raw_faults, quality_dir / "raw_faults.jsonl")
+    if dataset.schema_evolution_rows:
+        schema_dir = quality_dir / "schema_evolution"
+        schema_dir.mkdir(parents=True, exist_ok=True)
+        for name, rows in sorted(dataset.schema_evolution_rows.items()):
+            filename = name.replace("/", "_").replace(":", "_") + ".jsonl"
+            _write_json_lines(rows, schema_dir / filename)
+
+
+def _write_counterfactual_workflows(
+    records: Mapping[str, Iterable[BaseModel]],
+    directory: Path,
+    *,
+    mask_truth: bool,
+) -> None:
+    """Write the stable M14 workflow table set for one observable boundary."""
+
+    for table_name, schema in COUNTERFACTUAL_WORKFLOW_SCHEMAS.items():
+        masked_fields = (
+            ("fraud_truth",)
+            if mask_truth and table_name in COUNTERFACTUAL_MASKED_WORKFLOW_FIELDS
+            else ()
+        )
+        _write_table(
+            records[table_name],
+            schema,
+            directory / f"{table_name}.parquet",
+            masked_fields=masked_fields,
+        )
 
 
 def write_entity_parquet(dataset: EntityDataset, run_dir: Path) -> dict[str, Path]:
@@ -568,11 +672,7 @@ def write_behavior_parquet(
     )
     written: dict[str, Path] = {}
     for table_name, records in dataset.tables().items():
-        schema = BEHAVIOR_SCHEMAS[table_name]
-        if table_name == "payment_events" and any(
-            getattr(record, "ip_id", None) is not None for record in records
-        ):
-            schema = GRAPH_PAYMENT_EVENT_SCHEMA
+        schema = _behavior_schema(table_name, records)
         directory = table_directories[table_name]
         path = directory / f"{table_name}.parquet"
         _write_table(records, schema, path, masked_fields=masked_fields.get(table_name, ()))
@@ -585,16 +685,13 @@ def write_behavior_parquet(
             directory.mkdir(parents=True, exist_ok=True)
         for table_name, records in dataset.oracle_tables.items():
             if table_name in BEHAVIOR_SCHEMAS:
-                schema = BEHAVIOR_SCHEMAS[table_name]
-                if table_name == "payment_events" and any(
-                    getattr(record, "ip_id", None) is not None for record in records
-                ):
-                    schema = GRAPH_PAYMENT_EVENT_SCHEMA
+                schema = _behavior_schema(table_name, records)
                 _write_table(
                     records,
                     schema,
                     oracle_directories[table_name] / f"{table_name}.parquet",
                 )
+    _write_quality_artifacts(dataset, run_dir)
     return written
 
 
@@ -628,3 +725,135 @@ def write_graph_truth(
             _write_table(records, GRAPH_TRUTH_SCHEMAS[name], path)
             written[name] = path
     return written
+
+
+def write_counterfactual_sidecar(
+    dataset: CounterfactualDataset,
+    run_dir: Path,
+) -> tuple[Path, Path]:
+    """Write M14 append-only original/modified and oracle sidecars."""
+
+    root = run_dir / "counterfactuals" / dataset.counterfactual_id
+    observable_original = root / "observable" / "original"
+    observable_modified = root / "observable" / "modified"
+    oracle = root / "oracle"
+    for directory in (observable_original, observable_modified, oracle):
+        directory.mkdir(parents=True, exist_ok=False)
+    for directory, payments, events, entries in (
+        (
+            observable_original,
+            dataset.original_payments,
+            dataset.original_events,
+            dataset.original_ledger_entries,
+        ),
+        (
+            observable_modified,
+            dataset.modified_payments,
+            dataset.modified_events,
+            dataset.modified_ledger_entries,
+        ),
+    ):
+        _write_table(payments, PAYMENT_SCHEMA, directory / "payments.parquet")
+        schema = (
+            GRAPH_PAYMENT_EVENT_SCHEMA
+            if any(item.ip_id is not None for item in events)
+            else PAYMENT_EVENT_SCHEMA
+        )
+        _write_table(events, schema, directory / "payment_events.parquet")
+        _write_table(entries, LEDGER_ENTRY_SCHEMA, directory / "ledger_entries.parquet")
+        workflow_records = {
+            "fraud_alerts": dataset.alerts if directory == observable_modified else (),
+            "fraud_cases": dataset.fraud_cases if directory == observable_modified else (),
+            "case_confirmations": (
+                dataset.case_confirmations if directory == observable_modified else ()
+            ),
+            "customer_disputes": (
+                dataset.customer_disputes if directory == observable_modified else ()
+            ),
+            "fraud_labels": dataset.fraud_labels if directory == observable_modified else (),
+        }
+        # Operational copies keep the established observable/oracle boundary:
+        # workflow truth fields are masked in observable data.
+        _write_counterfactual_workflows(
+            workflow_records,
+            directory,
+            mask_truth=directory == observable_modified,
+        )
+    _write_table(dataset.fraud_records, FRAUD_RECORD_SCHEMA, oracle / "fraud_records.parquet")
+    _write_counterfactual_workflows(
+        {
+            "fraud_alerts": dataset.alerts,
+            "fraud_cases": dataset.fraud_cases,
+            "case_confirmations": dataset.case_confirmations,
+            "customer_disputes": dataset.customer_disputes,
+            "fraud_labels": dataset.fraud_labels,
+        },
+        oracle,
+        mask_truth=False,
+    )
+    rows = []
+    for item in dataset.change_sets:
+        row = item.model_dump(mode="json")
+        for key in (
+            "per_dimension_costs",
+            "changed_fields",
+            "objective_satisfaction",
+            "source_to_counterfactual",
+        ):
+            row[key] = json.dumps(row[key], sort_keys=True, separators=(",", ":"))
+        rows.append(row)
+    pl.DataFrame(rows, schema=COUNTERFACTUAL_CHANGE_SCHEMA, orient="row").write_parquet(
+        oracle / "change_sets.parquet"
+    )
+    if (
+        dataset.graph_campaigns
+        or dataset.graph_memberships
+        or dataset.graph_patterns
+        or dataset.graph_evidence
+        or dataset.graph_hyperedges
+        or dataset.graph_hyperedge_memberships
+    ):
+        graph_oracle = oracle / "graph"
+        graph_oracle.mkdir()
+        graph_values = {
+            "campaigns": dataset.graph_campaigns,
+            "campaign_memberships": dataset.graph_memberships,
+            "patterns": dataset.graph_patterns,
+            "graph_evidence": dataset.graph_evidence,
+            "hyperedges": dataset.graph_hyperedges,
+            "hyperedge_memberships": dataset.graph_hyperedge_memberships,
+        }
+        for name, records in graph_values.items():
+            if records:
+                _write_table(records, GRAPH_TRUTH_SCHEMAS[name], graph_oracle / f"{name}.parquet")
+    manifest_path = root / "counterfactual_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "counterfactual_id": dataset.counterfactual_id,
+                "metadata": dataset.metadata,
+                "counts": {
+                    "original_payments": len(dataset.original_payments),
+                    "modified_payments": len(dataset.modified_payments),
+                    "fraud_records": len(dataset.fraud_records),
+                    "fraud_alerts": len(dataset.alerts),
+                    "fraud_cases": len(dataset.fraud_cases),
+                    "case_confirmations": len(dataset.case_confirmations),
+                    "customer_disputes": len(dataset.customer_disputes),
+                    "fraud_labels": len(dataset.fraud_labels),
+                    "change_sets": len(dataset.change_sets),
+                    "rejected": len(dataset.rejected),
+                },
+                "artifacts": {
+                    "original": str(observable_original),
+                    "modified": str(observable_modified),
+                    "oracle": str(oracle),
+                },
+            },
+            sort_keys=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return root, manifest_path

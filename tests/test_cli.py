@@ -44,7 +44,7 @@ def test_generate_command_writes_manifest(tmp_path: Path) -> None:
     assert manifest["event_counts"]["PIX_INITIATED"] > 0
     assert manifest["event_counts"]["PIX_SETTLED"] > 0
     assert manifest["event_counts"]["ledger_entries"] > 0
-    assert manifest["schema_versions"]["payment_events"] == "4"
+    assert manifest["schema_versions"]["payment_events"] == "5"
     assert manifest["fraud_counts"] == {}
     assert sorted(path.name for path in (run_dir / "entities").glob("*.parquet")) == [
         "accounts.parquet",

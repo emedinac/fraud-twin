@@ -1,0 +1,80 @@
+simulation:
+  seed: 1313
+  start: 2026-01-01T00:00:00Z
+  duration_days: 7
+  speed: batch
+
+population:
+  customers: 120
+  institutions: 6
+  accounts: 120
+  cards: 80
+  merchants: 20
+  devices: 30
+  pix_keys: 40
+
+payments:
+  daily_target: 100
+  rails: {CARD: 0.5, PIX: 0.3, ACCOUNT_TRANSFER: 0.2}
+
+behavior:
+  amount_min: 10.0
+  amount_max: 5000.0
+  active_hours: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+  weekday_weights: [1, 1, 1, 1, 1, 1, 1]
+  merchant_preference_count: 3
+  preferred_device_limit: 3
+
+fraud:
+  enabled: true
+  target_rate: 0.20
+  scenario_count: 5
+  hard_negative_rate: 0.25
+
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 1.0
+  customer_dispute_probability: 1.0
+
+quality: {profile: clean}
+dataset: {enabled: true, unresolved_labels: include}
+outputs: {parquet: true, postgres: false, kafka: false}
+
+graph:
+  enabled: true
+  scenarios:
+    - {type: MULE_NETWORK, count: 1, source_count: 3, modifiers: [SHORT_DWELL]}
+    - {type: CYCLIC_RING, count: 1, member_count: 4}
+    - {type: BENEFICIARY_NETWORK, count: 1, source_count: 3}
+    - {type: FAN_OUT, count: 1, destination_count: 3}
+    - {type: BIPARTITE_NETWORK, count: 1, originator_count: 2, beneficiary_count: 2}
+    - {type: STACKED_NETWORK, count: 1, originator_count: 1, intermediary_count: 2, beneficiary_count: 1}
+    - {type: SCATTER_GATHER, count: 1, intermediary_count: 2}
+    - {type: GATHER_SCATTER, count: 1, source_count: 2, destination_count: 2}
+    - {type: SHARED_DEVICE_INFRASTRUCTURE, count: 1, member_count: 3}
+    - {type: SHARED_IP_INFRASTRUCTURE, count: 1, member_count: 3}
+    - {type: DENSE_CAMPAIGN, count: 1, member_count: 4, edge_count: 6}
+    - {type: MERCHANT_CUSTOMER_COMMUNITY, count: 1, customer_count: 3, merchant_count: 2, repeat_count: 2}
+    - {type: RANDOM_ALERT_CONTROL, count: 1, member_count: 3, edge_count: 3}
+
+stress:
+  camouflage: 0.80
+  feature_camouflage: 0.85
+  relation_camouflage: 0.75
+  cohort:
+    strategy: same_rail_and_profile
+    profile_dimensions: [spending_level, country, merchant_category, typical_payment_hour, trusted_device]
+    minimum_size: 3
+    fallback: same_rail
+  families:
+    fraud:
+      feature_camouflage: 0.90
+      features: {amount: 0.90, timing: 0.80, merchant: 0.90, device: 0.90, geography: 0.80, frequency: 0.80}
+      relations: {transferred_to: 0.60, transacted_with: 0.60, shares_device: 0.40, shares_ip: 0.40}
+    graph:
+      feature_camouflage: 0.75
+      relation_camouflage: 0.85
+      features: {amount: 0.80, timing: 0.80, merchant: 0.80, device: 0.70, geography: 0.70, frequency: 0.80}
+      relations: {transferred_to: 0.85, transacted_with: 0.85, shares_device: 0.70, shares_ip: 0.70}

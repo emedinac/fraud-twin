@@ -1,5 +1,37 @@
 # Release notes
 
+## 0.16.0 — Methodology completion for Milestones 4, 5 and 8
+
+- Completed strict M4/M5 lifecycle gaps with explicit card initiation, PIX
+  timeout handling, direct settled-return transitions, contract version 5, and
+  legacy v1-v4 read/replay compatibility.
+- Expanded M8 with independently configurable deterministic fault types,
+  mutation audit records, diagnostics, raw encoding artifacts, partition-skew
+  assignments, and serialized schema evolution with compatibility metadata.
+
+## 0.15.0 — Milestone 14 Counterfactual Fraud Generation
+
+- Added strict opt-in counterfactual configuration with deterministic source
+  selection, weighted distance budgets, immutable source lineage, and explicit
+  infeasibility records.
+- Added M6 and M11 objective requests, isolated M14 streams, derived IDs, and
+  original/modified observable plus oracle sidecar artifacts.
+- Added integrated and standalone counterfactual CLI workflows, the M14
+  benchmark fixture, public resolver/generator APIs, and reproducibility
+  metadata without changing inactive M1–M13 identities.
+
+## 0.14.0 — Milestone 13 Camouflage Engine
+
+- Added strict opt-in feature and relation camouflage controls with global,
+  fraud-family, graph-family, and per-signal overrides.
+- Added deterministic legitimate cohort selection, isolated M13 seed streams,
+  measurable similarity summaries, feasibility caps, and observable/oracle
+  truth separation.
+- Added lineage-valid benign graph support events while preserving fraud
+  campaign induced topology, lifecycle, ledger, workflow, and oracle truth.
+- Added source, dataset, and graph camouflage provenance, the M13 fixture,
+  focused regression tests, and public resolver APIs.
+
 ## 0.13.0 — Milestone 12 Fraud Difficulty Engine
 
 - Added strict opt-in difficulty levels 1–10 with per-dimension override

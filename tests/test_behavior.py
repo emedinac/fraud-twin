@@ -48,8 +48,7 @@ def test_payments_have_stable_order_valid_relationships_and_profile_preferences(
     base_events = [
         event
         for event in dataset.payment_events
-        if event.event_type
-        in {"CARD_AUTHORIZATION_REQUESTED", "PIX_INITIATED", "TRANSFER_COMPLETED"}
+        if event.event_type in {"CARD_PAYMENT_INITIATED", "PIX_INITIATED", "TRANSFER_COMPLETED"}
     ]
     assert [event.event_id for event in base_events] == [
         f"EVT-{number:08d}" for number in range(1, 101)

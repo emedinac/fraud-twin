@@ -27,6 +27,7 @@ from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
 from fraudtwin.simulation.parquet import (
     write_behavior_parquet,
+    write_counterfactual_sidecar,
     write_entity_parquet,
     write_graph_truth,
 )
@@ -38,6 +39,8 @@ app.add_typer(config_app, name="config")
 app.add_typer(ml_app, name="ml")
 graph_app = typer.Typer(help="Build deterministic temporal graph views.")
 app.add_typer(graph_app, name="graph")
+counterfactual_app = typer.Typer(help="Generate deterministic M14 counterfactual sidecars.")
+app.add_typer(counterfactual_app, name="counterfactual")
 
 
 def _load_or_exit(path: Path) -> SimulationRunConfig:
@@ -155,6 +158,19 @@ def generate(
         hyperedges=behavior_dataset.graph_hyperedges,
         hyperedge_memberships=behavior_dataset.graph_hyperedge_memberships,
     )
+    counterfactual_metadata: dict[str, object] | None = None
+    if behavior_dataset.counterfactual is not None:
+        counterfactual_root, counterfactual_manifest_path = write_counterfactual_sidecar(
+            behavior_dataset.counterfactual, run_dir
+        )
+        counterfactual_metadata = {
+            **behavior_dataset.counterfactual.metadata,
+            "counterfactual_id": behavior_dataset.counterfactual.counterfactual_id,
+            "root": str(counterfactual_root),
+            "manifest": str(counterfactual_manifest_path),
+            "accepted": len(behavior_dataset.counterfactual.modified_payments),
+            "rejected": len(behavior_dataset.counterfactual.rejected),
+        }
     entity_counts = {**entity_dataset.counts, "behavior_profiles": len(behavior_dataset.profiles)}
     if entity_dataset.state_history:
         entity_counts["state_history"] = len(entity_dataset.state_history)
@@ -167,7 +183,7 @@ def generate(
             "schema_versions": {
                 **{entity_name: "1" for entity_name in entity_counts},
                 "payments": "2",
-                "payment_events": "4",
+                "payment_events": "5",
                 "ledger_entries": "1",
                 "fraud_records": "1",
                 "fraud_alerts": "1",
@@ -175,6 +191,11 @@ def generate(
                 "case_confirmations": "1",
                 "customer_disputes": "1",
                 "fraud_labels": "1",
+                **(
+                    {"counterfactual_change_sets": "1"}
+                    if counterfactual_metadata is not None
+                    else {}
+                ),
             },
             "fraud_counts": behavior_dataset.fraud_counts,
             "fraud_rates": behavior_dataset.fraud_rates,
@@ -189,6 +210,8 @@ def generate(
                 base_manifest.run_id,
             )
             or None,
+            "camouflage": behavior_dataset.camouflage_metadata or None,
+            "counterfactual": counterfactual_metadata,
         }
     )
     dataset_path: Path | None = None
@@ -212,6 +235,55 @@ def generate(
     typer.echo("Generated payment counts:")
     for event_name, count in event_counts.items():
         typer.echo(f"  {event_name}: {count}")
+
+
+@counterfactual_app.command("generate")
+def generate_counterfactual_command(
+    config_path: Annotated[Path, typer.Option("--config", help="M14 configuration YAML file.")],
+    source_run_id: Annotated[str, typer.Option("--source-run-id", help="Baseline source run ID.")],
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory containing the source run.")
+    ] = Path("runs"),
+) -> None:
+    """Append M14 counterfactuals to a legitimate-only generated run."""
+
+    config = _load_or_exit(config_path)
+    source_dir = output_dir / source_run_id
+    try:
+        entities, behavior, source_manifest = load_generated_run(source_dir)
+        source_config = SimulationRunConfig.model_validate(source_manifest.resolved_configuration)
+        if source_config.fraud.enabled or source_config.graph.enabled:
+            raise ValueError("standalone M14 requires a source run with M6 and M11 disabled")
+        if not config.counterfactual.active:
+            raise ValueError("standalone M14 requires counterfactual.enabled=true")
+        source_values = source_config.model_dump(mode="json")
+        requested_values = config.model_dump(mode="json")
+        for section in (
+            "simulation",
+            "population",
+            "payments",
+            "behavior",
+            "card_lifecycle",
+            "pix_lifecycle",
+        ):
+            if source_values.get(section) != requested_values.get(section):
+                raise ValueError(f"standalone M14 base configuration mismatch in {section}")
+        from fraudtwin.counterfactual import generate_counterfactuals as generate_cf
+        from fraudtwin.simulation.payments import PaymentDataset
+
+        dataset = generate_cf(
+            config,
+            entities,
+            PaymentDataset(behavior.payments, behavior.payment_events, behavior.ledger_entries),
+            run_id=source_manifest.run_id,
+        )
+        root, manifest_path = write_counterfactual_sidecar(dataset, source_dir)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Counterfactual generation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Counterfactual generated: {dataset.counterfactual_id}")
+    typer.echo(f"Output: {root}")
+    typer.echo(f"Manifest: {manifest_path}")
 
 
 @app.command("validate-ledger")

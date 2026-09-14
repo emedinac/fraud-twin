@@ -84,6 +84,15 @@ def test_clean_quality_is_a_m1_to_m7_regression_baseline() -> None:
         "duplicate_events": 0,
         "missing_optional_fields": 0,
         "invalid_values": 0,
+        "invalid_enums": 0,
+        "invalid_references": 0,
+        "negative_amounts": 0,
+        "corrupted_timestamps": 0,
+        "timezone_errors": 0,
+        "schema_mismatches": 0,
+        "extreme_values": 0,
+        "encoding_errors": 0,
+        "partition_skews": 0,
         "late_events": 0,
         "out_of_order_events": 0,
         "source_delay_events": 0,
@@ -120,6 +129,38 @@ def test_outages_schema_changes_and_oracle_are_recorded(tmp_path: Path) -> None:
     assert (tmp_path / "run" / "oracle" / "payments" / "payment_events.parquet").is_file()
 
 
+def test_schema_changes_mutate_rows_at_boundary_and_encoding_has_raw_artifact(
+    tmp_path: Path,
+) -> None:
+    base = load_config(CONFIG_PATH)
+    boundary = datetime(2026, 1, 1, tzinfo=UTC)
+    quality = base.quality.model_copy(
+        update={
+            "encoding_error_probability": 1.0,
+            "schema_changes": (
+                SchemaChangeConfig(
+                    at=boundary,
+                    event="payment_events",
+                    version="6",
+                    change={"rename": {"amount": "gross_amount"}},
+                ),
+            ),
+        }
+    )
+    config = base.model_copy(update={"quality": quality})
+    entities = EntityGenerator(config).generate()
+    dataset = BehaviorGenerator(config, entities).generate()
+    assert dataset.schema_evolution_rows["payment_events:6"]
+    assert all(
+        "gross_amount" in row and "amount" not in row
+        for row in dataset.schema_evolution_rows["payment_events:6"]
+    )
+    assert dataset.quality_raw_faults
+    write_behavior_parquet(dataset, tmp_path / "run")
+    assert (tmp_path / "run" / "quality" / "raw_faults.jsonl").is_file()
+    assert (tmp_path / "run" / "quality" / "fault_audit.json").is_file()
+
+
 @pytest.mark.parametrize(
     ("field", "count_key"),
     [
@@ -127,6 +168,15 @@ def test_outages_schema_changes_and_oracle_are_recorded(tmp_path: Path) -> None:
         ("duplicate_event_probability", "duplicate_events"),
         ("missing_optional_probability", "missing_optional_fields"),
         ("invalid_value_probability", "invalid_values"),
+        ("invalid_enum_probability", "invalid_enums"),
+        ("invalid_reference_probability", "invalid_references"),
+        ("negative_amount_probability", "negative_amounts"),
+        ("corrupted_timestamp_probability", "corrupted_timestamps"),
+        ("timezone_error_probability", "timezone_errors"),
+        ("schema_mismatch_probability", "schema_mismatches"),
+        ("extreme_value_probability", "extreme_values"),
+        ("encoding_error_probability", "encoding_errors"),
+        ("partition_skew_probability", "partition_skews"),
         ("late_event_probability", "late_events"),
         ("out_of_order_probability", "out_of_order_events"),
     ],

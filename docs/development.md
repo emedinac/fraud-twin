@@ -1,0 +1,71 @@
+# Development guide
+
+FraudTwin is a small Python package with a deliberately deterministic core. Keep domain rules in `src/fraudtwin/domain`, use cases and orchestration in the simulation/application modules, and integrations at the edges. Changes should make generated data easier to explain, not merely more complex.
+
+## Set up the repository
+
+Requirements are Python 3.12 and Poetry 2.x:
+
+```bash
+poetry install
+poetry run fraudtwin config validate configs/minimal.yaml
+```
+
+Generated runs belong in a temporary directory or an ignored output path. Do not commit generated data, credentials, or local environment files.
+
+## Quality gate
+
+Run the same checks used by CI before opening a pull request:
+
+```bash
+poetry check --strict
+poetry run ruff check .
+poetry run ruff format --check .
+poetry run mypy src
+poetry run pytest
+poetry build
+git diff --check
+```
+
+The repository’s workflow runs on pull requests targeting `main`. Keep the working tree focused and include documentation when behavior or commands change.
+
+## Focused tests
+
+Use the narrowest test while iterating, then run the full suite:
+
+| Area | Test command |
+| --- | --- |
+| Entities and behavior | `poetry run pytest tests/test_entities.py tests/test_behavior.py` |
+| Card lifecycle | `poetry run pytest tests/test_card_lifecycle.py` |
+| Pix lifecycle and ledger | `poetry run pytest tests/test_pix_lifecycle.py` |
+| Fraud scenarios | `poetry run pytest tests/test_fraud.py` |
+| Workflow cases and labels | `poetry run pytest tests/test_cases.py` |
+| Data quality | `poetry run pytest tests/test_quality.py` |
+| Point-in-time datasets | `poetry run pytest tests/test_dataset.py` |
+| Replay and backtesting | `poetry run pytest tests/test_m10.py` |
+| Graph exports | `poetry run pytest tests/test_graph.py` |
+| Difficulty | `poetry run pytest tests/test_m12.py` |
+| Camouflage | `poetry run pytest tests/test_m13.py` |
+
+For a generated-run smoke test:
+
+```bash
+poetry run fraudtwin config validate configs/minimal.yaml
+poetry run fraudtwin generate configs/minimal.yaml \
+  --output-dir /tmp/fraudtwin-dev
+poetry run fraudtwin validate-ledger \
+  --run-id <run-id> \
+  --output-dir /tmp/fraudtwin-dev
+```
+
+## Working on a feature
+
+1. Read the relevant module and its nearest tests before editing implementation code.
+2. Preserve deterministic seeds, stable schemas, and causal timestamps.
+3. Add or update focused tests for invariants, not only happy-path output.
+4. Update the relevant page under `docs/`, the root README when the user path changes, and [`CHANGELOG.md`](../CHANGELOG.md) for release-facing behavior.
+5. Run the quality gate and inspect `git diff --check` before handing off.
+
+## Documentation conventions
+
+Write for a reader who has not seen the repository before. Lead with what a command enables, show the smallest working example, and explain any important constraint immediately after it. Keep milestone history in `CHANGELOG.md`; the README and `docs/` should teach people how to use the current system.

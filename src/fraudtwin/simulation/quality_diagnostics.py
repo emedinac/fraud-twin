@@ -16,7 +16,11 @@ import pandera.polars as pa
 import polars as pl
 from pandera.errors import SchemaError, SchemaErrors
 
-from fraudtwin.domain import PaymentEvent
+from fraudtwin.domain import (
+    CARD_LIFECYCLE_EVENT_TYPES,
+    PIX_LIFECYCLE_EVENT_TYPES,
+    PaymentEvent,
+)
 from fraudtwin.simulation.parquet import PAYMENT_EVENT_SCHEMA, PAYMENT_SCHEMA
 
 if TYPE_CHECKING:
@@ -63,6 +67,7 @@ def _event_validation_schema() -> pa.DataFrameSchema:
         "scenario_trigger",
         "scenario_reason",
         "fraud_record_id",
+        "transport_partition",
     }
     timestamp_columns = {
         "event_time",
@@ -72,6 +77,16 @@ def _event_validation_schema() -> pa.DataFrameSchema:
         "processed_at",
     }
     columns = {}
+    allowed_event_types = (
+        set(CARD_LIFECYCLE_EVENT_TYPES)
+        | set(PIX_LIFECYCLE_EVENT_TYPES)
+        | {
+            "TRANSFER_COMPLETED",
+            "FRAUD_AUTHENTICATION_SUSPICIOUS",
+            "FRAUD_PROFILE_CHANGED",
+            "FRAUD_BENEFICIARY_ADDED",
+        }
+    )
     for name in PAYMENT_EVENT_SCHEMA:
         dtype: Any = (
             bool
@@ -79,16 +94,21 @@ def _event_validation_schema() -> pa.DataFrameSchema:
             else float
             if name == "amount"
             else int
-            if name == "event_version"
+            if name in {"event_version", "transport_partition"}
             else pl.Datetime(time_zone="UTC")
             if name in timestamp_columns
             else pl.List(pl.Utf8)
             if name == "affected_entity_ids"
             else str
         )
+        checks: Any = None
+        if name == "amount":
+            checks = [pa.Check.gt(0), pa.Check.lt(1.0e12)]
+        elif name == "event_type":
+            checks = pa.Check.isin(allowed_event_types)
         columns[name] = pa.Column(
             dtype,
-            checks=pa.Check.gt(0) if name == "amount" else None,
+            checks=checks,
             nullable=name in optional,
             unique=name == "event_id",
         )
@@ -96,7 +116,9 @@ def _event_validation_schema() -> pa.DataFrameSchema:
 
 
 def _frame(records: Iterable[Any], schema: dict[str, Any]) -> pl.DataFrame:
-    rows = [record.model_dump(mode="python") for record in records]
+    # Access the validated field mapping directly so deliberately malformed
+    # Literal values can be inspected without Pydantic re-serializing them.
+    rows = [dict(record.__dict__) for record in records]
     return pl.DataFrame(rows, schema=schema, orient="row")
 
 
@@ -165,14 +187,19 @@ def _relationship_summary(values: Iterable[str | None], targets: set[str]) -> di
 
 def _envelope_summary(events: Iterable[PaymentEvent]) -> dict[str, Any]:
     materialized = tuple(events)
-    valid_count = sum(
-        event.event_time
-        <= event.source_created_at
-        <= event.source_available_at
-        <= event.ingested_at
-        <= event.processed_at
-        for event in materialized
-    )
+    valid_count = 0
+    for event in materialized:
+        try:
+            valid_count += (
+                event.event_time
+                <= event.source_created_at
+                <= event.source_available_at
+                <= event.ingested_at
+                <= event.processed_at
+            )
+        except TypeError:
+            # A timezone fault is data to diagnose, not an injector crash.
+            continue
     return {
         "valid": valid_count,
         "checked": len(materialized),
@@ -189,11 +216,47 @@ def _out_of_order_summary(events: Iterable[PaymentEvent]) -> dict[str, Any]:
     for payment_events in by_payment.values():
         for previous, current in zip(payment_events, payment_events[1:], strict=False):
             comparisons += 1
-            inversions += current.event_time <= previous.event_time
+            try:
+                inversions += current.event_time <= previous.event_time
+            except TypeError:
+                # Mixed aware/naive timestamps are themselves an ordering fault.
+                inversions += 1
     return {
         "comparisons": comparisons,
         "inversions": inversions,
         "rate": inversions / max(1, comparisons),
+    }
+
+
+def _partition_summary(events: Iterable[PaymentEvent]) -> dict[str, Any]:
+    partitions = [event.transport_partition for event in events]
+    assigned = [partition for partition in partitions if partition is not None]
+    counts = {str(partition): assigned.count(partition) for partition in sorted(set(assigned))}
+    largest = max(counts.values(), default=0)
+    return {
+        "assigned": len(assigned),
+        "distinct_partitions": len(counts),
+        "counts": counts,
+        "largest_partition_rate": largest / max(1, len(assigned)),
+    }
+
+
+def _schema_summary(events: Iterable[PaymentEvent]) -> dict[str, Any]:
+    versions = [event.schema_version for event in events]
+    return {
+        "versions": {version: versions.count(version) for version in sorted(set(versions))},
+        "distinct_versions": len(set(versions)),
+        "unregistered_versions": sum(version.startswith("unregistered-") for version in versions),
+    }
+
+
+def _extreme_value_summary(events: Iterable[PaymentEvent]) -> dict[str, Any]:
+    amounts = [event.amount for event in events]
+    extreme = sum(amount >= 1.0e12 for amount in amounts)
+    return {
+        "checked": len(amounts),
+        "extreme_values": extreme,
+        "rate": extreme / max(1, len(amounts)),
     }
 
 
@@ -257,4 +320,8 @@ def build_quality_diagnostics(clean: BehaviorDataset, output: BehaviorDataset) -
         },
         "event_envelope": _envelope_summary(output.payment_events),
         "delivery_order": _out_of_order_summary(output.payment_events),
+        "transport_partitions": _partition_summary(output.payment_events),
+        "schema_versions": _schema_summary(output.payment_events),
+        "extreme_values": _extreme_value_summary(output.payment_events),
+        "fault_counts": dict(output.quality_fault_counts),
     }

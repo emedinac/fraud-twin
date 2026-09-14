@@ -225,6 +225,7 @@ class CardLifecycleConfig(_StrictModel):
         return sum(
             (
                 self.authorization_delay_seconds,
+                self.authorization_delay_seconds,
                 self.capture_delay_seconds,
                 self.clearing_delay_seconds,
                 self.settlement_delay_seconds,
@@ -242,10 +243,12 @@ class PixLifecycleConfig(_StrictModel):
 
     authorization_approval_probability: float = Field(default=0.98, ge=0, le=1)
     rejection_probability: float = Field(default=0.02, ge=0, le=1)
+    timeout_probability: float = Field(default=0.0, ge=0, le=1)
     return_probability: float = Field(default=0.05, ge=0, le=1)
     validation_delay_seconds: Annotated[int, Field(ge=0)] = 1
     authorization_delay_seconds: Annotated[int, Field(ge=0)] = 1
     submission_delay_seconds: Annotated[int, Field(ge=0)] = 1
+    timeout_delay_seconds: Annotated[int, Field(ge=0)] = 1
     settlement_delay_seconds: Annotated[int, Field(ge=0)] = 1
     receipt_delay_seconds: Annotated[int, Field(ge=0)] = 1
     return_request_delay_seconds: Annotated[int, Field(ge=0)] = 60
@@ -260,7 +263,7 @@ class PixLifecycleConfig(_StrictModel):
                 self.validation_delay_seconds,
                 self.authorization_delay_seconds,
                 self.submission_delay_seconds,
-                self.settlement_delay_seconds,
+                max(self.timeout_delay_seconds, self.settlement_delay_seconds),
                 self.receipt_delay_seconds,
                 self.return_request_delay_seconds,
                 self.return_delay_seconds,
@@ -369,16 +372,43 @@ class OutageConfig(_StrictModel):
 
 
 class SchemaChangeConfig(_StrictModel):
-    """A scheduled, additive event-schema version change."""
+    """A scheduled event-schema change with optional compatibility metadata."""
 
     at: datetime
     event: str = Field(min_length=1)
     version: str = Field(min_length=1)
+    change: dict[str, object] = Field(default_factory=dict)
+    compatibility: (
+        Literal[
+            "BACKWARD_COMPATIBLE",
+            "FORWARD_COMPATIBLE",
+            "FULLY_COMPATIBLE",
+            "BREAKING",
+        ]
+        | None
+    ) = None
 
     @field_validator("at")
     @classmethod
     def schema_change_timestamp_must_include_timezone(cls, value: datetime) -> datetime:
         return _require_timezone(value, "schema change timestamp must include a timezone")
+
+    @model_validator(mode="after")
+    def schema_change_definition_must_be_supported(self) -> "SchemaChangeConfig":
+        supported = {
+            "add_optional_field",
+            "rename",
+            "remove_field",
+            "nullability",
+            "enum",
+            "type",
+        }
+        unknown = set(self.change) - supported
+        if unknown:
+            raise ValueError(f"unsupported schema change operation(s): {sorted(unknown)}")
+        if len(self.change) > 1:
+            raise ValueError("schema change must contain exactly one operation")
+        return self
 
 
 class QualityConfig(_StrictModel):
@@ -414,6 +444,15 @@ class QualityConfig(_StrictModel):
         le=1,
         validation_alias=AliasChoices("invalid_value_probability", "invalid_records"),
     )
+    invalid_enum_probability: float | None = Field(default=None, ge=0, le=1)
+    invalid_reference_probability: float | None = Field(default=None, ge=0, le=1)
+    negative_amount_probability: float | None = Field(default=None, ge=0, le=1)
+    corrupted_timestamp_probability: float | None = Field(default=None, ge=0, le=1)
+    timezone_error_probability: float | None = Field(default=None, ge=0, le=1)
+    schema_mismatch_probability: float | None = Field(default=None, ge=0, le=1)
+    extreme_value_probability: float | None = Field(default=None, ge=0, le=1)
+    encoding_error_probability: float | None = Field(default=None, ge=0, le=1)
+    partition_skew_probability: float | None = Field(default=None, ge=0, le=1)
     late_event_probability: float | None = Field(
         default=None,
         ge=0,
@@ -471,6 +510,10 @@ class QualityConfig(_StrictModel):
         explicit = getattr(self, f"{fault_name}_probability")
         if explicit is not None:
             return cast(float, explicit)
+        if fault_name == "negative_amount":
+            legacy = self.invalid_value_probability
+            if legacy is not None:
+                return legacy
         return _QUALITY_PROFILE_DEFAULTS[self.profile][fault_name]
 
 
@@ -480,6 +523,15 @@ _QUALITY_PROFILE_DEFAULTS: dict[QualityProfile, dict[str, float]] = {
         "duplicate_event": 0.0,
         "missing_optional": 0.0,
         "invalid_value": 0.0,
+        "invalid_enum": 0.0,
+        "invalid_reference": 0.0,
+        "negative_amount": 0.0,
+        "corrupted_timestamp": 0.0,
+        "timezone_error": 0.0,
+        "schema_mismatch": 0.0,
+        "extreme_value": 0.0,
+        "encoding_error": 0.0,
+        "partition_skew": 0.0,
         "late_event": 0.0,
         "out_of_order": 0.0,
         "fraud_spike": 0.0,
@@ -490,6 +542,15 @@ _QUALITY_PROFILE_DEFAULTS: dict[QualityProfile, dict[str, float]] = {
         "duplicate_event": 0.002,
         "missing_optional": 0.01,
         "invalid_value": 0.0005,
+        "invalid_enum": 0.0,
+        "invalid_reference": 0.0,
+        "negative_amount": 0.0005,
+        "corrupted_timestamp": 0.0,
+        "timezone_error": 0.0,
+        "schema_mismatch": 0.0,
+        "extreme_value": 0.0,
+        "encoding_error": 0.0,
+        "partition_skew": 0.0,
         "late_event": 0.03,
         "out_of_order": 0.02,
         "fraud_spike": 0.0,
@@ -500,6 +561,15 @@ _QUALITY_PROFILE_DEFAULTS: dict[QualityProfile, dict[str, float]] = {
         "duplicate_event": 0.03,
         "missing_optional": 0.08,
         "invalid_value": 0.02,
+        "invalid_enum": 0.0,
+        "invalid_reference": 0.0,
+        "negative_amount": 0.02,
+        "corrupted_timestamp": 0.0,
+        "timezone_error": 0.0,
+        "schema_mismatch": 0.0,
+        "extreme_value": 0.0,
+        "encoding_error": 0.0,
+        "partition_skew": 0.0,
         "late_event": 0.20,
         "out_of_order": 0.20,
         "fraud_spike": 0.10,
@@ -730,6 +800,197 @@ GraphModifierType = Literal[
     "SEMANTIC_HYPEREDGE",
 ]
 
+CounterfactualObjective = Literal[
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "MULE_NETWORK",
+    "CYCLIC_RING",
+    "BENEFICIARY_NETWORK",
+    "FAN_OUT",
+    "BIPARTITE_NETWORK",
+    "STACKED_NETWORK",
+    "SCATTER_GATHER",
+    "GATHER_SCATTER",
+    "SHARED_DEVICE_INFRASTRUCTURE",
+    "SHARED_IP_INFRASTRUCTURE",
+    "DENSE_CAMPAIGN",
+    "MERCHANT_CUSTOMER_COMMUNITY",
+    "RANDOM_ALERT_CONTROL",
+]
+CounterfactualDimension = Literal[
+    "beneficiary",
+    "device",
+    "timing",
+    "amount",
+    "merchant",
+    "geography",
+    "payment_rail",
+    "graph_relationships",
+]
+
+
+class CounterfactualDimensionConfig(_StrictModel):
+    """Cost and mutability controls for one counterfactual dimension."""
+
+    enabled: bool = True
+    cost: float = Field(default=1.0, gt=0)
+
+
+class CounterfactualScopeConfig(_StrictModel):
+    """Global, family, or objective-level M14 overrides."""
+
+    enabled: bool | None = None
+    budget: float | None = Field(default=None, ge=0)
+    dimensions: dict[CounterfactualDimension, CounterfactualDimensionConfig] = Field(
+        default_factory=dict
+    )
+
+
+class CounterfactualRequestConfig(_StrictModel):
+    """One deterministic counterfactual objective request."""
+
+    objective: CounterfactualObjective | None = None
+    scenario: CounterfactualObjective | None = Field(default=None, exclude=True)
+    count: int = Field(default=1, ge=1)
+    enabled: bool | None = None
+    budget: float | None = Field(default=None, ge=0)
+    max_distance: float | None = Field(default=None, exclude=True, ge=0)
+    dimensions: dict[CounterfactualDimension, CounterfactualDimensionConfig] = Field(
+        default_factory=dict
+    )
+    graph_template: GraphScenarioType | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def aliases_must_not_conflict(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        raw = dict(value)
+        if "objective" in raw and "scenario" in raw:
+            raise ValueError("counterfactual request objective and scenario aliases conflict")
+        if "budget" in raw and "max_distance" in raw:
+            raise ValueError("counterfactual request budget and max_distance aliases conflict")
+        if "objective" not in raw and "scenario" in raw:
+            raw["objective"] = raw.pop("scenario")
+        if "budget" not in raw and "max_distance" in raw:
+            raw["budget"] = raw.pop("max_distance")
+        return raw
+
+    @model_validator(mode="after")
+    def objective_must_be_present(self) -> "CounterfactualRequestConfig":
+        if self.objective is None:
+            raise ValueError("counterfactual request requires objective")
+        return self
+
+
+def _default_counterfactual_dimensions() -> (
+    dict[CounterfactualDimension, CounterfactualDimensionConfig]
+):
+    names: tuple[CounterfactualDimension, ...] = (
+        "beneficiary",
+        "device",
+        "timing",
+        "amount",
+        "merchant",
+        "geography",
+        "payment_rail",
+        "graph_relationships",
+    )
+    return {name: CounterfactualDimensionConfig() for name in names}
+
+
+class CounterfactualConfig(_StrictModel):
+    """Strict, opt-in Milestone 14 counterfactual controls."""
+
+    enabled: bool = False
+    budget: float = Field(default=4.0, ge=0)
+    distance_function: str = "weighted_changed_dimensions_v1"
+    source_strategy: Literal["chronological_first", "stable_hash"] = "chronological_first"
+    allow_source_reuse: bool = False
+    include_enabled_objectives: bool = False
+    dimensions: dict[CounterfactualDimension, CounterfactualDimensionConfig] = Field(
+        default_factory=_default_counterfactual_dimensions
+    )
+    families: dict[Literal["fraud", "graph"], CounterfactualScopeConfig] = Field(
+        default_factory=dict
+    )
+    scenarios: dict[CounterfactualObjective, CounterfactualScopeConfig] = Field(
+        default_factory=dict
+    )
+    requests: tuple[CounterfactualRequestConfig, ...] = ()
+
+    @model_validator(mode="after")
+    def requests_must_be_feasible_in_shape(self) -> "CounterfactualConfig":
+        if not self.enabled:
+            return self
+        if not self.requests and not self.include_enabled_objectives:
+            raise ValueError(
+                "enabled counterfactual generation requires requests or include_enabled_objectives"
+            )
+        if self.distance_function != "weighted_changed_dimensions_v1":
+            # Registered custom functions are resolved at runtime; names are
+            # intentionally accepted here for extension compatibility.
+            if not self.distance_function.strip():
+                raise ValueError("counterfactual distance_function must not be empty")
+        seen_objectives: set[str] = set()
+        required_dimensions: dict[str, set[CounterfactualDimension]] = {
+            "F03": {"device", "beneficiary"},
+            "F04": {"beneficiary"},
+        }
+        for request in self.requests:
+            assert request.objective is not None
+            if request.objective in seen_objectives:
+                raise ValueError(
+                    "counterfactual requests must use count for repeated objectives, "
+                    "not duplicate request entries"
+                )
+            seen_objectives.add(request.objective)
+            if request.objective in {"F01", "F02", "F03", "F04", "F05"}:
+                if request.graph_template is not None:
+                    raise ValueError("fraud counterfactual requests cannot use graph_template")
+            else:
+                if request.graph_template is None:
+                    raise ValueError("graph counterfactual requests require graph_template")
+                if request.graph_template != request.objective:
+                    raise ValueError("graph_template must match the graph counterfactual objective")
+            family_name = "fraud" if request.objective.startswith("F") else "graph"
+            family = self.families.get(cast(Literal["fraud", "graph"], family_name))
+            objective_scope = self.scenarios.get(request.objective)
+            disabled: set[CounterfactualDimension] = set()
+            for dimension in _default_counterfactual_dimensions():
+                setting = self.dimensions.get(dimension, CounterfactualDimensionConfig())
+                for override in (
+                    family.dimensions.get(dimension) if family else None,
+                    objective_scope.dimensions.get(dimension) if objective_scope else None,
+                    request.dimensions.get(dimension),
+                ):
+                    if override is not None:
+                        setting = override
+                if not setting.enabled:
+                    disabled.add(dimension)
+            required = required_dimensions.get(
+                request.objective,
+                {"graph_relationships"} if not request.objective.startswith("F") else set(),
+            )
+            missing = required & disabled
+            if missing:
+                names = ", ".join(sorted(missing))
+                raise ValueError(
+                    f"counterfactual objective {request.objective} requires disabled "
+                    f"dimensions: {names}"
+                )
+        return self
+
+    @property
+    def active(self) -> bool:
+        """Whether M14 changes generation or artifacts."""
+
+        return self.enabled
+
+
 DifficultyControlName = Literal[
     "fraud_legitimate_overlap",
     "behavioral_deviation",
@@ -739,6 +1000,22 @@ DifficultyControlName = Literal[
     "temporal_irregularity",
     "graph_structural_subtlety",
 ]
+
+CamouflageFeatureName = Literal[
+    "amount",
+    "timing",
+    "merchant",
+    "device",
+    "geography",
+    "frequency",
+]
+CamouflageRelationName = Literal[
+    "transferred_to",
+    "transacted_with",
+    "shares_device",
+    "shares_ip",
+]
+CamouflageFamilyName = Literal["fraud", "graph"]
 
 
 class DifficultyControls(_StrictModel):
@@ -774,6 +1051,16 @@ class BenchmarkConfig(_StrictModel):
 
     difficulty: Annotated[int, Field(ge=1, le=10)] | None = None
     controls: DifficultyControls = Field(default_factory=DifficultyControls)
+    # M13 compatibility alias.  The canonical surface is ``stress``.
+    camouflage: float | None = Field(default=None, ge=0, le=1)
+    feature_camouflage: float | None = Field(default=None, ge=0, le=1)
+    relation_camouflage: float | None = Field(default=None, ge=0, le=1)
+    camouflage_cohort: "CamouflageCohortConfig" = Field(
+        default_factory=lambda: CamouflageCohortConfig()
+    )
+    camouflage_families: dict[CamouflageFamilyName, "CamouflageFamilyConfig"] = Field(
+        default_factory=dict
+    )
 
     @model_validator(mode="after")
     def level_required_for_overrides(self) -> "BenchmarkConfig":
@@ -786,6 +1073,101 @@ class BenchmarkConfig(_StrictModel):
         """Whether M12 should alter generation or artifacts."""
 
         return self.difficulty is not None
+
+    @property
+    def camouflage_active(self) -> bool:
+        return (
+            any(
+                value is not None and value > 0
+                for value in (
+                    self.camouflage,
+                    self.feature_camouflage,
+                    self.relation_camouflage,
+                )
+            )
+            or any(family.active for family in self.camouflage_families.values())
+            or self.camouflage_cohort != CamouflageCohortConfig()
+        )
+
+
+class CamouflageCohortConfig(_StrictModel):
+    """Deterministic legitimate peer selection for M13."""
+
+    strategy: Literal["same_rail_and_profile", "same_rail", "global_legitimate"] = (
+        "same_rail_and_profile"
+    )
+    profile_dimensions: tuple[
+        Literal[
+            "spending_level",
+            "country",
+            "merchant_category",
+            "typical_payment_hour",
+            "trusted_device",
+        ],
+        ...,
+    ] = (
+        "spending_level",
+        "country",
+        "merchant_category",
+        "typical_payment_hour",
+        "trusted_device",
+    )
+    minimum_size: Annotated[int, Field(ge=1)] = 3
+    fallback: Literal["same_rail", "global_legitimate", "reject"] = "same_rail"
+
+
+class CamouflageFamilyConfig(_StrictModel):
+    """Optional M13 controls for the fraud or graph generator family."""
+
+    camouflage: float | None = Field(default=None, ge=0, le=1)
+    feature_camouflage: float | None = Field(default=None, ge=0, le=1)
+    relation_camouflage: float | None = Field(default=None, ge=0, le=1)
+    features: dict[CamouflageFeatureName, Annotated[float, Field(ge=0, le=1)]] = Field(
+        default_factory=dict
+    )
+    relations: dict[CamouflageRelationName, Annotated[float, Field(ge=0, le=1)]] = Field(
+        default_factory=dict
+    )
+
+    @property
+    def active(self) -> bool:
+        return (
+            any(
+                value is not None and value > 0
+                for value in (
+                    self.camouflage,
+                    self.feature_camouflage,
+                    self.relation_camouflage,
+                )
+            )
+            or any(value > 0 for value in self.features.values())
+            or any(value > 0 for value in self.relations.values())
+        )
+
+
+class StressConfig(_StrictModel):
+    """Opt-in M13 camouflage controls."""
+
+    camouflage: float | None = Field(default=None, ge=0, le=1)
+    feature_camouflage: float | None = Field(default=None, ge=0, le=1)
+    relation_camouflage: float | None = Field(default=None, ge=0, le=1)
+    cohort: CamouflageCohortConfig = Field(default_factory=CamouflageCohortConfig)
+    families: dict[CamouflageFamilyName, CamouflageFamilyConfig] = Field(default_factory=dict)
+
+    @property
+    def active(self) -> bool:
+        return (
+            any(
+                value is not None and value > 0
+                for value in (
+                    self.camouflage,
+                    self.feature_camouflage,
+                    self.relation_camouflage,
+                )
+            )
+            or any(family.active for family in self.families.values())
+            or self.cohort != CamouflageCohortConfig()
+        )
 
 
 class GraphScenarioConfig(_StrictModel):
@@ -1047,6 +1429,8 @@ class SimulationRunConfig(_StrictModel):
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
     graph: GraphConfig = Field(default_factory=GraphConfig)
     benchmark: BenchmarkConfig = Field(default_factory=BenchmarkConfig)
+    stress: StressConfig = Field(default_factory=StressConfig)
+    counterfactual: CounterfactualConfig = Field(default_factory=CounterfactualConfig)
 
     def effective_label_delay_seconds(self) -> int:
         """Return the dataset label delay, falling back to workflow settings."""
@@ -1139,7 +1523,54 @@ class SimulationRunConfig(_StrictModel):
                 if scenario.type == "BENEFICIARY_NETWORK"
             ):
                 raise ValueError("beneficiary graph scenarios require at least one PIX key")
-        if self.benchmark.enabled and not (self.fraud.enabled or self.graph.enabled):
+        stress_active = self.stress.active
+        benchmark_camouflage_active = self.benchmark.camouflage_active
+        if stress_active and benchmark_camouflage_active:
+            raise ValueError(
+                "M13 camouflage must be configured under stress or benchmark, not both"
+            )
+        if stress_active or benchmark_camouflage_active:
+            if not (self.fraud.enabled or self.graph.enabled or self.counterfactual.active):
+                raise ValueError("camouflage requires fraud or graph generation to be enabled")
+            camouflage_settings = self.stress if stress_active else self.benchmark
+            relation_strength = (
+                camouflage_settings.relation_camouflage
+                if camouflage_settings.relation_camouflage is not None
+                else camouflage_settings.camouflage
+            )
+            feature_strength = (
+                camouflage_settings.feature_camouflage
+                if camouflage_settings.feature_camouflage is not None
+                else camouflage_settings.camouflage
+            )
+            family_items = (
+                camouflage_settings.families.items()
+                if isinstance(camouflage_settings, StressConfig)
+                else camouflage_settings.camouflage_families.items()
+            )
+            family_active = any(family.active for _, family in family_items)
+            if (relation_strength or feature_strength or family_active) and (
+                self.payments.daily_target == 0 or self.population.customers < 2
+            ):
+                raise ValueError("camouflage requires legitimate payment and customer capacity")
+            if (relation_strength or family_active) and self.population.accounts < 2:
+                raise ValueError("relation camouflage requires at least two accounts")
+            for family_name, family in family_items:
+                if (
+                    family_name == "fraud"
+                    and not (self.fraud.enabled or self.counterfactual.active)
+                    and family.active
+                ):
+                    raise ValueError("fraud camouflage controls require fraud generation")
+                if (
+                    family_name == "graph"
+                    and not (self.graph.enabled or self.counterfactual.active)
+                    and family.active
+                ):
+                    raise ValueError("graph camouflage controls require graph generation")
+        if self.benchmark.enabled and not (
+            self.fraud.enabled or self.graph.enabled or self.counterfactual.active
+        ):
             raise ValueError(
                 "benchmark difficulty requires fraud or graph generation to be enabled"
             )
@@ -1160,6 +1591,50 @@ class SimulationRunConfig(_StrictModel):
                 ):
                     raise ValueError(
                         "difficulty-enabled fraud scenario count exceeds entity capacity"
+                    )
+        if self.counterfactual.active:
+            if self.payments.daily_target == 0:
+                raise ValueError("counterfactual generation requires legitimate payment capacity")
+            if not self.counterfactual.allow_source_reuse:
+                requested = sum(item.count for item in self.counterfactual.requests)
+                if requested > self.payments.daily_target * self.simulation.duration_days:
+                    raise ValueError("counterfactual request count exceeds trajectory capacity")
+            for request in self.counterfactual.requests:
+                if request.objective in {"F01", "F02", "F05"} and self.population.cards == 0:
+                    raise ValueError(
+                        f"counterfactual {request.objective} requires at least one card"
+                    )
+                if request.objective == "F04" and self.population.accounts < 2:
+                    raise ValueError("counterfactual F04 requires at least two accounts")
+                if (
+                    request.objective
+                    in {
+                        "MULE_NETWORK",
+                        "CYCLIC_RING",
+                        "BENEFICIARY_NETWORK",
+                        "FAN_OUT",
+                        "BIPARTITE_NETWORK",
+                        "STACKED_NETWORK",
+                        "SCATTER_GATHER",
+                        "GATHER_SCATTER",
+                        "DENSE_CAMPAIGN",
+                        "RANDOM_ALERT_CONTROL",
+                    }
+                    and self.population.accounts < 2
+                ):
+                    raise ValueError(
+                        f"counterfactual {request.objective} requires at least two accounts"
+                    )
+            if self.counterfactual.include_enabled_objectives and not self.counterfactual.requests:
+                has_fraud_objective = self.fraud.enabled and any(
+                    item.enabled and item.count > 0 for item in self.fraud.scenarios.values()
+                )
+                has_graph_objective = self.graph.enabled and any(
+                    item.count > 0 for item in self.graph.scenarios
+                )
+                if not has_fraud_objective and not has_graph_objective:
+                    raise ValueError(
+                        "counterfactual include_enabled_objectives expands to no objectives"
                     )
         return self
 
@@ -1222,8 +1697,14 @@ def _canonical_config(
         payload.pop("graph", None)
     # M12 is opt-in; a benchmark section with no level must not change legacy
     # run IDs, manifests, or fingerprints.
-    if not config.benchmark.enabled:
+    if not config.benchmark.enabled and not config.benchmark.camouflage_active:
         payload.pop("benchmark", None)
+    # M13 is opt-in; a disabled stress section must not alter legacy identities.
+    if not config.stress.active:
+        payload.pop("stress", None)
+    # M14 is opt-in; its neutral section must not alter legacy identities.
+    if not config.counterfactual.active:
+        payload.pop("counterfactual", None)
     # Keep run identities backward-compatible when newly optional methodology
     # controls remain at their neutral defaults.
     neutral_defaults: dict[str, dict[str, object]] = {

@@ -6,7 +6,12 @@ import pytest
 from pydantic import ValidationError
 
 from fraudtwin.config import SimulationRunConfig, load_config
-from fraudtwin.domain import validate_card_lifecycle, validate_ledger
+from fraudtwin.domain import (
+    PAYMENT_EVENT_CONTRACT_VERSION,
+    PaymentEvent,
+    validate_card_lifecycle,
+    validate_ledger,
+)
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.parquet import (
     PAYMENT_EVENT_SCHEMA,
@@ -49,6 +54,25 @@ def test_card_lifecycle_is_deterministic_and_ids_are_stable() -> None:
     assert len({payment.payment_id for payment in first.payments}) == 120
 
 
+def test_new_card_contract_starts_with_initiation_and_legacy_runs_remain_readable() -> None:
+    _, _, dataset = _dataset(authorization_approval_probability=1.0, reversal_probability=0.0)
+    payment = next(payment for payment in dataset.payments if payment.payment_rail == "CARD")
+    events = _events_by_payment(dataset)[payment.payment_id]
+    assert events[0].event_type == "CARD_PAYMENT_INITIATED"
+    assert all(event.schema_version == PAYMENT_EVENT_CONTRACT_VERSION for event in events)
+    legacy = tuple(
+        PaymentEvent.model_validate(
+            event.model_dump(mode="python")
+            | {
+                "schema_version": "4",
+                "causation_id": None if index == 0 else event.causation_id,
+            }
+        )
+        for index, event in enumerate(events[1:])
+    )
+    validate_card_lifecycle(payment, legacy)
+
+
 def test_declined_authorizations_have_no_downstream_events() -> None:
     _, _, dataset = _dataset(authorization_approval_probability=0.0)
     payments = {payment.payment_id: payment for payment in dataset.payments}
@@ -56,6 +80,7 @@ def test_declined_authorizations_have_no_downstream_events() -> None:
     for payment_id, events in _events_by_payment(dataset).items():
         if payments[payment_id].payment_rail == "CARD":
             assert [event.event_type for event in events] == [
+                "CARD_PAYMENT_INITIATED",
                 "CARD_AUTHORIZATION_REQUESTED",
                 "CARD_DECLINED",
             ]
@@ -78,6 +103,7 @@ def test_approved_authorizations_follow_valid_order_and_can_refund() -> None:
         if payments[payment_id].payment_rail != "CARD":
             continue
         assert [event.event_type for event in events] == [
+            "CARD_PAYMENT_INITIATED",
             "CARD_AUTHORIZATION_REQUESTED",
             "CARD_AUTHORIZED",
             "CARD_CAPTURED",
@@ -110,8 +136,14 @@ def test_reversals_only_follow_authorized_or_captured_states() -> None:
         event_types = [event.event_type for event in events]
         assert event_types[-1] == "CARD_REVERSED"
         assert event_types in (
-            ["CARD_AUTHORIZATION_REQUESTED", "CARD_AUTHORIZED", "CARD_REVERSED"],
             [
+                "CARD_PAYMENT_INITIATED",
+                "CARD_AUTHORIZATION_REQUESTED",
+                "CARD_AUTHORIZED",
+                "CARD_REVERSED",
+            ],
+            [
+                "CARD_PAYMENT_INITIATED",
                 "CARD_AUTHORIZATION_REQUESTED",
                 "CARD_AUTHORIZED",
                 "CARD_CAPTURED",
@@ -135,6 +167,7 @@ def test_chargebacks_follow_settlement_and_resolve() -> None:
         if payments[payment_id].payment_rail != "CARD":
             continue
         assert [event.event_type for event in events] == [
+            "CARD_PAYMENT_INITIATED",
             "CARD_AUTHORIZATION_REQUESTED",
             "CARD_AUTHORIZED",
             "CARD_CAPTURED",

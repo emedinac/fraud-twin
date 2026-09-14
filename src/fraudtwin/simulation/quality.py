@@ -8,6 +8,8 @@ the earlier milestones.
 
 from __future__ import annotations
 
+import base64
+import json
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import timedelta
@@ -29,6 +31,7 @@ from fraudtwin.domain import (
     PaymentEvent,
 )
 from fraudtwin.reproducibility import sha256_json
+from fraudtwin.schema import apply_schema_change, schema_change_metadata
 from fraudtwin.seed import create_stream_rng
 from fraudtwin.simulation.quality_diagnostics import build_quality_diagnostics
 
@@ -42,6 +45,15 @@ _FAULT_NAMES = (
     "duplicate_events",
     "missing_optional_fields",
     "invalid_values",
+    "invalid_enums",
+    "invalid_references",
+    "negative_amounts",
+    "corrupted_timestamps",
+    "timezone_errors",
+    "schema_mismatches",
+    "extreme_values",
+    "encoding_errors",
+    "partition_skews",
     "late_events",
     "out_of_order_events",
     "source_delay_events",
@@ -60,6 +72,8 @@ def _clear_optional_fields(
     fields: tuple[str, ...],
     rng: Random,
     probability: float,
+    fault: str,
+    audit: list[dict[str, object]],
 ) -> tuple[tuple[RecordModel, ...], int]:
     """Clear one populated optional field on selected records."""
 
@@ -75,12 +89,28 @@ def _clear_optional_fields(
             continue
         field = rng.choice(available)
         result.append(record.model_copy(update={field: None}))
+        audit.append(
+            {
+                "fault": fault,
+                "target": getattr(record, "event_id", getattr(record, "payment_id", "unknown")),
+                "field": field,
+                "requested_probability": probability,
+                "mutation": "set_null",
+                "logical_identity_preserved": True,
+                "affected_boundary": "source",
+                "expected_validation_rule": "optional field may be null",
+            }
+        )
         count += 1
     return tuple(result), count
 
 
 def _negative_amounts(
-    records: tuple[RecordModel, ...], *, rng: Random, probability: float
+    records: tuple[RecordModel, ...],
+    *,
+    rng: Random,
+    probability: float,
+    audit: list[dict[str, object]],
 ) -> tuple[tuple[RecordModel, ...], int]:
     """Inject negative amounts without re-validating the chaos record."""
 
@@ -92,6 +122,17 @@ def _negative_amounts(
             # a chaos dataset, while the clean domain remains strict.
             amount = record.model_dump(mode="python")["amount"]
             result.append(record.model_copy(update={"amount": -abs(amount)}))
+            audit.append(
+                {
+                    "fault": "negative_amount",
+                    "target": getattr(record, "event_id", getattr(record, "payment_id", "unknown")),
+                    "requested_probability": probability,
+                    "mutation": {"amount": -abs(amount)},
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "source",
+                    "expected_validation_rule": "amount > 0",
+                }
+            )
             count += 1
         else:
             result.append(record)
@@ -123,12 +164,18 @@ class QualityFaultInjector:
     def apply(self, dataset: BehaviorDataset) -> BehaviorDataset:
         """Return a quality-mutated dataset and measured fault metadata."""
 
+        # This order is part of the reproducibility contract: field faults,
+        # source/contract faults, delivery faults, duplication, and finally
+        # group/order stress are applied in stable phases.
+
         counts = _zero_counts()
         if self.quality.outages:
             counts["outage_events"] = 0
         if self.quality.schema_changes:
             counts["schema_changes"] = 0
         audit: list[dict[str, object]] = []
+        raw_faults: list[dict[str, object]] = []
+        schema_evolution_rows: dict[str, list[dict[str, object]]] = {}
         oracle_tables = dataset.oracle_tables or dataset.tables()
         payments = dataset.payments
         events = dataset.payment_events
@@ -143,20 +190,46 @@ class QualityFaultInjector:
         original_event_count = len(events)
         original_fraud_record_count = len(fraud_records)
 
-        payments, payment_missing = self._missing_payment_fields(payments)
-        events, event_missing = self._missing_event_fields(events)
+        payments, payment_missing = self._missing_payment_fields(payments, audit)
+        events, event_missing = self._missing_event_fields(events, audit)
         counts["missing_optional_fields"] = payment_missing + event_missing
 
-        payments, payment_invalid = self._invalid_payment_values(payments)
-        events, event_invalid = self._invalid_event_values(events)
-        counts["invalid_values"] = payment_invalid + event_invalid
+        payments, payment_invalid = self._invalid_payment_values(payments, audit)
+        events, event_invalid = self._invalid_event_values(events, audit)
+        legacy_invalid_values = (
+            self.quality.invalid_value_probability is not None
+            and self.quality.negative_amount_probability is None
+        )
+        counts["negative_amounts"] = 0 if legacy_invalid_values else payment_invalid + event_invalid
+        counts["invalid_values"] = (
+            payment_invalid + event_invalid
+            if self.quality.invalid_value_probability is not None
+            else 0
+        )
+
+        events, count = self._invalid_enums(events, audit)
+        counts["invalid_enums"] = count
+        events, count = self._invalid_references(events, audit)
+        counts["invalid_references"] = count
+        events, count = self._corrupt_timestamps(events, audit)
+        counts["corrupted_timestamps"] = count
+        events, count = self._timezone_errors(events, audit)
+        counts["timezone_errors"] = count
+        events, count = self._schema_mismatches(events, audit)
+        counts["schema_mismatches"] = count
+        events, count = self._extreme_values(events, audit)
+        counts["extreme_values"] = count
+        events, count = self._encoding_errors(events, audit, raw_faults)
+        counts["encoding_errors"] = count
+        events, count = self._partition_skew(events, audit)
+        counts["partition_skews"] = count
 
         events, source_delay_count = self._apply_source_delay(events)
         counts["source_delay_events"] = source_delay_count
         events, outage_count = self._apply_outages(events, audit)
         if self.quality.outages:
             counts["outage_events"] = outage_count
-        events, schema_count = self._apply_schema_changes(events, audit)
+        events, schema_count, schema_evolution_rows = self._apply_schema_changes(events, audit)
         if self.quality.schema_changes:
             counts["schema_changes"] = schema_count
         events, late_count = self._apply_late_events(events)
@@ -179,6 +252,15 @@ class QualityFaultInjector:
         counts["fraud_spikes"] = fraud_spike_count
         events, out_of_order_count = self._apply_out_of_order(events)
         counts["out_of_order_events"] = out_of_order_count
+
+        for entry in audit:
+            entry.setdefault("actual_mutation", entry.get("mutation"))
+            entry.setdefault(
+                "identity_effect",
+                "preserved" if entry.get("logical_identity_preserved") else "changed",
+            )
+            entry.setdefault("expected_validation_failure", entry.get("expected_validation_rule"))
+            entry.setdefault("requested_count", None)
 
         ledger_entries = self._align_ledger_timestamps(dataset.ledger_entries, events)
         alerts, cases, confirmations, disputes, labels = self._align_workflow_timestamps(
@@ -213,6 +295,8 @@ class QualityFaultInjector:
             quality_fault_counts=counts,
             quality_fault_rates=rates,
             oracle_tables=oracle_tables,
+            quality_raw_faults=tuple(raw_faults),
+            schema_evolution_rows={key: tuple(rows) for key, rows in schema_evolution_rows.items()},
         )
         diagnostics = build_quality_diagnostics(dataset, result)
         diagnostics["oracle_fingerprint"] = sha256_json(
@@ -222,6 +306,10 @@ class QualityFaultInjector:
             }
         )
         diagnostics["fault_audit"] = audit
+        diagnostics["schema_evolution"] = {
+            "changes": [schema_change_metadata(item) for item in self.quality.schema_changes],
+            "outputs": {key: len(rows) for key, rows in sorted(schema_evolution_rows.items())},
+        }
         return replace(result, quality_diagnostics=diagnostics)
 
     def _apply_outages(
@@ -268,17 +356,22 @@ class QualityFaultInjector:
 
     def _apply_schema_changes(
         self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
-    ) -> tuple[tuple[PaymentEvent, ...], int]:
+    ) -> tuple[tuple[PaymentEvent, ...], int, dict[str, list[dict[str, object]]]]:
         result: list[PaymentEvent] = []
         count = 0
+        serialized_rows: dict[str, list[dict[str, object]]] = {}
         for event in events:
             current = event
+            row = event.model_dump(mode="python", warnings=False)
             for change in self.quality.schema_changes:
                 if event.event_time < change.at:
                     continue
                 if change.event not in {"*", "payment_events", event.event_type}:
                     continue
                 current = current.model_copy(update={"schema_version": change.version})
+                row = apply_schema_change(row, change)
+                row["schema_version"] = change.version
+                serialized_rows.setdefault(f"{change.event}:{change.version}", []).append(row)
                 count += 1
                 audit.append(
                     {
@@ -286,13 +379,17 @@ class QualityFaultInjector:
                         "event_id": event.event_id,
                         "event": change.event,
                         "version": change.version,
+                        "change": change.change,
+                        "compatibility": schema_change_metadata(change)["compatibility"],
+                        "logical_identity_preserved": True,
+                        "affected_boundary": "serialized_source",
                     }
                 )
             result.append(current)
-        return tuple(result), count
+        return tuple(result), count, serialized_rows
 
     def _missing_payment_fields(
-        self, payments: tuple[Payment, ...]
+        self, payments: tuple[Payment, ...], audit: list[dict[str, object]]
     ) -> tuple[tuple[Payment, ...], int]:
         return _clear_optional_fields(
             payments,
@@ -307,10 +404,12 @@ class QualityFaultInjector:
             ),
             rng=create_stream_rng(self.config.simulation.seed, "milestone-8:missing:payments"),
             probability=self.quality.probability("missing_optional"),
+            fault="missing_field",
+            audit=audit,
         )
 
     def _missing_event_fields(
-        self, events: tuple[PaymentEvent, ...]
+        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
     ) -> tuple[tuple[PaymentEvent, ...], int]:
         return _clear_optional_fields(
             events,
@@ -328,25 +427,264 @@ class QualityFaultInjector:
             ),
             rng=create_stream_rng(self.config.simulation.seed, "milestone-8:missing:events"),
             probability=self.quality.probability("missing_optional"),
+            fault="missing_field",
+            audit=audit,
         )
 
     def _invalid_payment_values(
-        self, payments: tuple[Payment, ...]
+        self, payments: tuple[Payment, ...], audit: list[dict[str, object]]
     ) -> tuple[tuple[Payment, ...], int]:
         return _negative_amounts(
             payments,
             rng=create_stream_rng(self.config.simulation.seed, "milestone-8:invalid:payments"),
-            probability=self.quality.probability("invalid_value"),
+            probability=self.quality.probability("negative_amount"),
+            audit=audit,
         )
 
     def _invalid_event_values(
-        self, events: tuple[PaymentEvent, ...]
+        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
     ) -> tuple[tuple[PaymentEvent, ...], int]:
         return _negative_amounts(
             events,
             rng=create_stream_rng(self.config.simulation.seed, "milestone-8:invalid:events"),
-            probability=self.quality.probability("invalid_value"),
+            probability=self.quality.probability("negative_amount"),
+            audit=audit,
         )
+
+    def _invalid_enums(
+        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
+    ) -> tuple[tuple[PaymentEvent, ...], int]:
+        probability = self.quality.probability("invalid_enum")
+        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:invalid-enums")
+        result: list[PaymentEvent] = []
+        count = 0
+        for event in events:
+            if rng.random() >= probability:
+                result.append(event)
+                continue
+            invalid_value = f"INVALID_ENUM:{event.event_id}"
+            result.append(event.model_copy(update={"event_type": invalid_value}))
+            audit.append(
+                {
+                    "fault": "invalid_enum",
+                    "target": event.event_id,
+                    "requested_probability": probability,
+                    "mutation": {"event_type": invalid_value},
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "typed_output",
+                    "expected_validation_rule": "event_type is a registered payment event",
+                }
+            )
+            count += 1
+        return tuple(result), count
+
+    def _invalid_references(
+        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
+    ) -> tuple[tuple[PaymentEvent, ...], int]:
+        probability = self.quality.probability("invalid_reference")
+        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:invalid-references")
+        result: list[PaymentEvent] = []
+        count = 0
+        for event in events:
+            if rng.random() >= probability:
+                result.append(event)
+                continue
+            invalid_payment_id = f"PAYMENT-UNKNOWN-{event.event_id}"
+            result.append(event.model_copy(update={"payment_id": invalid_payment_id}))
+            audit.append(
+                {
+                    "fault": "invalid_reference",
+                    "target": event.event_id,
+                    "requested_probability": probability,
+                    "mutation": {"payment_id": invalid_payment_id},
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "typed_output",
+                    "expected_validation_rule": "payment_id references payments.payment_id",
+                }
+            )
+            count += 1
+        return tuple(result), count
+
+    def _corrupt_timestamps(
+        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
+    ) -> tuple[tuple[PaymentEvent, ...], int]:
+        probability = self.quality.probability("corrupted_timestamp")
+        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:corrupted-timestamps")
+        result: list[PaymentEvent] = []
+        count = 0
+        for event in events:
+            if rng.random() >= probability:
+                result.append(event)
+                continue
+            value = event.event_time - timedelta(seconds=1)
+            result.append(event.model_copy(update={"source_available_at": value}))
+            audit.append(
+                {
+                    "fault": "corrupted_timestamp",
+                    "target": event.event_id,
+                    "requested_probability": probability,
+                    "mutation": {"source_available_at": value.isoformat()},
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "typed_output",
+                    "expected_validation_rule": "event_time <= source_available_at",
+                }
+            )
+            count += 1
+        return tuple(result), count
+
+    def _timezone_errors(
+        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
+    ) -> tuple[tuple[PaymentEvent, ...], int]:
+        probability = self.quality.probability("timezone_error")
+        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:timezone-errors")
+        result: list[PaymentEvent] = []
+        count = 0
+        for event in events:
+            if rng.random() >= probability:
+                result.append(event)
+                continue
+            value = event.event_time.replace(tzinfo=None)
+            result.append(event.model_copy(update={"event_time": value}))
+            audit.append(
+                {
+                    "fault": "timezone_error",
+                    "target": event.event_id,
+                    "requested_probability": probability,
+                    "mutation": {"event_time": value.isoformat(), "timezone": None},
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "typed_output",
+                    "expected_validation_rule": "timestamps include a timezone",
+                }
+            )
+            count += 1
+        return tuple(result), count
+
+    def _schema_mismatches(
+        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
+    ) -> tuple[tuple[PaymentEvent, ...], int]:
+        probability = self.quality.probability("schema_mismatch")
+        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:schema-mismatches")
+        result: list[PaymentEvent] = []
+        count = 0
+        for event in events:
+            if rng.random() >= probability:
+                result.append(event)
+                continue
+            value = f"unregistered-{event.schema_version}-{event.event_id}"
+            result.append(event.model_copy(update={"schema_version": value}))
+            audit.append(
+                {
+                    "fault": "schema_mismatch",
+                    "target": event.event_id,
+                    "requested_probability": probability,
+                    "mutation": {"schema_version": value},
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "typed_output",
+                    "expected_validation_rule": "schema_version is registered",
+                }
+            )
+            count += 1
+        return tuple(result), count
+
+    def _extreme_values(
+        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
+    ) -> tuple[tuple[PaymentEvent, ...], int]:
+        probability = self.quality.probability("extreme_value")
+        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:extreme-values")
+        result: list[PaymentEvent] = []
+        count = 0
+        for event in events:
+            if rng.random() >= probability:
+                result.append(event)
+                continue
+            value = 1.0e15
+            result.append(event.model_copy(update={"amount": value}))
+            audit.append(
+                {
+                    "fault": "extreme_value",
+                    "target": event.event_id,
+                    "requested_probability": probability,
+                    "mutation": {"amount": value},
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "typed_output",
+                    "expected_validation_rule": "amount is within configured business bounds",
+                }
+            )
+            count += 1
+        return tuple(result), count
+
+    def _encoding_errors(
+        self,
+        events: tuple[PaymentEvent, ...],
+        audit: list[dict[str, object]],
+        raw_faults: list[dict[str, object]],
+    ) -> tuple[tuple[PaymentEvent, ...], int]:
+        probability = self.quality.probability("encoding_error")
+        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:encoding-errors")
+        result: list[PaymentEvent] = []
+        count = 0
+        for event in events:
+            if rng.random() >= probability:
+                result.append(event)
+                continue
+            payload = json.dumps(
+                event.model_dump(mode="python", warnings=False), sort_keys=True, default=str
+            ).encode("utf-8")
+            raw_faults.append(
+                {
+                    "fault": "encoding_error",
+                    "target": event.event_id,
+                    "encoding": "invalid-utf8",
+                    "payload_base64": base64.b64encode(payload + b"\xff").decode("ascii"),
+                }
+            )
+            audit.append(
+                {
+                    "fault": "encoding_error",
+                    "target": event.event_id,
+                    "requested_probability": probability,
+                    "mutation": "raw payload contains invalid UTF-8 byte",
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "raw_fault_artifact",
+                    "expected_validation_rule": "payload decodes as UTF-8",
+                }
+            )
+            result.append(event)
+            count += 1
+        return tuple(result), count
+
+    def _partition_skew(
+        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
+    ) -> tuple[tuple[PaymentEvent, ...], int]:
+        probability = self.quality.probability("partition_skew")
+        if probability == 0:
+            return events, 0
+        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:partition-skews")
+        selected: set[str] = set()
+        for payment_id in dict.fromkeys(event.payment_id for event in events):
+            if rng.random() < probability:
+                selected.add(payment_id)
+        result: list[PaymentEvent] = []
+        for event in events:
+            partition = int(sha256_json(event.payment_id)[:8], 16) % 16
+            if event.payment_id in selected:
+                partition = 0
+            result.append(event.model_copy(update={"transport_partition": partition}))
+        for payment_id in sorted(selected):
+            audit.append(
+                {
+                    "fault": "partition_skew",
+                    "target": payment_id,
+                    "requested_probability": probability,
+                    "mutation": {"transport_partition": 0},
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "transport_partition",
+                    "expected_validation_rule": (
+                        "partition distribution remains within configured skew"
+                    ),
+                }
+            )
+        return tuple(result), len(selected)
 
     def _apply_source_delay(
         self, events: tuple[PaymentEvent, ...]
@@ -615,6 +953,15 @@ class QualityFaultInjector:
             "duplicate_events": event_count,
             "missing_optional_fields": payment_count + event_count,
             "invalid_values": payment_count + event_count,
+            "invalid_enums": event_count,
+            "invalid_references": event_count,
+            "negative_amounts": payment_count + event_count,
+            "corrupted_timestamps": event_count,
+            "timezone_errors": event_count,
+            "schema_mismatches": event_count,
+            "extreme_values": event_count,
+            "encoding_errors": event_count,
+            "partition_skews": traffic_group_count,
             "late_events": event_count,
             "out_of_order_events": event_count,
             "source_delay_events": event_count,
@@ -626,6 +973,15 @@ class QualityFaultInjector:
             "duplicate_events": self.quality.probability("duplicate_event"),
             "missing_optional_fields": self.quality.probability("missing_optional"),
             "invalid_values": self.quality.probability("invalid_value"),
+            "invalid_enums": self.quality.probability("invalid_enum"),
+            "invalid_references": self.quality.probability("invalid_reference"),
+            "negative_amounts": self.quality.probability("negative_amount"),
+            "corrupted_timestamps": self.quality.probability("corrupted_timestamp"),
+            "timezone_errors": self.quality.probability("timezone_error"),
+            "schema_mismatches": self.quality.probability("schema_mismatch"),
+            "extreme_values": self.quality.probability("extreme_value"),
+            "encoding_errors": self.quality.probability("encoding_error"),
+            "partition_skews": self.quality.probability("partition_skew"),
             "late_events": self.quality.probability("late_event"),
             "out_of_order_events": self.quality.probability("out_of_order"),
             "fraud_spikes": self.quality.probability("fraud_spike"),

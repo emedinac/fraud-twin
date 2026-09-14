@@ -107,6 +107,7 @@ PIT_DATASET_SCHEMA: dict[str, Any] = {
 }
 
 _INITIAL_EVENT_TYPES = {
+    "CARD_PAYMENT_INITIATED",
     "CARD_AUTHORIZATION_REQUESTED",
     "PIX_INITIATED",
     "TRANSFER_COMPLETED",
@@ -1249,6 +1250,8 @@ class PointInTimeDatasetBuilder:
             schema_fingerprint=schema_fingerprint,
             output_fingerprint=output_fingerprint,
             difficulty=(self.source_manifest.difficulty if self.source_manifest else None),
+            camouflage=(self.source_manifest.camouflage if self.source_manifest else None),
+            counterfactual=(self.source_manifest.counterfactual if self.source_manifest else None),
         )
 
     def _source_manifest_hash(self) -> str:

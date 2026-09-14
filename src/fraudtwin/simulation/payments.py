@@ -18,6 +18,7 @@ from fraudtwin.config import (
 )
 from fraudtwin.domain import (
     CARD_LIFECYCLE_EVENT_TYPES,
+    PAYMENT_EVENT_CONTRACT_VERSION,
     PIX_LIFECYCLE_EVENT_TYPES,
     Account,
     BehaviorProfile,
@@ -471,7 +472,7 @@ class PaymentGenerator:
             payer_pix_key_id=None,
             payee_pix_key_id=None,
             payment_type="PURCHASE",
-            event_type="CARD_AUTHORIZATION_REQUESTED",
+            event_type="CARD_PAYMENT_INITIATED",
             online=merchant.online_only or rng.random() < profile.online_purchase_rate,
         )
 
@@ -565,7 +566,7 @@ class PaymentGenerator:
             processed_at=processed_at,
             producer="fraudtwin.behavior",
             source_system="synthetic_payment_source",
-            schema_version="2" if rail == "CARD" else "3" if rail == "PIX" else "1",
+            schema_version=PAYMENT_EVENT_CONTRACT_VERSION,
             correlation_id=payment_id,
             causation_id=None,
             simulation_run_id=self.simulation_run_id,
@@ -667,6 +668,7 @@ class PaymentGenerator:
                 CARD_SOURCE_DELAY_SECONDS,
             )
 
+        append("CARD_AUTHORIZATION_REQUESTED", settings.authorization_delay_seconds)
         if rng.random() >= settings.authorization_approval_probability:
             append("CARD_DECLINED", settings.authorization_delay_seconds)
             final_status = "DECLINED"
@@ -739,14 +741,18 @@ class PaymentGenerator:
         else:
             append("PIX_AUTHORIZED", settings.authorization_delay_seconds)
             append("PIX_SUBMITTED", settings.submission_delay_seconds)
-            append("PIX_SETTLED", settings.settlement_delay_seconds)
-            append("PIX_RECEIVED", settings.receipt_delay_seconds)
-            if rng.random() < settings.return_probability:
-                append("PIX_RETURN_REQUESTED", settings.return_request_delay_seconds)
-                append("PIX_RETURNED", settings.return_delay_seconds)
-                final_status = "RETURNED"
+            if rng.random() < settings.timeout_probability:
+                append("PIX_TIMEOUT", settings.timeout_delay_seconds)
+                final_status = "TIMED_OUT"
             else:
-                final_status = "RECEIVED"
+                append("PIX_SETTLED", settings.settlement_delay_seconds)
+                append("PIX_RECEIVED", settings.receipt_delay_seconds)
+                if rng.random() < settings.return_probability:
+                    append("PIX_RETURN_REQUESTED", settings.return_request_delay_seconds)
+                    append("PIX_RETURNED", settings.return_delay_seconds)
+                    final_status = "RETURNED"
+                else:
+                    final_status = "RECEIVED"
 
         result = payment.model_copy(update={"current_status": final_status})
         event_tuple = tuple(events)
