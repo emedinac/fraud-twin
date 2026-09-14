@@ -97,7 +97,7 @@ def test_all_m6_scenarios_are_deterministic_and_explainable() -> None:
 
 
 def test_scenario_sequences_and_hard_negatives_have_expected_signals() -> None:
-    _, entities, dataset = _dataset()
+    config, entities, dataset = _dataset()
     negatives = [record for record in dataset.fraud_records if not record.fraud_truth]
     assert len(negatives) == 5
     assert all(record.record_type == "HARD_NEGATIVE" for record in negatives)
@@ -135,8 +135,61 @@ def test_scenario_sequences_and_hard_negatives_have_expected_signals() -> None:
         elif payments[payment_id].payment_rail == "PIX":
             validate_pix_lifecycle(payments[payment_id], tuple(events))
     validate_ledger(
-        entities.accounts, dataset.payments, dataset.payment_events, dataset.ledger_entries
+        entities.accounts,
+        dataset.payments,
+        dataset.payment_events,
+        dataset.ledger_entries,
     )
+
+    payments_by_id = {payment.payment_id: payment for payment in dataset.payments}
+    negatives_by_scenario = {record.scenario_type: record for record in negatives}
+    for scenario_type, record in negatives_by_scenario.items():
+        prefix = f"PAY-{record.scenario_id}-"
+        lookalike_payments = [
+            payment for payment in dataset.payments if payment.payment_id.startswith(prefix)
+        ]
+        lookalike_events = [
+            event for event in dataset.payment_events if event.payment_id.startswith(prefix)
+        ]
+        assert lookalike_payments
+        assert lookalike_events
+        assert all(event.scenario_id is None for event in lookalike_events)
+        assert all(event.scenario_type == scenario_type for event in lookalike_events)
+        assert all(event.scenario_trigger and event.scenario_reason for event in lookalike_events)
+        assert all(event.affected_entity_ids for event in lookalike_events)
+        assert all(event.payment_id in payments_by_id for event in lookalike_events)
+        assert all(payment.amount > 0 for payment in lookalike_payments)
+
+        if scenario_type in {"F01", "F02", "F05"}:
+            assert all(payment.payment_rail == "CARD" for payment in lookalike_payments)
+            assert len({payment.card_id for payment in lookalike_payments}) == 1
+            authorization_times = [
+                event.event_time
+                for event in lookalike_events
+                if event.event_type == "CARD_AUTHORIZATION_REQUESTED"
+            ]
+            expected_count = (
+                3 if scenario_type == "F01" else config.fraud.scenarios[scenario_type].attempt_count
+            )
+            assert len(authorization_times) == expected_count
+            if scenario_type in {"F02", "F05"}:
+                assert max(authorization_times) - min(authorization_times) <= timedelta(
+                    seconds=config.fraud.scenarios[scenario_type].window_seconds
+                )
+        elif scenario_type == "F03":
+            assert len(lookalike_payments) == 2
+            assert {event.event_type for event in lookalike_events} >= {
+                "FRAUD_AUTHENTICATION_SUSPICIOUS",
+                "FRAUD_PROFILE_CHANGED",
+                "FRAUD_BENEFICIARY_ADDED",
+                "TRANSFER_COMPLETED",
+            }
+        else:
+            assert len(lookalike_payments) == 1
+            assert lookalike_payments[0].payment_rail == "PIX"
+            validate_pix_lifecycle(lookalike_payments[0], tuple(lookalike_events))
+
+    assert all(not event.payment_id.startswith("PAY-HN-") for event in dataset.fraud_events)
 
 
 def test_fraud_parquet_schema_and_disabled_behavior_are_stable(tmp_path: Path) -> None:

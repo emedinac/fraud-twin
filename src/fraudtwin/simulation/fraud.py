@@ -172,17 +172,14 @@ class FraudScenarioGenerator:
             events.extend(new_events)
             records.extend(new_records)
             if self.config.fraud.hard_negative_rate > 0 and self.baseline.payments:
-                negative_payment, negative_event = self._lookalike_payment(
-                    scenario_type, campaign_number
+                hard_negative = self._hard_negative_campaign(
+                    scenario_type, campaign_number, settings
                 )
-                records.append(
-                    self._hard_negative(
-                        scenario_type,
-                        campaign_number,
-                        negative_payment,
-                        negative_event,
-                    )
-                )
+                if hard_negative is not None:
+                    negative_payments, negative_events, negative_record = hard_negative
+                    payments.extend(negative_payments)
+                    events.extend(negative_events)
+                    records.append(negative_record)
 
         payment_tuple = tuple(payments)
         event_tuple = tuple(events)
@@ -254,19 +251,15 @@ class FraudScenarioGenerator:
         count: int,
         trigger: str,
     ) -> tuple[list[Payment], list[PaymentEvent], list[FraudRecord]]:
-        if not self.cards or not self.merchants or not self.accounts:
+        target = self._card_target(rng)
+        if target is None:
             return [], [], []
-        card = self.cards[rng.randrange(len(self.cards))]
-        customer_id = card.customer_id
-        device_pool = self.untrusted_devices or self.devices
-        device = device_pool[rng.randrange(len(device_pool))] if device_pool else None
+        card, device = target
         payments: list[Payment] = []
         events: list[PaymentEvent] = []
         records: list[FraudRecord] = []
         for attempt in range(1, count + 1):
-            merchant = self.merchants[
-                (attempt + rng.randrange(len(self.merchants))) % len(self.merchants)
-            ]
+            merchant = self._merchant_for_attempt(attempt, rng)
             generated = self._card_attempt(
                 scenario_type,
                 scenario_id,
@@ -276,7 +269,6 @@ class FraudScenarioGenerator:
                 trigger,
                 attempt,
                 card,
-                customer_id,
                 device,
                 merchant,
             )
@@ -298,44 +290,29 @@ class FraudScenarioGenerator:
         trigger: str,
         attempt: int,
         card: Card,
-        customer_id: str,
         device: Device | None,
         merchant: Merchant,
     ) -> tuple[Payment, tuple[PaymentEvent, ...], FraudRecord] | None:
         """Generate one card scenario attempt and its explainable record."""
 
-        amount = self._amount(settings, rng, low_value=scenario_type == "F02")
-        if amount is None:
+        generated = self._card_payment(
+            scenario_type,
+            scenario_id,
+            settings,
+            rng,
+            count,
+            trigger,
+            attempt,
+            card,
+            device,
+            merchant,
+            force_scenario_decline=True,
+        )
+        if generated is None:
             return None
-        offset = attempt - 1
-        if trigger in {"LOW_VALUE_AUTHORIZATION_BURST", "PAYMENT_VELOCITY_BURST"}:
-            offset = ((attempt - 1) * settings.window_seconds) // count
-        payment, initial = self._initial_payment(
-            f"PAY-{scenario_id}-{attempt:0{_ID_WIDTH}d}",
-            f"EVT-{scenario_id}-{attempt:0{_ID_WIDTH}d}",
-            "CARD",
-            "PURCHASE",
-            card.account_id,
-            customer_id,
-            amount,
-            self._start_time(settings, rail="CARD", offset=offset),
-            card_id=card.card_id,
-            merchant_id=merchant.merchant_id,
-            device_id=device.device_id if device else None,
-            online=True,
-            event_type="CARD_AUTHORIZATION_REQUESTED",
-        )
-        payment, payment_events = self.payment_generator._card_lifecycle(payment, initial, rng)
-        force_decline = (scenario_type == "F01" and attempt < count) or (
-            scenario_type == "F02" and attempt % 4 != 0
-        )
-        if force_decline:
-            declined = payment_events[1].model_copy(update={"event_type": "CARD_DECLINED"})
-            payment = payment.model_copy(update={"current_status": "DECLINED"})
-            payment_events = (payment_events[0], declined)
-            validate_card_lifecycle(payment, payment_events)
+        payment, payment_events = generated
         record_id = f"FRD-{scenario_id}-{attempt:0{_ID_WIDTH}d}"
-        affected = (customer_id, card.account_id, card.card_id, merchant.merchant_id)
+        affected = (card.customer_id, card.account_id, card.card_id, merchant.merchant_id)
         reason = self._reason(scenario_type, trigger, device.device_id if device else None)
         payment_events = self._annotate_events(
             payment_events,
@@ -362,6 +339,56 @@ class FraudScenarioGenerator:
             ),
         )
 
+    def _card_payment(
+        self,
+        scenario_type: FraudScenarioType,
+        scenario_id: str,
+        settings: FraudScenarioSettings,
+        rng: Random,
+        count: int,
+        trigger: str,
+        attempt: int,
+        card: Card,
+        device: Device | None,
+        merchant: Merchant,
+        *,
+        force_scenario_decline: bool,
+    ) -> tuple[Payment, tuple[PaymentEvent, ...]] | None:
+        """Generate one card payment with optional scenario-forced decline."""
+
+        amount = self._amount(settings, rng, low_value=scenario_type == "F02")
+        if amount is None:
+            return None
+        offset = attempt - 1
+        if trigger in {"LOW_VALUE_AUTHORIZATION_BURST", "PAYMENT_VELOCITY_BURST"}:
+            offset = ((attempt - 1) * settings.window_seconds) // count
+        payment, initial = self._initial_payment(
+            f"PAY-{scenario_id}-{attempt:0{_ID_WIDTH}d}",
+            f"EVT-{scenario_id}-{attempt:0{_ID_WIDTH}d}",
+            "CARD",
+            "PURCHASE",
+            card.account_id,
+            card.customer_id,
+            amount,
+            self._start_time(settings, rail="CARD", offset=offset),
+            card_id=card.card_id,
+            merchant_id=merchant.merchant_id,
+            device_id=device.device_id if device else None,
+            online=True,
+            event_type="CARD_AUTHORIZATION_REQUESTED",
+        )
+        payment, payment_events = self.payment_generator._card_lifecycle(payment, initial, rng)
+        should_decline = force_scenario_decline and (
+            (scenario_type == "F01" and attempt < count)
+            or (scenario_type == "F02" and attempt % 4 != 0)
+        )
+        if should_decline:
+            declined = payment_events[1].model_copy(update={"event_type": "CARD_DECLINED"})
+            payment = payment.model_copy(update={"current_status": "DECLINED"})
+            payment_events = (payment_events[0], declined)
+            validate_card_lifecycle(payment, payment_events)
+        return payment, payment_events
+
     def _account_takeover(
         self,
         scenario_type: FraudScenarioType,
@@ -374,8 +401,7 @@ class FraudScenarioGenerator:
             return [], [], []
         payer, payee = pair
         customer_id = payer.customer_id
-        device_pool = self.untrusted_devices or self.devices
-        device = device_pool[rng.randrange(len(device_pool))] if device_pool else None
+        device = self._choose_device(rng)
         reason = self._reason(
             scenario_type, "NEW_UNTRUSTED_DEVICE", device.device_id if device else None
         )
@@ -490,8 +516,7 @@ class FraudScenarioGenerator:
             return [], [], []
         payer, payee = pair
         key = self.pix_keys_by_account[payee.account_id][0]
-        device_pool = self.untrusted_devices or self.devices
-        device = device_pool[rng.randrange(len(device_pool))] if device_pool else None
+        device = self._choose_device(rng)
         amount = self._amount(settings, rng, capacity=self._capacity(payer), high_value=True)
         if amount is None:
             return [], [], []
@@ -675,49 +700,225 @@ class FraudScenarioGenerator:
             - self.outgoing_by_account[account.account_id],
         )
 
-    def _lookalike_payment(
-        self, scenario_type: FraudScenarioType, number: int
-    ) -> tuple[Payment, PaymentEvent]:
-        matching_rails = {
-            "F01": {"CARD"},
-            "F02": {"CARD"},
-            "F03": {"ACCOUNT_TRANSFER"},
-            "F04": {"PIX"},
-            "F05": {"CARD"},
-        }[scenario_type]
-        candidates = (
-            tuple(
-                payment
-                for payment in self.baseline.payments
-                if payment.payment_rail in matching_rails
+    def _card_target(self, rng: Random) -> tuple[Card, Device | None] | None:
+        """Choose a card and device for a card campaign."""
+
+        if not self.cards or not self.merchants or not self.accounts:
+            return None
+        return self.cards[rng.randrange(len(self.cards))], self._choose_device(rng)
+
+    def _choose_device(self, rng: Random) -> Device | None:
+        device_pool = self.untrusted_devices or self.devices
+        return device_pool[rng.randrange(len(device_pool))] if device_pool else None
+
+    def _merchant_for_attempt(self, attempt: int, rng: Random) -> Merchant:
+        return self.merchants[(attempt + rng.randrange(len(self.merchants))) % len(self.merchants)]
+
+    def _hard_negative_campaign(
+        self,
+        scenario_type: FraudScenarioType,
+        number: int,
+        settings: FraudScenarioSettings,
+    ) -> tuple[list[Payment], list[PaymentEvent], FraudRecord] | None:
+        """Generate one legitimate sequence with the selected fraud signals."""
+
+        rng = create_stream_rng(
+            self.config.simulation.seed, f"milestone-6:hard-negative:{scenario_type}:{number}"
+        )
+        trigger, reason = self._lookalike_metadata(scenario_type)
+        if scenario_type in {"F01", "F02", "F05"}:
+            return self._card_hard_negative(scenario_type, number, settings, rng, trigger, reason)
+        if scenario_type == "F03":
+            return self._account_hard_negative(
+                scenario_type, number, settings, rng, trigger, reason
             )
-            or self.baseline.payments
+        return self._pix_hard_negative(number, settings, rng, trigger, reason)
+
+    def _card_hard_negative(
+        self,
+        scenario_type: FraudScenarioType,
+        number: int,
+        settings: FraudScenarioSettings,
+        rng: Random,
+        trigger: str,
+        reason: str,
+    ) -> tuple[list[Payment], list[PaymentEvent], FraudRecord] | None:
+        target = self._card_target(rng)
+        if target is None:
+            return None
+        card, device = target
+        count = 3 if scenario_type == "F01" else settings.attempt_count
+        payments: list[Payment] = []
+        events: list[PaymentEvent] = []
+        for attempt in range(1, count + 1):
+            merchant = self._merchant_for_attempt(attempt, rng)
+            generated = self._card_payment(
+                scenario_type,
+                f"HN-{scenario_type}-{number:0{_ID_WIDTH}d}",
+                settings,
+                rng,
+                count,
+                trigger,
+                attempt,
+                card,
+                device,
+                merchant,
+                force_scenario_decline=False,
+            )
+            if generated is None:
+                continue
+            payment, payment_events = generated
+            affected = (card.customer_id, card.account_id, card.card_id, merchant.merchant_id)
+            payment_events = self._annotate_lookalike_events(
+                payment_events, scenario_type, trigger, reason, affected
+            )
+            payments.append(payment)
+            events.extend(payment_events)
+        if not payments or not events:
+            return None
+        return payments, events, self._hard_negative(scenario_type, number, payments[0], events[0])
+
+    def _account_hard_negative(
+        self,
+        scenario_type: FraudScenarioType,
+        number: int,
+        settings: FraudScenarioSettings,
+        rng: Random,
+        trigger: str,
+        reason: str,
+    ) -> tuple[list[Payment], list[PaymentEvent], FraudRecord] | None:
+        pair = self._account_pair(require_pix=False)
+        if pair is None:
+            return None
+        payer, payee = pair
+        device = self._choose_device(rng)
+        amount = self._amount(settings, rng, capacity=self._capacity(payer) / 4)
+        if amount is None:
+            return None
+        scenario_id = f"HN-F03-{number:0{_ID_WIDTH}d}"
+        first, first_event = self._transfer_payment(
+            scenario_id, 1, payer, payee, amount, device, None, settings
         )
-        payment = candidates[(number - 1) % len(candidates)]
-        event = next(
-            event
-            for event in self.baseline.payment_events
-            if event.payment_id == payment.payment_id
+        second, second_event = self._transfer_payment(
+            scenario_id, 2, payer, payee, amount, device, first_event.event_id, settings
         )
-        trigger = {
-            "F01": "TRAVEL_NEW_DEVICE",
-            "F02": "LEGITIMATE_LOW_VALUE_BURST",
-            "F03": "NEW_PHONE_TRAVEL_LEGITIMATE_BENEFICIARY",
-            "F04": "LEGITIMATE_NEW_BENEFICIARY",
-            "F05": "LEGITIMATE_ACTIVITY_BURST",
-        }[scenario_type]
-        reason = {
-            "F01": "legitimate travel and a new device resemble card-not-present signals",
-            "F02": "legitimate repeated low-value authorizations resemble card testing",
-            "F03": (
-                "legitimate phone replacement and beneficiary transfer resemble takeover behavior"
+        affected = (payer.customer_id, payer.account_id, payee.account_id)
+        signals: list[PaymentEvent] = []
+        previous_id: str | None = None
+        for index, event_type in enumerate(
+            (
+                "FRAUD_AUTHENTICATION_SUSPICIOUS",
+                "FRAUD_PROFILE_CHANGED",
+                "FRAUD_BENEFICIARY_ADDED",
             ),
-            "F04": "legitimate new beneficiary transfer resembles an instant-payment scam",
-            "F05": "legitimate activity burst resembles a transaction velocity attack",
-        }[scenario_type]
-        return payment, event.model_copy(
-            update={"scenario_trigger": trigger, "scenario_reason": reason}
+            start=1,
+        ):
+            event_time = self._start_time(settings, rail="ACCOUNT_TRANSFER", offset=index - 1)
+            signals.append(
+                first_event.model_copy(
+                    update={
+                        "event_id": f"EVT-{scenario_id}-SIGNAL-{index:02d}",
+                        "event_type": event_type,
+                        "event_time": event_time,
+                        "source_created_at": event_time,
+                        "source_available_at": event_time
+                        + timedelta(seconds=ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS),
+                        "ingested_at": event_time
+                        + timedelta(seconds=ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS + 1),
+                        "processed_at": event_time
+                        + timedelta(seconds=ACCOUNT_TRANSFER_SOURCE_DELAY_SECONDS + 2),
+                        "causation_id": previous_id,
+                        "scenario_id": None,
+                        "scenario_type": scenario_type,
+                        "scenario_trigger": trigger,
+                        "scenario_reason": reason,
+                        "fraud_record_id": None,
+                        "affected_entity_ids": affected,
+                    }
+                )
+            )
+            previous_id = signals[-1].event_id
+        first_event = self._annotate_lookalike_events(
+            (first_event.model_copy(update={"causation_id": signals[-1].event_id}),),
+            scenario_type,
+            trigger,
+            reason,
+            affected,
+        )[0]
+        second_event = self._annotate_lookalike_events(
+            (second_event,), scenario_type, trigger, reason, affected
+        )[0]
+        return (
+            [first, second],
+            [*signals, first_event, second_event],
+            self._hard_negative(scenario_type, number, first, first_event),
         )
+
+    def _pix_hard_negative(
+        self,
+        number: int,
+        settings: FraudScenarioSettings,
+        rng: Random,
+        trigger: str,
+        reason: str,
+    ) -> tuple[list[Payment], list[PaymentEvent], FraudRecord] | None:
+        pair = self._account_pair(require_pix=True)
+        if pair is None:
+            return None
+        payer, payee = pair
+        payer_key = self.pix_keys_by_account[payer.account_id][0]
+        payee_key = self.pix_keys_by_account[payee.account_id][0]
+        device = self._choose_device(rng)
+        amount = self._amount(settings, rng, capacity=self._capacity(payer), high_value=True)
+        if amount is None:
+            return None
+        scenario_id = f"HN-F04-{number:0{_ID_WIDTH}d}"
+        payment, initial = self._initial_payment(
+            f"PAY-{scenario_id}-000001",
+            f"EVT-{scenario_id}-000001",
+            "PIX",
+            "TRANSFER",
+            payer.account_id,
+            payer.customer_id,
+            amount,
+            self._start_time(settings, rail="PIX"),
+            payee_account_id=payee.account_id,
+            payer_institution_id=payer.institution_id,
+            payee_institution_id=payee.institution_id,
+            payer_pix_key_id=payer_key.pix_key_id,
+            payee_pix_key_id=payee_key.pix_key_id,
+            device_id=device.device_id if device else None,
+            event_type="PIX_INITIATED",
+        )
+        payment, payment_events = self.payment_generator._pix_lifecycle(payment, initial, rng)
+        affected = (payer.customer_id, payer.account_id, payee.account_id, payee_key.pix_key_id)
+        events = self._annotate_lookalike_events(payment_events, "F04", trigger, reason, affected)
+        return [payment], list(events), self._hard_negative("F04", number, payment, events[0])
+
+    @staticmethod
+    def _lookalike_metadata(scenario_type: FraudScenarioType) -> tuple[str, str]:
+        return {
+            "F01": (
+                "TRAVEL_NEW_DEVICE",
+                "legitimate travel and a new device resemble card-not-present signals",
+            ),
+            "F02": (
+                "LEGITIMATE_LOW_VALUE_BURST",
+                "legitimate repeated low-value authorizations resemble card testing",
+            ),
+            "F03": (
+                "NEW_PHONE_TRAVEL_LEGITIMATE_BENEFICIARY",
+                "legitimate phone replacement and beneficiary transfer resemble takeover behavior",
+            ),
+            "F04": (
+                "LEGITIMATE_NEW_BENEFICIARY",
+                "legitimate new beneficiary transfer resembles an instant-payment scam",
+            ),
+            "F05": (
+                "LEGITIMATE_ACTIVITY_BURST",
+                "legitimate activity burst resembles a transaction velocity attack",
+            ),
+        }[scenario_type]
 
     def _amount(
         self,
@@ -779,6 +980,30 @@ class FraudScenarioGenerator:
                     "scenario_trigger": trigger,
                     "scenario_reason": reason,
                     "fraud_record_id": record_id,
+                    "affected_entity_ids": affected,
+                }
+            )
+            for event in events
+        )
+
+    @staticmethod
+    def _annotate_lookalike_events(
+        events: tuple[PaymentEvent, ...],
+        scenario_type: FraudScenarioType,
+        trigger: str,
+        reason: str,
+        affected: tuple[str, ...],
+    ) -> tuple[PaymentEvent, ...]:
+        """Add lookalike context without marking an event as fraud."""
+
+        return tuple(
+            event.model_copy(
+                update={
+                    "scenario_id": None,
+                    "scenario_type": scenario_type,
+                    "scenario_trigger": trigger,
+                    "scenario_reason": reason,
+                    "fraud_record_id": None,
                     "affected_entity_ids": affected,
                 }
             )
