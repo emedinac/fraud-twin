@@ -4,6 +4,7 @@ FraudTwin is easiest to understand as a small, deterministic payment world. Star
 
 ## Start here
 
+- [Getting Started tutorial](tutorials/getting-started.ipynb) — generate and inspect a first run in a notebook.
 - [Quickstart](quickstart.md) — install FraudTwin and generate your first run.
 - [Configuration](configuration.md) — shape populations, behavior, payment rails, fraud, and quality.
 - [Workflows](workflows.md) — build point-in-time datasets, replay runs, and backtest models.

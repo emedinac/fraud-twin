@@ -1,4 +1,4 @@
-__version__ = "0.17.0"
+__version__ = "0.18.0"
 
 from fraudtwin.camouflage import (  # noqa: E402
     CamouflagePlan,
@@ -32,6 +32,7 @@ from fraudtwin.difficulty import (  # noqa: E402
     apply_difficulty,
     resolve_difficulty,
 )
+from fraudtwin.generation import GeneratedData, GeneratedRun, generate  # noqa: E402
 from fraudtwin.graph import (  # noqa: E402
     GraphCampaign,
     GraphDataset,
@@ -49,6 +50,9 @@ from fraudtwin.graph import (  # noqa: E402
 
 __all__ = [
     "__version__",
+    "GeneratedData",
+    "GeneratedRun",
+    "generate",
     "DynamicCampaignDataset",
     "evolve_campaigns",
     "register_intensity_model",

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal, cast
 
@@ -7,10 +7,9 @@ import polars as pl
 import typer
 
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
-from fraudtwin.difficulty import difficulty_metadata
 from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
+from fraudtwin.generation import generate as generate_library
 from fraudtwin.graph import GraphDataset, build_graph, validate_graph, write_graph
-from fraudtwin.manifest import RunManifest, create_manifest, write_manifest
 from fraudtwin.ml import (
     BenchmarkPack,
     PointInTimeDatasetBuilder,
@@ -21,17 +20,10 @@ from fraudtwin.ml import (
     write_point_in_time_dataset,
 )
 from fraudtwin.replay import ReplayOrder, replay_run, write_replay
-from fraudtwin.reproducibility import sha256_json
-from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
-from fraudtwin.simulation.behavior import BehaviorDataset
-from fraudtwin.simulation.generator import EntityDataset
 from fraudtwin.simulation.graph_fraud import GraphFraudDataset
 from fraudtwin.simulation.parquet import (
-    write_behavior_parquet,
     write_campaign_dynamics_sidecar,
     write_counterfactual_sidecar,
-    write_entity_parquet,
-    write_graph_truth,
 )
 
 app = typer.Typer(help="Synthetic financial-system and fraud digital twin.")
@@ -53,67 +45,6 @@ def _load_or_exit(path: Path) -> SimulationRunConfig:
     except (FileNotFoundError, ValueError) as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
-
-
-def _graph_metadata(
-    config: SimulationRunConfig,
-    entities: EntityDataset,
-    behavior: BehaviorDataset,
-    manifest: RunManifest,
-) -> dict[str, object]:
-    """Build optional source-manifest metadata for an enabled graph run."""
-
-    if not config.graph.enabled:
-        return {}
-    metadata: dict[str, object] = {
-        "enabled": True,
-        "configuration_hash": config_hash(config),
-        "schema_version": "2",
-        "node_count": sum(entities.counts.values()),
-        "edge_count": 0,
-        "pattern_count": len(behavior.graph_patterns),
-        "campaign_membership_count": len(behavior.graph_memberships),
-        "campaign_count": len(behavior.graph_campaigns),
-        "evidence_count": len(behavior.graph_evidence),
-        "hyperedge_count": len(behavior.graph_hyperedges),
-        "hyperedge_membership_count": len(behavior.graph_hyperedge_memberships),
-        "source_snapshot": {
-            "start": config.simulation.start.isoformat(),
-            "end": (
-                config.simulation.start + timedelta(days=config.simulation.duration_days)
-            ).isoformat(),
-        },
-    }
-    source_graph = build_graph(config, entities, behavior, manifest, view="oracle")
-    metadata.update(
-        {
-            "node_count": len(source_graph.nodes),
-            "edge_count": len(source_graph.edges),
-            "pattern_count": len(source_graph.patterns),
-            "output_fingerprint": source_graph.output_fingerprint,
-            "schema_fingerprint": sha256_json(
-                {
-                    "graph_schema_version": "2",
-                    "source_tables": entities.counts,
-                    "events": behavior.event_counts,
-                }
-            ),
-            "oracle_artifact_fingerprint": sha256_json(
-                {
-                    name: [item.model_dump(mode="json") for item in records]
-                    for name, records in (
-                        ("campaigns", behavior.graph_campaigns),
-                        ("patterns", behavior.graph_patterns),
-                        ("campaign_memberships", behavior.graph_memberships),
-                        ("evidence", behavior.graph_evidence),
-                        ("hyperedges", behavior.graph_hyperedges),
-                        ("hyperedge_memberships", behavior.graph_hyperedge_memberships),
-                    )
-                }
-            ),
-        }
-    )
-    return metadata
 
 
 def _parse_optional_timestamp(value: str | None) -> datetime | None:
@@ -145,110 +76,16 @@ def generate(
     """Validate a configuration and generate a reproducible batch dataset."""
 
     config = _load_or_exit(path)
-    base_manifest = create_manifest(config)
-    entity_dataset = EntityGenerator(config).generate()
-    behavior_dataset = BehaviorGenerator(
-        config, entity_dataset, simulation_run_id=base_manifest.run_id
-    ).generate()
-    run_dir = output_dir / base_manifest.run_id
-    write_entity_parquet(entity_dataset, run_dir)
-    write_behavior_parquet(behavior_dataset, run_dir)
-    write_graph_truth(
-        behavior_dataset.graph_memberships,
-        behavior_dataset.graph_patterns,
-        run_dir,
-        campaigns=behavior_dataset.graph_campaigns,
-        evidence=behavior_dataset.graph_evidence,
-        hyperedges=behavior_dataset.graph_hyperedges,
-        hyperedge_memberships=behavior_dataset.graph_hyperedge_memberships,
-    )
-    counterfactual_metadata: dict[str, object] | None = None
-    campaign_dynamics_metadata: dict[str, object] | None = None
-    if behavior_dataset.campaign_dynamics is not None:
-        dynamic_root, dynamic_manifest_path = write_campaign_dynamics_sidecar(
-            behavior_dataset.campaign_dynamics,
-            run_dir,
-            source_run_id=base_manifest.run_id,
-        )
-        campaign_dynamics_metadata = {
-            "root": str(dynamic_root.relative_to(run_dir)),
-            "manifest": str(dynamic_manifest_path.relative_to(run_dir)),
-            "configuration_hash": behavior_dataset.campaign_dynamics.configuration_hash,
-            "stream_ids": list(behavior_dataset.campaign_dynamics.stream_ids),
-            "transitions": len(behavior_dataset.campaign_dynamics.transitions),
-            "snapshots": len(behavior_dataset.campaign_dynamics.snapshots),
-        }
-    if behavior_dataset.counterfactual is not None:
-        counterfactual_root, counterfactual_manifest_path = write_counterfactual_sidecar(
-            behavior_dataset.counterfactual, run_dir
-        )
-        counterfactual_metadata = {
-            **behavior_dataset.counterfactual.metadata,
-            "counterfactual_id": behavior_dataset.counterfactual.counterfactual_id,
-            "root": str(counterfactual_root),
-            "manifest": str(counterfactual_manifest_path),
-            "accepted": len(behavior_dataset.counterfactual.modified_payments),
-            "rejected": len(behavior_dataset.counterfactual.rejected),
-        }
-    entity_counts = {**entity_dataset.counts, "behavior_profiles": len(behavior_dataset.profiles)}
-    if entity_dataset.state_history:
-        entity_counts["state_history"] = len(entity_dataset.state_history)
-    event_counts = behavior_dataset.event_counts
-    graph_metadata = _graph_metadata(config, entity_dataset, behavior_dataset, base_manifest)
-    manifest = base_manifest.model_copy(
-        update={
-            "entity_counts": entity_counts,
-            "event_counts": event_counts,
-            "schema_versions": {
-                **{entity_name: "1" for entity_name in entity_counts},
-                "payments": "2",
-                "payment_events": "5",
-                "ledger_entries": "1",
-                "fraud_records": "1",
-                "fraud_alerts": "1",
-                "fraud_cases": "1",
-                "case_confirmations": "1",
-                "customer_disputes": "1",
-                "fraud_labels": "1",
-                **(
-                    {"counterfactual_change_sets": "1"}
-                    if counterfactual_metadata is not None
-                    else {}
-                ),
-            },
-            "fraud_counts": behavior_dataset.fraud_counts,
-            "fraud_rates": behavior_dataset.fraud_rates,
-            "quality_fault_counts": behavior_dataset.quality_fault_counts,
-            "quality_fault_rates": behavior_dataset.quality_fault_rates,
-            "quality_diagnostics": behavior_dataset.quality_diagnostics,
-            "graph": graph_metadata,
-            "difficulty": difficulty_metadata(
-                config,
-                entity_dataset,
-                behavior_dataset,
-                base_manifest.run_id,
-            )
-            or None,
-            "camouflage": behavior_dataset.camouflage_metadata or None,
-            "counterfactual": counterfactual_metadata,
-            "campaign_dynamics": campaign_dynamics_metadata,
-        }
-    )
-    dataset_path: Path | None = None
-    dataset_manifest_path: Path | None = None
-    if config.dataset.enabled:
-        dataset = PointInTimeDatasetBuilder(
-            config, entity_dataset, behavior_dataset, manifest
-        ).build()
-        dataset_path, dataset_manifest_path = write_point_in_time_dataset(
-            dataset, run_dir / "ml" / "dataset.parquet"
-        )
-    manifest_path = write_manifest(manifest, output_dir)
+    result = generate_library(config, write=True, output_dir=output_dir)
+    manifest = result.manifest
+    entity_counts = manifest.entity_counts
+    event_counts = manifest.event_counts
+    manifest_path = result.manifest_path
     typer.echo(f"Run generated: {manifest.run_id}")
     typer.echo(f"Manifest: {manifest_path}")
-    if dataset_path is not None and dataset_manifest_path is not None:
-        typer.echo(f"Dataset: {dataset_path}")
-        typer.echo(f"Dataset manifest: {dataset_manifest_path}")
+    if result.dataset_path is not None and result.dataset_manifest_path is not None:
+        typer.echo(f"Dataset: {result.dataset_path}")
+        typer.echo(f"Dataset manifest: {result.dataset_manifest_path}")
     typer.echo("Generated entity counts:")
     for entity_name, count in entity_counts.items():
         typer.echo(f"  {entity_name}: {count}")

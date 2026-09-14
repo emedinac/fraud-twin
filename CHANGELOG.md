@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.18.0 — Package convertion release
+
+- Added a `pip install` procedure and first getting-started tutorial in ipynb.
+- Added the high-level `fraudtwin.generate()` Python API for in-memory generation or persisted runs while preserving the existing CLI.
+- Added a built-in minimal configuration so library users can call `fraudtwin.generate()` without repository-relative paths.
+
 ## 0.17.0 — Milestone 15 Advanced Campaign Dynamics
 
 - Added strict opt-in evolving campaign profiles, deterministic phase transitions, bounded Hawkes and piecewise intensity models, actor/device rotation, cross-rail actions, topology mutations, higher-order graph lineage, and reproducible oracle sidecars.
