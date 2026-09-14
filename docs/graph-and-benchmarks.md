@@ -51,6 +51,10 @@ poetry run fraudtwin generate \
 
 Requested and effective strengths, cohort snapshots, constraints, and measured observable/oracle summaries are recorded in manifests. Geography is represented through valid customer and merchant choices because the payment schema has no standalone geography field. Requests that exceed available capacity are capped or redirected deterministically and recorded as constraints.
 
+## Advanced campaign dynamics
+
+M15 evolves matching M11 campaigns in stable campaign order. Phase snapshots and transitions use isolated per-campaign streams, and derived payments receive reserved `M15-` IDs with source lineage. Actor joins/leaves, mule and device rotation, cross-rail movement, split/merge mutations, and structural hyperedges remain closed over the oracle graph. Observable graph views use only source-available events; dynamic truth and transition reasons remain oracle-only.
+
 ## Choosing a fixture
 
 | Fixture | Best for |

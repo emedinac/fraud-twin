@@ -16,10 +16,19 @@ import polars as pl
 from pydantic import BaseModel
 
 from fraudtwin import __version__
+from fraudtwin.campaign_dynamics import DynamicCampaignDataset
 from fraudtwin.config import SimulationRunConfig, _default_feature_windows, config_hash
 from fraudtwin.domain import (
     Account,
     BehaviorProfile,
+    CampaignActorMembershipChange,
+    CampaignIntensityDecision,
+    CampaignLineage,
+    CampaignPhaseChange,
+    CampaignSourceSnapshot,
+    CampaignStateSnapshot,
+    CampaignTopologyMutation,
+    CampaignTransition,
     Card,
     Customer,
     CustomerDispute,
@@ -49,6 +58,7 @@ from fraudtwin.manifest import DatasetManifest, RunManifest
 from fraudtwin.reproducibility import as_utc, canonical_json, sha256_json
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
+from fraudtwin.simulation.graph_fraud import GraphFraudDataset
 
 PIT_DATASET_SCHEMA: dict[str, Any] = {
     "dataset_row_id": pl.Utf8,
@@ -374,6 +384,47 @@ def load_generated_run(
             else ()
         ),
     )
+    dynamic_roots = (
+        sorted((run_dir / "campaign_dynamics").glob("M15-*/oracle"))
+        if (run_dir / "campaign_dynamics").is_dir()
+        else []
+    )
+    if dynamic_roots:
+        dynamic_oracle = dynamic_roots[-1]
+        dynamic_graph = GraphFraudDataset(
+            behavior.payments,
+            behavior.payment_events,
+            behavior.ledger_entries,
+            behavior.fraud_records,
+            behavior.graph_memberships,
+            behavior.graph_patterns,
+            behavior.graph_campaigns,
+            behavior.graph_evidence,
+            behavior.graph_hyperedges,
+            behavior.graph_hyperedge_memberships,
+        )
+        dynamic = DynamicCampaignDataset(
+            graph=dynamic_graph,
+            snapshots=_read_models(dynamic_oracle / "snapshots.parquet", CampaignStateSnapshot),
+            transitions=_read_models(dynamic_oracle / "transitions.parquet", CampaignTransition),
+            phase_changes=_read_models(
+                dynamic_oracle / "phase_changes.parquet", CampaignPhaseChange
+            ),
+            membership_changes=_read_models(
+                dynamic_oracle / "membership_changes.parquet", CampaignActorMembershipChange
+            ),
+            intensity_decisions=_read_models(
+                dynamic_oracle / "intensity_decisions.parquet", CampaignIntensityDecision
+            ),
+            topology_mutations=_read_models(
+                dynamic_oracle / "topology_mutations.parquet", CampaignTopologyMutation
+            ),
+            lineage=_read_models(dynamic_oracle / "lineage.parquet", CampaignLineage),
+            source_snapshots=_read_models(
+                dynamic_oracle / "source_snapshots.parquet", CampaignSourceSnapshot
+            ),
+        )
+        behavior = replace(behavior, campaign_dynamics=dynamic)
     if manifest.difficulty is not None:
         oracle_models: dict[str, tuple[type[BaseModel], str, str]] = {
             "behavior_profiles": (BehaviorProfile, "oracle/behavior", "behavior_profiles"),

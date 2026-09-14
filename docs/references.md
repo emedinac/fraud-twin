@@ -33,4 +33,10 @@ These references informed FraudTwin’s design. The repository does not bundle c
 
 ## Engineering references
 
+## Advanced Campaign Dynamics references
+
+- Prasetya et al., [*A multi-rounded adversarial scenario for graph-based promo fraud detection*](https://doi.org/10.1007/s13278-025-01566-0) — evolving campaign structure.
+- Fan et al., [*Fraud learns too*](https://doi.org/10.1038/s41598-026-60997-7) — structural drift and perturbation concepts.
+- Haghighi et al., [*Beyond pairwise relationships*](https://doi.org/10.1007/s10115-025-02476-5) — higher-order fraud relationships.
+
 - [Python Packaging User Guide](https://packaging.python.org/en/latest/), [Pydantic documentation](https://docs.pydantic.dev/latest/), and [pytest documentation](https://docs.pytest.org/en/stable/) — informed package layout, typed configuration validation, and deterministic regression testing.

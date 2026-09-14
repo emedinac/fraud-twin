@@ -1,10 +1,18 @@
-__version__ = "0.15.0"
+__version__ = "0.17.0"
 
 from fraudtwin.camouflage import (  # noqa: E402
     CamouflagePlan,
     ResolvedCamouflage,
     apply_camouflage,
     resolve_camouflage,
+)
+from fraudtwin.campaign_dynamics import (  # noqa: E402
+    DynamicCampaignDataset,
+    evolve_campaigns,
+    register_intensity_model,
+    register_transition_model,
+    resolve_campaign_dynamics,
+    validate_campaign_dynamics,
 )
 from fraudtwin.counterfactual import (  # noqa: E402
     CounterfactualChangeSet,
@@ -41,6 +49,12 @@ from fraudtwin.graph import (  # noqa: E402
 
 __all__ = [
     "__version__",
+    "DynamicCampaignDataset",
+    "evolve_campaigns",
+    "register_intensity_model",
+    "register_transition_model",
+    "resolve_campaign_dynamics",
+    "validate_campaign_dynamics",
     "ResolvedDifficulty",
     "ResolvedCamouflage",
     "CamouflagePlan",

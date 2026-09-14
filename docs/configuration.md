@@ -169,6 +169,23 @@ stress:
 
 Use either the versioned fixtures under `configs/benchmarks/` or a copied YAML file when comparing runs. The resolved controls, constraints, cohort choices, and effective configuration hash are recorded with the output.
 
+## Dynamic campaign evolution
+
+M15 is disabled by default and does not change legacy IDs, hashes, schemas, or files. Enable it with an M11 graph run:
+
+```yaml
+campaign_dynamics:
+  enabled: true
+  bindings:
+    - {profile: linear}
+    - {profile: rotating_ring}
+    - {profile: adaptive_network}
+```
+
+The built-ins target `MULE_NETWORK`, `CYCLIC_RING`, and `DENSE_CAMPAIGN`. Bindings validate phase durations and transitions before generation and support `marked_hawkes_v1` (default) or `piecewise_rate_v1`. CARD actions are merchant purchases with the normal card lifecycle; PIX and account-transfer actions preserve account-to-account ledger rules. Rail, template, model, phase, and capacity incompatibilities are rejected deterministically.
+
+M15 runs after M11 and before M13. M14 still selects pristine legitimate sources before all fraud, graph, dynamic, and camouflage processing. Dynamic state, reasons, membership history, intensity decisions, topology mutations, and lineage are oracle-only append-only Parquet artifacts under `campaign_dynamics/<m15_id>/`; observable output uses established payment, event, and ledger schemas. Custom deterministic transition and intensity models can be registered through the public API. `fraudtwin campaign evolve` appends a sidecar to a clean static graph run without modifying its existing artifacts.
+
 ## Reproducibility
 
 Named random streams isolate entity, behavior, payment, lifecycle, fraud, quality, graph, and benchmark generation. The same validated configuration and seed produce equivalent identities, records, ordering, schemas, and manifests. Scenario generation never depends on the current clock or uncontrolled global randomness.

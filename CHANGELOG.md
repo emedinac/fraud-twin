@@ -1,77 +1,50 @@
 # Release notes
 
+## 0.17.0 — Milestone 15 Advanced Campaign Dynamics
+
+- Added strict opt-in evolving campaign profiles, deterministic phase transitions, bounded Hawkes and piecewise intensity models, actor/device rotation, cross-rail actions, topology mutations, higher-order graph lineage, and reproducible oracle sidecars.
+- Added immutable M15 domain records, named streams, stable `M15-` IDs, and the
+  append-only `campaign evolve` CLI while preserving M14 source ordering and M13 post-evolution processing.
+
 ## 0.16.0 — Methodology completion for Milestones 4, 5 and 8
 
-- Completed strict M4/M5 lifecycle gaps with explicit card initiation, PIX
-  timeout handling, direct settled-return transitions, contract version 5, and
-  legacy v1-v4 read/replay compatibility.
-- Expanded M8 with independently configurable deterministic fault types,
-  mutation audit records, diagnostics, raw encoding artifacts, partition-skew
-  assignments, and serialized schema evolution with compatibility metadata.
+- Completed strict M4/M5 lifecycle gaps with explicit card initiation, PIX timeout handling, direct settled-return transitions, contract version 5, and legacy v1-v4 read/replay compatibility.
+- Expanded M8 with independently configurable deterministic fault types, mutation audit records, diagnostics, raw encoding artifacts, partition-skew assignments, and serialized schema evolution with compatibility metadata.
 
 ## 0.15.0 — Milestone 14 Counterfactual Fraud Generation
 
-- Added strict opt-in counterfactual configuration with deterministic source
-  selection, weighted distance budgets, immutable source lineage, and explicit
-  infeasibility records.
-- Added M6 and M11 objective requests, isolated M14 streams, derived IDs, and
-  original/modified observable plus oracle sidecar artifacts.
-- Added integrated and standalone counterfactual CLI workflows, the M14
-  benchmark fixture, public resolver/generator APIs, and reproducibility
-  metadata without changing inactive M1–M13 identities.
+- Added strict opt-in counterfactual configuration with deterministic source selection, weighted distance budgets, immutable source lineage, and explicit infeasibility records.
+- Added M6 and M11 objective requests, isolated M14 streams, derived IDs, and original/modified observable plus oracle sidecar artifacts.
+- Added integrated and standalone counterfactual CLI workflows, the M14 benchmark fixture, public resolver/generator APIs, and reproducibility metadata without changing inactive M1–M13 identities.
 
 ## 0.14.0 — Milestone 13 Camouflage Engine
 
-- Added strict opt-in feature and relation camouflage controls with global,
-  fraud-family, graph-family, and per-signal overrides.
-- Added deterministic legitimate cohort selection, isolated M13 seed streams,
-  measurable similarity summaries, feasibility caps, and observable/oracle
-  truth separation.
-- Added lineage-valid benign graph support events while preserving fraud
-  campaign induced topology, lifecycle, ledger, workflow, and oracle truth.
-- Added source, dataset, and graph camouflage provenance, the M13 fixture,
-  focused regression tests, and public resolver APIs.
+- Added strict opt-in feature and relation camouflage controls with global, fraud-family, graph-family, and per-signal overrides.
+- Added deterministic legitimate cohort selection, isolated M13 seed streams, measurable similarity summaries, feasibility caps, and observable/oracle truth separation.
+- Added lineage-valid benign graph support events while preserving fraud campaign induced topology, lifecycle, ledger, workflow, and oracle truth.
+- Added source, dataset, and graph camouflage provenance, the M13 fixture, focused regression tests, and public resolver APIs.
 
 ## 0.13.0 — Milestone 12 Fraud Difficulty Engine
 
-- Added strict opt-in difficulty levels 1–10 with per-dimension override
-  controls for overlap, behavioral deviation, scenario subtlety,
-  hard-negative noise, prevalence, temporal irregularity, and graph structure.
-- Added deterministic `resolve_difficulty` and `apply_difficulty` APIs with
-  isolated streams, explicit per-scenario transformations, and effective
-  configuration hashes.
-- Added difficulty-aware M6/M11 generation while preserving fraud objectives,
-  graph topology, ledger reconciliation, temporal ordering, and oracle truth.
-- Added active-run oracle separation, source/dataset/graph difficulty metadata,
-  measured summaries, the M12 fixture, focused tests, and documentation.
+- Added strict opt-in difficulty levels 1–10 with per-dimension override controls for overlap, behavioral deviation, scenario subtlety, hard-negative noise, prevalence, temporal irregularity, and graph structure.
+- Added deterministic `resolve_difficulty` and `apply_difficulty` APIs with isolated streams, explicit per-scenario transformations, and effective configuration hashes.
+- Added difficulty-aware M6/M11 generation while preserving fraud objectives, graph topology, ledger reconciliation, temporal ordering, and oracle truth.
+- Added active-run oracle separation, source/dataset/graph difficulty metadata, measured summaries, the M12 fixture, focused tests, and documentation.
 
 ## 0.12.0 — Milestone 11 Graph Fraud
 
-- Added schema-v2 opt-in deterministic graph scenarios: mule, cyclic ring,
-  beneficiary, fan-in/out, bipartite, stacked, scatter/gather, shared
-  infrastructure, dense and merchant communities, and labelled controls.
-- Added temporal observable/oracle graph construction, evidence and hyperedge
-  incidence artifacts, structural validation, typed Parquet output, bulk-ready
-  Neo4j CSV/Cypher artifacts, and optional PyTorch Geometric export.
-- Added graph configuration, source/export manifest metadata, M11 fixture
-  configuration, CLI workflow, public graph APIs, and focused regression tests.
+- Added schema-v2 opt-in deterministic graph scenarios: mule, cyclic ring, beneficiary, fan-in/out, bipartite, stacked, scatter/gather, shared infrastructure, dense and merchant communities, and labelled controls.
+- Added temporal observable/oracle graph construction, evidence and hyperedge incidence artifacts, structural validation, typed Parquet output, bulk-ready Neo4j CSV/Cypher artifacts, and optional PyTorch Geometric export.
+- Added graph configuration, source/export manifest metadata, M11 fixture configuration, CLI workflow, public graph APIs, and focused regression tests.
 
 ## 0.11.0 — Methodology completion for Milestones 1–8
 
-- **Milestone 1:** added optional effective-dated customer/account state history
-  with deterministic Parquet output and compatible merchant-acquirer selection.
-- **Milestone 2:** enforced active account/card eligibility and card/account
-  spend limits during payment generation.
-- **Milestone 3:** made spending-level segment weights configurable and added
-  beginning/end-of-month, payday, holiday, travel-period, and merchant-hour
-  temporal controls.
-- **Milestone 4:** added configurable card chargeback creation/resolution and
-  card lifecycle participant references.
-- **Milestone 8:** added deterministic source-outage and scheduled schema-change
-  injectors, per-fault audit metadata, and an exported pristine oracle snapshot
-  before corruption.
-- **Milestone 10:** replay now carries selected entity state-history records
-  through the immutable replay artifact.
+- **Milestone 1:** added optional effective-dated customer/account state history with deterministic Parquet output and compatible merchant-acquirer selection.
+- **Milestone 2:** enforced active account/card eligibility and card/account spend limits during payment generation.
+- **Milestone 3:** made spending-level segment weights configurable and added beginning/end-of-month, payday, holiday, travel-period, and merchant-hour temporal controls.
+- **Milestone 4:** added configurable card chargeback creation/resolution and card lifecycle participant references.
+- **Milestone 8:** added deterministic source-outage and scheduled schema-change injectors, per-fault audit metadata, and an exported pristine oracle snapshot before corruption.
+- **Milestone 10:** replay now carries selected entity state-history records through the immutable replay artifact.
 
 ## 0.10.0 — Milestone 10
 

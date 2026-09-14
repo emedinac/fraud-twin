@@ -25,8 +25,10 @@ from fraudtwin.reproducibility import sha256_json
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
+from fraudtwin.simulation.graph_fraud import GraphFraudDataset
 from fraudtwin.simulation.parquet import (
     write_behavior_parquet,
+    write_campaign_dynamics_sidecar,
     write_counterfactual_sidecar,
     write_entity_parquet,
     write_graph_truth,
@@ -40,7 +42,9 @@ app.add_typer(ml_app, name="ml")
 graph_app = typer.Typer(help="Build deterministic temporal graph views.")
 app.add_typer(graph_app, name="graph")
 counterfactual_app = typer.Typer(help="Generate deterministic M14 counterfactual sidecars.")
+campaign_app = typer.Typer(help="Evolve deterministic M15 campaign sidecars.")
 app.add_typer(counterfactual_app, name="counterfactual")
+app.add_typer(campaign_app, name="campaign")
 
 
 def _load_or_exit(path: Path) -> SimulationRunConfig:
@@ -159,6 +163,21 @@ def generate(
         hyperedge_memberships=behavior_dataset.graph_hyperedge_memberships,
     )
     counterfactual_metadata: dict[str, object] | None = None
+    campaign_dynamics_metadata: dict[str, object] | None = None
+    if behavior_dataset.campaign_dynamics is not None:
+        dynamic_root, dynamic_manifest_path = write_campaign_dynamics_sidecar(
+            behavior_dataset.campaign_dynamics,
+            run_dir,
+            source_run_id=base_manifest.run_id,
+        )
+        campaign_dynamics_metadata = {
+            "root": str(dynamic_root.relative_to(run_dir)),
+            "manifest": str(dynamic_manifest_path.relative_to(run_dir)),
+            "configuration_hash": behavior_dataset.campaign_dynamics.configuration_hash,
+            "stream_ids": list(behavior_dataset.campaign_dynamics.stream_ids),
+            "transitions": len(behavior_dataset.campaign_dynamics.transitions),
+            "snapshots": len(behavior_dataset.campaign_dynamics.snapshots),
+        }
     if behavior_dataset.counterfactual is not None:
         counterfactual_root, counterfactual_manifest_path = write_counterfactual_sidecar(
             behavior_dataset.counterfactual, run_dir
@@ -212,6 +231,7 @@ def generate(
             or None,
             "camouflage": behavior_dataset.camouflage_metadata or None,
             "counterfactual": counterfactual_metadata,
+            "campaign_dynamics": campaign_dynamics_metadata,
         }
     )
     dataset_path: Path | None = None
@@ -235,6 +255,70 @@ def generate(
     typer.echo("Generated payment counts:")
     for event_name, count in event_counts.items():
         typer.echo(f"  {event_name}: {count}")
+
+
+@campaign_app.command("evolve")
+def evolve_campaign_command(
+    config_path: Annotated[Path, typer.Option("--config", help="M15 configuration YAML file.")],
+    source_run_id: Annotated[str, typer.Option("--source-run-id", help="Static source run ID.")],
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory containing the source run.")
+    ] = Path("runs"),
+) -> None:
+    """Append an M15 sidecar to a compatible clean static graph run."""
+
+    config = _load_or_exit(config_path)
+    source_dir = output_dir / source_run_id
+    try:
+        entities, behavior, source_manifest = load_generated_run(source_dir)
+        source_config = SimulationRunConfig.model_validate(source_manifest.resolved_configuration)
+        if source_config.campaign_dynamics.active or source_config.stress.active:
+            raise ValueError("standalone M15 requires a source run without M13/M15")
+        if config.stress.active:
+            raise ValueError("standalone M15 does not accept active M13 camouflage")
+        if source_config.quality.profile != "clean" or config.quality.profile != "clean":
+            raise ValueError("standalone M15 requires clean quality output")
+        if not config.campaign_dynamics.active or not source_config.graph.enabled:
+            raise ValueError("standalone M15 requires enabled campaign dynamics and graph source")
+        source_values = source_config.model_dump(mode="json")
+        requested_values = config.model_dump(mode="json")
+        for section in (
+            "simulation",
+            "population",
+            "payments",
+            "behavior",
+            "card_lifecycle",
+            "pix_lifecycle",
+            "fraud",
+            "graph",
+            "quality",
+        ):
+            if source_values.get(section) != requested_values.get(section):
+                raise ValueError(f"standalone M15 base configuration mismatch in {section}")
+        graph_dataset = GraphFraudDataset(
+            behavior.payments,
+            behavior.payment_events,
+            behavior.ledger_entries,
+            behavior.fraud_records,
+            behavior.graph_memberships,
+            behavior.graph_patterns,
+            behavior.graph_campaigns,
+            behavior.graph_evidence,
+            behavior.graph_hyperedges,
+            behavior.graph_hyperedge_memberships,
+        )
+        from fraudtwin.campaign_dynamics import evolve_campaigns
+
+        dynamic = evolve_campaigns(config, entities, graph_dataset, source_manifest.run_id)
+        root, manifest_path = write_campaign_dynamics_sidecar(
+            dynamic, source_dir, source_run_id=source_manifest.run_id
+        )
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        typer.echo(f"Campaign evolution failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Campaign dynamics generated: {root.name}")
+    typer.echo(f"Output: {root}")
+    typer.echo(f"Manifest: {manifest_path}")
 
 
 @counterfactual_app.command("generate")

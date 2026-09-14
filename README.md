@@ -26,6 +26,7 @@ FraudTwin generates a small, coherent payment world: customers have accounts, ca
 - Optional graph-fraud campaigns with observable/oracle views, Neo4j artifacts, and PyG export.
 - Difficulty and camouflage controls for cases that remain valid but are harder to separate.
 - Opt-in counterfactual fraud trajectories with minimum-change budgets and audit lineage.
+- Opt-in dynamic fraud campaigns with phase evolution, rail movement, topology mutations, and oracle sidecars.
 
 FraudTwin is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and timing before introducing a larger streaming or production stack.
 
@@ -82,6 +83,10 @@ runs/<run_id>/
     ├── observable/{original,modified}/
     ├── oracle/change_sets.parquet
     └── counterfactual_manifest.json
+└── campaign_dynamics/<m15_id>/
+    ├── observable/
+    ├── oracle/
+    └── campaign_dynamics_manifest.json
 ```
 
 The manifest records the seed, configuration, schemas, counts, fingerprints, and quality diagnostics. Graph and benchmark runs may also contain `oracle/`, graph exports, and backtest folds. No real personal data or payment credentials are generated.
