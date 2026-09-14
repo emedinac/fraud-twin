@@ -1,5 +1,12 @@
 # Release notes
 
+## 0.20.0 — Tutorial and Baseline Evaluation Workflows
+
+- Added numbered tutorials covering configuration, payment lifecycles, fraud and delayed labels, point-in-time datasets, stress testing, and simple fraud scoring.
+- Added an end-to-end stress-testing tutorial for replay, graph views, difficulty, camouflage, and counterfactual fraud.
+- Added a dependency-free, transparent fraud-scoring baseline using point-in-time features with precision and recall evaluation across temporal splits.
+- Improved tutorial explanations, references, direct links, and documentation navigation.
+
 ## 0.19.0 — Milestone 16 Reference Calibration & Fidelity
 
 - Added strict Parquet reference loading, deterministic aggregate calibration profiles, profile serialization/reuse, custom calibration registries, and named calibration streams.
