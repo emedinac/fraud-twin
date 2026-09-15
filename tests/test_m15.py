@@ -23,7 +23,7 @@ FIXTURE = Path("configs/benchmarks/m15-campaign-dynamics-v1.yaml")
 
 
 def test_m15_is_strict_and_neutral_identity_is_unchanged() -> None:
-    assert __version__ == "0.25.0"
+    assert __version__ == "0.26.0"
     base = load_config(Path("configs/minimal.yaml"))
     neutral = base.model_copy(update={"campaign_dynamics": CampaignDynamicsConfig()})
     assert config_hash(base) == config_hash(neutral)

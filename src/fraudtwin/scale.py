@@ -229,7 +229,7 @@ def write_checkpoint(path: str | Path, checkpoint: ScaleCheckpoint) -> Path:
 
     if checkpoint.integrity_hash is None:
         checkpoint = checkpoint.model_copy(
-            update={"integrity_hash": _checkpoint_integrity_hash(checkpoint)}
+            update={"integrity_hash": checkpoint_fingerprint(checkpoint)}
         )
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -248,7 +248,7 @@ def load_checkpoint(path: str | Path) -> ScaleCheckpoint:
     try:
         checkpoint = ScaleCheckpoint.model_validate_json(source.read_text(encoding="utf-8"))
         if checkpoint.integrity_hash is not None:
-            if checkpoint.integrity_hash != _checkpoint_integrity_hash(checkpoint):
+            if checkpoint.integrity_hash != checkpoint_fingerprint(checkpoint):
                 raise ValueError("checkpoint integrity hash mismatch")
         return checkpoint
     except (OSError, ValueError) as exc:
@@ -350,10 +350,6 @@ def _checkpoint_integrity_payload(checkpoint: ScaleCheckpoint) -> dict[str, Any]
     payload.pop("integrity_hash", None)
     payload.pop("created_at", None)
     return payload
-
-
-def _checkpoint_integrity_hash(checkpoint: ScaleCheckpoint) -> str:
-    return sha256_json(_checkpoint_integrity_payload(checkpoint))
 
 
 __all__ = [

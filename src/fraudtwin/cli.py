@@ -6,7 +6,13 @@ from typing import Annotated, Literal, cast
 import polars as pl
 import typer
 
-from fraudtwin.benchmark import BenchmarkRequest, SuiteName, run_benchmark
+from fraudtwin.benchmark import (
+    BenchmarkRequest,
+    SuiteName,
+    load_public_pack,
+    run_benchmark,
+    run_public_benchmark,
+)
 from fraudtwin.calibration import (
     fit_calibration_profile,
     load_reference_data,
@@ -50,10 +56,20 @@ counterfactual_app = typer.Typer(help="Generate deterministic M14 counterfactual
 campaign_app = typer.Typer(help="Evolve deterministic M15 campaign sidecars.")
 app.add_typer(counterfactual_app, name="counterfactual")
 app.add_typer(campaign_app, name="campaign")
+benchmark_app = typer.Typer(help="Run generic M20 suites or immutable M21 public packs.")
+app.add_typer(benchmark_app, name="benchmark")
 
 
-@app.command("benchmark")
-def benchmark_command(
+def _selected_models(models: list[str] | None) -> tuple[str, ...]:
+    return tuple(
+        item.strip()
+        for value in (models or ["deterministic_heuristic"])
+        for item in value.split(",")
+        if item.strip()
+    )
+
+
+def _run_generic_benchmark(
     suite: Annotated[
         str,
         typer.Option(
@@ -89,12 +105,7 @@ def benchmark_command(
 ) -> None:
     """Generate and evaluate a reproducible fraud stress benchmark."""
 
-    selected_models = tuple(
-        item.strip()
-        for value in (models or ["deterministic_heuristic"])
-        for item in value.split(",")
-        if item.strip()
-    )
+    selected_models = _selected_models(models)
     try:
         result = run_benchmark(
             BenchmarkRequest(
@@ -114,6 +125,98 @@ def benchmark_command(
     typer.echo(f"Manifest: {result.manifest_path}")
     typer.echo(f"Results: {result.results_path}")
     typer.echo(f"Descriptors: {result.descriptors_path}")
+
+
+@benchmark_app.callback(invoke_without_command=True)
+def benchmark_command(
+    ctx: typer.Context,
+    suite: Annotated[
+        str,
+        typer.Option(
+            "--suite",
+            help=(
+                "Legacy M20 suite or all: baseline, temporal, boundary, camouflage, "
+                "graph, observability, calibrated, mixed."
+            ),
+        ),
+    ] = "mixed",
+    difficulty: Annotated[int, typer.Option("--difficulty", min=1, max=10)] = 7,
+    seed: Annotated[int, typer.Option("--seed", min=0)] = 42,
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for benchmark artifacts.")
+    ] = Path("runs/benchmarks"),
+    models: Annotated[
+        list[str] | None,
+        typer.Option("--models", help="Built-in model ID; repeat or comma-separate."),
+    ] = None,
+    runners: Annotated[
+        list[str] | None,
+        typer.Option("--runner", help="External runner module:factory; repeat this option."),
+    ] = None,
+    calibration_profile: Annotated[
+        Path | None, typer.Option("--calibration-profile", help="M16 calibration profile YAML.")
+    ] = None,
+) -> None:
+    """Run the backwards-compatible generic M20 benchmark command."""
+
+    if ctx.invoked_subcommand is not None:
+        return
+    _run_generic_benchmark(
+        suite=suite,
+        difficulty=difficulty,
+        seed=seed,
+        output_dir=output_dir,
+        models=models,
+        runners=runners,
+        calibration_profile=calibration_profile,
+    )
+
+
+@benchmark_app.command("run")
+def benchmark_pack_run(
+    pack_ref: Annotated[str, typer.Argument(help="Immutable pack, e.g. FT-B04-CAMOUFLAGE@1.0")],
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for benchmark artifacts.")
+    ] = Path("runs/benchmarks"),
+    models: Annotated[
+        list[str] | None,
+        typer.Option("--models", help="Built-in model ID; repeat or comma-separate."),
+    ] = None,
+    runners: Annotated[
+        list[str] | None,
+        typer.Option("--runner", help="External runner module:factory; repeat this option."),
+    ] = None,
+) -> None:
+    """Run one immutable M21 public benchmark pack."""
+
+    try:
+        result = run_public_benchmark(
+            pack_ref,
+            output_dir=output_dir,
+            models=_selected_models(models),
+            runners=tuple(runners or ()),
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Public benchmark failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Public benchmark generated: {result.benchmark_id}")
+    typer.echo(f"Manifest: {result.manifest_path}")
+    typer.echo(f"Results: {result.results_path}")
+    typer.echo(f"Descriptors: {result.descriptors_path}")
+
+
+@benchmark_app.command("describe")
+def benchmark_pack_describe(
+    pack_ref: Annotated[str, typer.Argument(help="Immutable pack reference.")],
+) -> None:
+    """Describe the frozen definition of one M21 public benchmark pack."""
+
+    try:
+        pack = load_public_pack(pack_ref)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Public benchmark lookup failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(pack.model_dump(mode="json"), indent=2, sort_keys=True))
 
 
 def _load_or_exit(

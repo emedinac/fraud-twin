@@ -1,5 +1,11 @@
-__version__ = "0.25.0"
+__version__ = "0.26.0"
 
+from fraudtwin.benchmark import (  # noqa: E402
+    PublicBenchmarkPack,
+    list_public_packs,
+    load_public_pack,
+    run_public_benchmark,
+)
 from fraudtwin.calibration import (  # noqa: E402
     CalibrationMetric,
     CalibrationModel,
@@ -185,4 +191,8 @@ __all__ = [
     "register_distance_function",
     "resolve_counterfactual",
     "select_source_trajectories",
+    "PublicBenchmarkPack",
+    "list_public_packs",
+    "load_public_pack",
+    "run_public_benchmark",
 ]

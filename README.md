@@ -99,6 +99,18 @@ poetry run fraudtwin ml train runs/<run-id>/ml/dataset.parquet --output-dir runs
 poetry run fraudtwin ml evaluate runs/<run-id>/ml/dataset.parquet predictions.parquet
 ```
 
+For comparable results across machines and FraudTwin releases, run one of the
+bundled immutable public benchmark packs:
+
+```bash
+fraudtwin benchmark run FT-B04-CAMOUFLAGE@1.0
+fraudtwin benchmark describe FT-B04-CAMOUFLAGE@1.0.0
+```
+
+Pack definitions freeze their generation controls, PIT windows, metrics,
+calibration identity, descriptors, and logical fingerprints. Historical pack
+versions remain runnable; changes publish a new version.
+
 ## Generated output
 
 Runs are written under `runs/<run_id>/` (or the directory supplied with `--output-dir`):

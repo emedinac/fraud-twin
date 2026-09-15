@@ -71,6 +71,12 @@ MODEL_FEATURES = (
 )
 MODEL_CATEGORICAL_FEATURES = frozenset({"payment_rail", "payment_type"})
 PREDICTION_FIELDS = ("event_id", "payment_id", "customer_id", "account_id")
+FEATURE_VERSION = "M19-observable-allowlist-1"
+PREPROCESSING_METADATA = {
+    "missing_values": "numeric=0; categorical=__UNKNOWN__",
+    "categorical_encoding": "deterministic one-hot vocabulary fit on train rows",
+    "resampling": "none",
+}
 
 
 class BaselineEvaluationConfig(BaseModel):
@@ -101,6 +107,11 @@ class BaselineEvaluationConfig(BaseModel):
         if any(value not in ALL_MODEL_NAMES for value in values):
             raise ValueError(f"models must use supported names: {ALL_MODEL_NAMES}")
         return values
+
+
+def _tracking_metadata(config: BaselineEvaluationConfig) -> dict[str, str | bool]:
+    enabled = bool(config.tracking_uri)
+    return {"enabled": enabled, "backend": "mlflow" if enabled else "local"}
 
 
 def load_baseline_config(path: Path) -> BaselineEvaluationConfig:
@@ -745,7 +756,7 @@ def evaluate_predictions(
     manifest = {
         "evaluation_version": __version__,
         "model_id": model_id,
-        "feature_version": "M19-observable-allowlist-1",
+        "feature_version": FEATURE_VERSION,
         "model_features": list(MODEL_FEATURES),
         "prediction_count": len(selected),
         "label_policy": config.label_policy,
@@ -757,16 +768,9 @@ def evaluate_predictions(
                 "metrics": metrics,
             }
         ),
-        "tracking": {
-            "enabled": bool(config.tracking_uri),
-            "backend": "mlflow" if config.tracking_uri else "local",
-        },
+        "tracking": _tracking_metadata(config),
         "lineage": lineage,
-        "preprocessing": {
-            "missing_values": "numeric=0; categorical=__UNKNOWN__",
-            "categorical_encoding": "deterministic one-hot vocabulary fit on train rows",
-            "resampling": "none",
-        },
+        "preprocessing": PREPROCESSING_METADATA.copy(),
         "class_weights": "validation-independent train-label balancing",
     }
     return EvaluationResult(canonical_predictions, tuple(metrics), manifest)
@@ -849,20 +853,13 @@ def train_baselines(
         "evaluation_version": __version__,
         "models": list(config.models),
         "model_metadata": model_metadata,
-        "feature_version": "M19-observable-allowlist-1",
+        "feature_version": FEATURE_VERSION,
         "configuration": config.model_dump(mode="json"),
         "output_fingerprint": sha256_json({"predictions": all_predictions, "metrics": all_metrics}),
         "runtime": {"python": platform.python_version(), "platform": platform.platform()},
-        "tracking": {
-            "enabled": bool(config.tracking_uri),
-            "backend": "mlflow" if config.tracking_uri else "local",
-        },
+        "tracking": _tracking_metadata(config),
         "lineage": lineage,
-        "preprocessing": {
-            "missing_values": "numeric=0; categorical=__UNKNOWN__",
-            "categorical_encoding": "deterministic one-hot vocabulary fit on train rows",
-            "resampling": "none",
-        },
+        "preprocessing": PREPROCESSING_METADATA.copy(),
         "class_weights": "balanced from train labels only",
     }
     return EvaluationResult(tuple(all_predictions), tuple(all_metrics), manifest, model_artifacts)

@@ -1,0 +1,232 @@
+dependencies:
+- conditional_weights:
+    '5411': 0.75
+    '5812': 0.25
+  source: merchant_category
+  target: amount
+  version: '1'
+distributions:
+- maximum: 40.0
+  minimum: 10.0
+  name: amount
+  probabilities:
+  - 0.0
+  - 0.1
+  - 0.25
+  - 0.5
+  - 0.75
+  - 0.9
+  - 1.0
+  quantiles:
+  - 10.0
+  - 10.0
+  - 20.0
+  - 30.0
+  - 30.0
+  - 40.0
+  - 40.0
+  version: '1'
+- maximum: 3600.0
+  minimum: 3600.0
+  name: inter_arrival_seconds
+  probabilities:
+  - 0.0
+  - 0.1
+  - 0.25
+  - 0.5
+  - 0.75
+  - 0.9
+  - 1.0
+  quantiles:
+  - 3600.0
+  - 3600.0
+  - 3600.0
+  - 3600.0
+  - 3600.0
+  - 3600.0
+  - 3600.0
+  version: '1'
+profile_id: CAL-2a3593eb1d4b619c45ca
+profile_version: '1'
+provenance:
+  calibration_version: '1'
+  configuration_hash: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+  model_versions:
+    builtin: '1'
+  row_count: 4
+  seed: 42
+  source_fingerprint: 2f85992dadd138780b9cc6bfc5d77e9091df2d8985e2d556b7d88ae5f6ee5547
+  source_schema_fingerprint: f33b68ffcd262ca5c2f2bac290d7fb808529b6f20a832f8ce15d131c075db7bb
+  stream_ids:
+  - milestone-16:calibration:fit
+summaries:
+- available: true
+  fields:
+  - amount
+  fingerprint: f75fa1683324907c1a107faa9673bad95b2329b622c7b230bd5e628c817ae21e
+  name: amount_distribution
+  parameters:
+    quantiles:
+    - 10.0
+    - 10.0
+    - 20.0
+    - 30.0
+    - 30.0
+    - 40.0
+    - 40.0
+  version: '1'
+- available: true
+  fields:
+  - event_time
+  fingerprint: 0659ff3de17629447f68dbfe3ee8ceafe838c287237ef41a13cb0fe8f93e7146
+  name: seasonality
+  parameters:
+    hour_weights:
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    weekday_weights:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 4.0
+    - 0.0
+    - 0.0
+    - 0.0
+  version: '1'
+- available: true
+  fields:
+  - customer_id
+  fingerprint: 0a294a8adf3dd1f1ab7d8963dacc80b6e8e75a6ad034a5f03dba02fa6095c5ce
+  name: customer_activity
+  parameters:
+    count_quantiles:
+    - 2.0
+    - 2.0
+    - 2.0
+    - 2.0
+    - 2.0
+    - 2.0
+    - 2.0
+  version: '1'
+- available: true
+  fields:
+  - customer_id
+  fingerprint: f8d0565299278c656627a6544afe125d2a0e53c997ec6bdb18521083a22d953c
+  name: transaction_count
+  parameters:
+    count_quantiles:
+    - 2.0
+    - 2.0
+    - 2.0
+    - 2.0
+    - 2.0
+    - 2.0
+    - 2.0
+    customer_cardinality: 2
+    total: 4
+  version: '1'
+- available: true
+  fields:
+  - event_time
+  fingerprint: 67ff1a8fbf075f233bfe329fcb8c4e864824db67b9d4abab7d7b67e86d3e322d
+  name: inter_arrival
+  parameters:
+    quantiles:
+    - 3600.0
+    - 3600.0
+    - 3600.0
+    - 3600.0
+    - 3600.0
+    - 3600.0
+    - 3600.0
+  version: '1'
+- available: true
+  fields:
+  - merchant_category
+  fingerprint: 9c4cc40b796d959d18ca866b481343c027ee16d2c89fcf665ec9c644c9b655e0
+  name: merchant_frequency
+  parameters:
+    weights:
+      '5411': 0.75
+      '5812': 0.25
+  version: '1'
+- available: true
+  fields:
+  - account_balance
+  fingerprint: f133de71389bf7e3bec800707b98290ac013c2160c541a54964a6a5792955b83
+  name: account_balance
+  parameters:
+    maximum: 400.0
+    minimum: 100.0
+    quantiles:
+    - 100.0
+    - 100.0
+    - 200.0
+    - 300.0
+    - 300.0
+    - 400.0
+    - 400.0
+  version: '1'
+- available: true
+  fields:
+  - payer_account_id
+  - payee_account_id
+  fingerprint: cef5572c9aaf8db3bb6bf27e32effafc5cd67a23219db3d9d4640cb1181749c2
+  name: graph_statistics
+  parameters:
+    average_degree: 4.0
+    degree_quantiles:
+    - 4.0
+    - 4.0
+    - 4.0
+    - 4.0
+    - 4.0
+    - 4.0
+    - 4.0
+    edge_count: 4
+    motif_triangle_count: 0
+  version: '1'
+- available: true
+  fields:
+  - campaign_id
+  fingerprint: 686b05c29b07f286488087bc36ac0850177794da3a2d98f6c16446aa9b9e0227
+  name: campaign_statistics
+  parameters:
+    unavailable: true
+  version: '1'
+- available: true
+  fields:
+  - amount
+  - event_time
+  - merchant_category
+  fingerprint: 80f9ab9d0e48123335bff2ed173aab4eb85463cc600bfecec61be70bdef06bff
+  name: feature_dependencies
+  parameters:
+    supported:
+    - amount
+    - event_time
+    - merchant_category
+  version: '1'
+

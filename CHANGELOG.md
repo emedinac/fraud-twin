@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.26.0 — Milestone 21 Versioned Public Benchmark Packs
+
+- Added eight immutable, bundled FT-B01–FT-B08 public benchmark packs with semantic versions, compatibility checks, fixed PIT windows, calibration provenance, and logical fingerprints.
+- Added `fraudtwin benchmark run` and `fraudtwin benchmark describe` while preserving the generic M20 benchmark command.
+
 ## 0.25.0 — Milestone 20 Fraud Stress Benchmark
 
 - Added reproducible baseline, temporal, boundary, camouflage, graph, observability, calibrated, mixed, and all-suite benchmark orchestration.

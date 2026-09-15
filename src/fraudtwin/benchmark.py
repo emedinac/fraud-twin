@@ -10,7 +10,8 @@ from __future__ import annotations
 import importlib
 import json
 import platform
-from collections.abc import Sequence
+import re
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from importlib.resources import files
@@ -22,8 +23,8 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from fraudtwin import __version__
-from fraudtwin.config import SimulationRunConfig
-from fraudtwin.generation import GeneratedRun, generate
+from fraudtwin.config import SimulationRunConfig, config_hash
+from fraudtwin.generation import GeneratedData, GeneratedRun, generate
 from fraudtwin.ml import (
     ALL_MODEL_NAMES,
     BaselineEvaluationConfig,
@@ -58,6 +59,12 @@ STANDARD_SUITES: tuple[str, ...] = (
     "mixed",
 )
 SUITE_DEFINITION_VERSION = "1"
+PUBLIC_PACK_VERSION = "1"
+PUBLIC_PACK_RESOURCE_DIR = "public_packs"
+PUBLIC_PACK_REFERENCE_RE = re.compile(
+    r"^(?P<id>FT-B0[1-8]-(?:STABLE|TEMPORAL|BOUNDARY|CAMOUFLAGE|GRAPH|OBSERVABILITY|CALIBRATED|MIXED))@"
+    r"(?P<version>\d+\.\d+(?:\.\d+)?)$"
+)
 
 
 class BenchmarkRequest(BaseModel):
@@ -125,6 +132,84 @@ class BenchmarkResult:
     results: tuple[dict[str, Any], ...]
 
 
+class PublicBenchmarkPack(BaseModel):
+    """Immutable, distributable M21 benchmark definition."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: str = Field(pattern=r"^FT-B0[1-8]-[A-Z]+$")
+    version: str = Field(pattern=r"^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$")
+    suite: Literal[
+        "baseline",
+        "temporal",
+        "boundary",
+        "camouflage",
+        "graph",
+        "observability",
+        "calibrated",
+        "mixed",
+    ]
+    generator_compatibility: str = Field(pattern=r"^>=\d+\.\d+\.\d+,<\d+\.\d+\.\d+$")
+    seed: int = Field(ge=0)
+    seed_tree_version: str = Field(min_length=1)
+    difficulty: int = Field(ge=1, le=10)
+    simulation_start: datetime
+    simulation_end: datetime
+    split_boundaries: dict[str, datetime]
+    scenario_definitions: dict[str, Any]
+    stress_parameters: dict[str, Any]
+    label_observation_policy: dict[str, Any]
+    calibration: dict[str, Any] | None = None
+    metric_definitions: dict[str, Any]
+    resolved_configuration_hash: str = Field(min_length=1)
+    expected_descriptors: dict[str, Any]
+    expected_fingerprints: dict[str, str]
+
+    @field_validator("simulation_start", "simulation_end", mode="before")
+    @classmethod
+    def timestamps_are_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("public benchmark pack timestamps must include a timezone")
+        return value.astimezone(UTC)
+
+    @field_validator("split_boundaries", mode="before")
+    @classmethod
+    def split_timestamps_are_aware(cls, value: dict[str, Any]) -> dict[str, datetime]:
+        return {key: cls.timestamps_are_aware(item) for key, item in value.items()}
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> PublicBenchmarkPack:
+        pack = cls.model_validate(payload)
+        if pack.simulation_end <= pack.simulation_start:
+            raise ValueError("public benchmark pack simulation_end must follow simulation_start")
+        required_splits = {"train_end", "validation_end", "test_end"}
+        if set(pack.split_boundaries) != required_splits:
+            raise ValueError("public benchmark pack must freeze train, validation, and test ends")
+        boundaries = [
+            pack.simulation_start,
+            *(pack.split_boundaries[name] for name in ("train_end", "validation_end", "test_end")),
+        ]
+        if any(left >= right for left, right in zip(boundaries, boundaries[1:], strict=False)):
+            raise ValueError("public benchmark pack windows must be chronological")
+        if pack.split_boundaries["test_end"] != pack.simulation_end:
+            raise ValueError("public benchmark pack test_end must equal simulation_end")
+        if pack.suite in {"calibrated", "mixed"} and pack.calibration is None:
+            raise ValueError(f"public pack suite {pack.suite} requires frozen calibration")
+        if not pack.expected_descriptors or not pack.expected_fingerprints:
+            raise ValueError(
+                "public benchmark pack must freeze expected descriptors and fingerprints"
+            )
+        return pack
+
+    @property
+    def identity(self) -> str:
+        return f"{self.id}@{self.version}"
+
+    @property
+    def fingerprint(self) -> str:
+        return sha256_json(self.model_dump(mode="json"))
+
+
 def _base_values(seed: int) -> dict[str, Any]:
     raw = yaml.safe_load(files("fraudtwin").joinpath("defaults/minimal.yaml").read_text())
     if not isinstance(raw, dict):
@@ -157,7 +242,6 @@ def _base_values(seed: int) -> dict[str, Any]:
     values["dataset"].update(
         {"enabled": True, "unresolved_labels": "include", "label_delay_seconds": 3_600}
     )
-    values["dataset"]["splits"] = {"label_delay_gap_seconds": 3_600}
     values["outputs"].update({"parquet": True})
     values["quality"] = {"profile": "clean"}
     return values
@@ -229,6 +313,12 @@ def build_suite_config(
     values = _base_values(seed)
     start = datetime(2026, 1, 1, tzinfo=UTC)
     values["benchmark"] = {"difficulty": difficulty}
+    values["dataset"]["splits"] = {
+        "train_end": start + timedelta(days=7),
+        "validation_end": start + timedelta(days=9),
+        "test_end": start + timedelta(days=12),
+        "label_delay_gap_seconds": 3_600,
+    }
     if suite in {"temporal", "observability", "mixed"}:
         values["backtest"] = {"regimes": _regimes(start)}
     if suite in {"camouflage", "graph", "mixed"}:
@@ -279,6 +369,106 @@ def build_suite_config(
 def _json_write(path: Path, value: object) -> Path:
     path.write_text(json.dumps(value, indent=2, sort_keys=True, default=str) + "\n")
     return path
+
+
+def _public_pack_resources() -> tuple[Any, ...]:
+    root = files("fraudtwin").joinpath(PUBLIC_PACK_RESOURCE_DIR)
+    return tuple(
+        sorted(
+            (
+                item
+                for item in root.iterdir()
+                if item.name.startswith("FT-B") and item.name.endswith(".yaml")
+            ),
+            key=lambda item: item.name,
+        )
+    )
+
+
+def _pack_payload(resource: Any) -> dict[str, Any]:
+    raw = yaml.safe_load(resource.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"public benchmark pack must be a mapping: {resource.name}")
+    return cast(dict[str, Any], raw)
+
+
+def list_public_packs() -> tuple[PublicBenchmarkPack, ...]:
+    """Return all bundled public packs in stable identity order."""
+
+    return tuple(
+        sorted(
+            (
+                PublicBenchmarkPack.from_payload(_pack_payload(item))
+                for item in _public_pack_resources()
+            ),
+            key=lambda item: item.identity,
+        )
+    )
+
+
+def load_public_pack(reference: str) -> PublicBenchmarkPack:
+    """Resolve an exact or unambiguous major/minor public-pack reference."""
+
+    match = PUBLIC_PACK_REFERENCE_RE.fullmatch(reference)
+    if match is None:
+        raise ValueError("public pack reference must use FT-Bxx-NAME@major.minor[.patch]")
+    pack_id = match.group("id")
+    requested_version = match.group("version")
+    candidates = [item for item in list_public_packs() if item.id == pack_id]
+    if requested_version.count(".") == 2:
+        candidates = [item for item in candidates if item.version == requested_version]
+    else:
+        candidates = [
+            item for item in candidates if item.version.startswith(requested_version + ".")
+        ]
+    if not candidates:
+        raise ValueError(f"public benchmark pack does not exist: {reference}")
+    if len(candidates) > 1:
+        raise ValueError(f"public benchmark pack reference is ambiguous: {reference}")
+    return candidates[0]
+
+
+def _calibration_resource(pack: PublicBenchmarkPack) -> Path | None:
+    if pack.calibration is None:
+        return None
+    resource_name = pack.calibration.get("resource")
+    if not isinstance(resource_name, str) or not resource_name:
+        raise ValueError(f"{pack.identity} calibration must name a bundled resource")
+    resource = files("fraudtwin").joinpath(PUBLIC_PACK_RESOURCE_DIR, resource_name)
+    if not resource.is_file():
+        raise ValueError(f"{pack.identity} calibration resource is missing: {resource_name}")
+    path = Path(str(resource))
+    if not path.is_file():
+        raise ValueError("public benchmark resources must be available as package files")
+    return path
+
+
+def _record_payload(records: Iterable[BaseModel]) -> list[dict[str, Any]]:
+    values = [item.model_dump(mode="json") for item in records]
+    return sorted(values, key=lambda item: json.dumps(item, sort_keys=True, default=str))
+
+
+def _logical_fingerprints(
+    generated: GeneratedData, dataset_manifest: dict[str, Any]
+) -> dict[str, str]:
+    """Fingerprint logical content independently of Parquet bytes or machine details."""
+
+    source = {
+        "entities": {
+            name: _record_payload(records)
+            for name, records in sorted(generated.entities.all_tables().items())
+        },
+        "behavior": {
+            name: _record_payload(records)
+            for name, records in sorted(generated.behavior.tables().items())
+        },
+    }
+    return {
+        "source": sha256_json(source),
+        "dataset": str(dataset_manifest.get("output_fingerprint", "")),
+        "latent_truth": sha256_json(_record_payload(generated.behavior.fraud_records)),
+        "observed_truth": sha256_json(_record_payload(generated.behavior.label_observations)),
+    }
 
 
 def _load_rows(dataset_path: Path) -> list[dict[str, Any]]:
@@ -575,6 +765,7 @@ def _run_one(
             "source": manifest.get("output_fingerprint"),
             "dataset": dataset_manifest_values.get("output_fingerprint"),
         },
+        "logical_fingerprints": _logical_fingerprints(in_memory, dataset_manifest_values),
     }
     return (
         evaluated,
@@ -662,6 +853,7 @@ def run_benchmark(request: BenchmarkRequest) -> BenchmarkResult:
         all_rows.extend(rows)
         suites_metadata[suite] = metadata
         descriptors[suite] = suite_descriptors
+        metadata["logical_fingerprints"]["descriptors"] = sha256_json(suite_descriptors)
     lineage = {
         "generator_versions": {
             suite: metadata["manifest"].get("generator_version")
@@ -731,14 +923,128 @@ def run_benchmark(request: BenchmarkRequest) -> BenchmarkResult:
     )
 
 
+def _verify_public_pack_calibration(pack: PublicBenchmarkPack, profile_path: Path | None) -> None:
+    if pack.calibration is None:
+        if profile_path is not None:
+            raise ValueError(f"{pack.identity} does not accept a calibration profile")
+        return
+    if profile_path is None:
+        raise ValueError(f"{pack.identity} calibration resource is unavailable")
+    raw = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{pack.identity} calibration profile must be a mapping")
+    expected = pack.calibration
+    actual = {
+        "profile_id": raw.get("profile_id"),
+        "profile_version": raw.get("profile_version"),
+        "fingerprint": sha256_json(raw),
+    }
+    for field in ("profile_id", "profile_version", "fingerprint"):
+        if expected.get(field) != actual[field]:
+            raise ValueError(
+                f"{pack.identity} calibration {field} mismatch: "
+                f"expected {expected.get(field)!r}, got {actual[field]!r}"
+            )
+
+
+def _version_tuple(value: str) -> tuple[int, int, int]:
+    parts = value.split(".")
+    if len(parts) != 3 or any(not part.isdigit() for part in parts):
+        raise ValueError(f"invalid semantic version: {value}")
+    return int(parts[0]), int(parts[1]), int(parts[2])
+
+
+def _pack_supports_generator(pack: PublicBenchmarkPack) -> bool:
+    lower, upper = pack.generator_compatibility.split(",")
+    current = _version_tuple(__version__)
+    lower_version = _version_tuple(lower.removeprefix(">="))
+    upper_version = _version_tuple(upper.removeprefix("<"))
+    return lower_version <= current < upper_version
+
+
+def run_public_benchmark(
+    reference: str,
+    *,
+    output_dir: Path = Path("runs/benchmarks"),
+    models: tuple[str, ...] = ("deterministic_heuristic",),
+    runners: tuple[str, ...] = (),
+) -> BenchmarkResult:
+    """Run one immutable bundled M21 pack and verify its frozen outputs."""
+
+    pack = load_public_pack(reference)
+    if not _pack_supports_generator(pack):
+        raise ValueError(
+            f"{pack.identity} is incompatible with FraudTwin {__version__} "
+            f"(requires {pack.generator_compatibility})"
+        )
+    calibration_profile = _calibration_resource(pack)
+    _verify_public_pack_calibration(pack, calibration_profile)
+    config = build_suite_config(
+        pack.suite,
+        difficulty=pack.difficulty,
+        seed=pack.seed,
+        calibration_profile=calibration_profile,
+    )
+    if config_hash(config, include_dataset=True) != pack.resolved_configuration_hash:
+        raise ValueError(
+            f"{pack.identity} resolved configuration differs from the released definition"
+        )
+    result = run_benchmark(
+        BenchmarkRequest(
+            suite=pack.suite,
+            difficulty=pack.difficulty,
+            seed=pack.seed,
+            output_dir=output_dir,
+            models=models,
+            runners=runners,
+            calibration_profile=calibration_profile,
+        )
+    )
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    suite_metadata = manifest["suites"][pack.suite]
+    actual_fingerprints = suite_metadata.get("logical_fingerprints", {})
+    actual_descriptors = json.loads(result.descriptors_path.read_text(encoding="utf-8"))[pack.suite]
+    expected_fingerprints = pack.expected_fingerprints
+    if actual_fingerprints != expected_fingerprints:
+        raise ValueError(
+            f"{pack.identity} logical fingerprint mismatch: "
+            f"expected {expected_fingerprints!r}, got {actual_fingerprints!r}"
+        )
+    if actual_descriptors != pack.expected_descriptors:
+        raise ValueError(
+            f"{pack.identity} generator descriptors differ from the released definition"
+        )
+    manifest["public_pack"] = {
+        "id": pack.id,
+        "version": pack.version,
+        "identity": pack.identity,
+        "definition_fingerprint": pack.fingerprint,
+        "definition_version": PUBLIC_PACK_VERSION,
+        "generator_compatibility": pack.generator_compatibility,
+        "verification": {
+            "configuration_hash": pack.resolved_configuration_hash,
+            "logical_fingerprints": actual_fingerprints,
+            "descriptors_match": True,
+        },
+    }
+    result.manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
+    )
+    return result
+
+
 __all__ = [
     "BenchmarkModelRunner",
     "BenchmarkRequest",
     "BenchmarkResult",
     "BenchmarkRunnerInput",
+    "PublicBenchmarkPack",
     "RunnerMetadata",
     "STANDARD_SUITES",
     "SUITE_DEFINITION_VERSION",
     "build_suite_config",
+    "list_public_packs",
+    "load_public_pack",
+    "run_public_benchmark",
     "run_benchmark",
 ]

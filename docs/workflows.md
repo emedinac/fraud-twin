@@ -56,6 +56,18 @@ poetry run fraudtwin ml backtest configs/minimal.yaml \
 
 Windows are chronological and non-overlapping. A benchmark pack freezes its own label-maturity gap, regime policy, seed/configuration identity, and metric definition so later comparisons remain meaningful.
 
+For the immutable Milestone 21 public packs, use the separate public-pack
+commands:
+
+```bash
+fraudtwin benchmark run FT-B04-CAMOUFLAGE@1.0
+fraudtwin benchmark describe FT-B04-CAMOUFLAGE@1.0.0
+```
+
+These bundled definitions verify generator compatibility and logical output
+fingerprints. The existing M10 `--benchmark-pack` option remains for backtests
+over a previously generated run.
+
 ## Train baselines and evaluate external predictions
 
 The baseline workflow trains Logistic Regression, LightGBM, XGBoost, and CatBoost models on the same frozen point-in-time feature allowlist. Install the optional model stack before training:

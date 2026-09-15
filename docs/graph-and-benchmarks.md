@@ -103,5 +103,24 @@ dependencies remain outside FraudTwin's core installation.
 Each benchmark manifest records the generator and suite versions, seed,
 scenario mix, resolved stress controls, calibration identity, label-observation
 policy, temporal ranges, ground-truth availability rules, model lineage, and
-output fingerprints. Public benchmark pack IDs can be added on top of these
-standardized suites.
+output fingerprints.
+
+## Run an immutable public benchmark pack
+
+Milestone 21 bundles eight named packs whose generation controls, PIT windows,
+metrics, calibration identity, descriptors, and logical content fingerprints
+are frozen in the installed package:
+
+```bash
+fraudtwin benchmark run FT-B04-CAMOUFLAGE@1.0
+fraudtwin benchmark describe FT-B04-CAMOUFLAGE@1.0.0
+```
+
+The shorthand `@1.0` is accepted only when it resolves to one patch version.
+Pack runs reject incompatible FraudTwin versions, altered definitions, and
+logical output drift. Released definitions are never edited or removed; a
+change to seeds, scenarios, splits, metrics, label policy, or calibration
+creates a new pack version, while prior versions remain runnable.
+
+The M10 `fraudtwin.ml.BenchmarkPack` fixtures remain supported for backtests
+over an existing generated run and are separate from these M21 public packs.
