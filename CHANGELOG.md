@@ -1,6 +1,6 @@
 # Release notes
 
-## Unreleased — M18 bounded-scale contract
+## 0.33.0 — Fix: Milestone 18 bounded-scale contract
 
 - Made canonical payment rows the scale target, added the bounded `dev` smoke
   profile, derived row-count reporting, target validation, versioned checkpoints,
@@ -11,6 +11,10 @@
 - Added table-qualified entity chunks, physical chunk checksum validation on
   resume, a completed-run resume fast path, lazy partition-table readers, and
   optional M22 ingestion of M18 scale evidence manifests.
+- Added the public lazy `iter_scale_records` producer API for integrations that
+  stream canonical payment/event/ledger rows directly to partition writers.
+- Added durable spool reuse, disk-backed duplicate-ID and account-balance
+  reconciliation, plus streaming Kafka/PostgreSQL/Iceberg/replay adapters.
 
 ## 0.32.0 — Milestone 27 Minimal Observability
 

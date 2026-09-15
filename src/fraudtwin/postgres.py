@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from importlib.resources import files
 from typing import Any
@@ -320,6 +321,68 @@ def persist_run(
     return PostgresPersistenceResult(SCHEMA_VERSION, row_counts, fingerprint)
 
 
+def persist_scale_records(
+    records: Iterable[Mapping[str, Any]],
+    run_id: str,
+    *,
+    dsn: str | None = None,
+    batch_size: int = 2_000,
+) -> PostgresPersistenceResult:
+    """Persist a partition-record stream without whole-run materialization.
+
+    Scale rows are kept in a narrow staging table so chunks can be consumed
+    independently by downstream jobs.  The established ``persist_run`` API
+    remains unchanged for small, typed in-memory runs.
+    """
+
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
+    psycopg = _psycopg()
+    digest = hashlib.sha256()
+    counts: dict[str, int] = {}
+    batch: list[tuple[str, str, str, str | None, str]] = []
+    with psycopg.connect(_dsn(dsn)) as connection:
+        with connection.transaction():
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"CREATE TABLE IF NOT EXISTS {SCHEMA_NAME}.scale_records ("
+                    "run_id TEXT NOT NULL, logical_type TEXT NOT NULL, "
+                    "logical_id TEXT NOT NULL, partition_id TEXT, payload JSONB NOT NULL, "
+                    "PRIMARY KEY (run_id, logical_type, logical_id))"
+                )
+
+                def flush() -> None:
+                    if not batch:
+                        return
+                    cursor.executemany(
+                        f"INSERT INTO {SCHEMA_NAME}.scale_records "
+                        "(run_id, logical_type, logical_id, partition_id, payload) "
+                        "VALUES (%s, %s, %s, %s, %s::jsonb) "
+                        "ON CONFLICT (run_id, logical_type, logical_id) DO NOTHING",
+                        batch,
+                    )
+                    batch.clear()
+
+                for record in records:
+                    row = dict(record)
+                    logical_type = str(row.get("logical_type", "records"))
+                    logical_id = str(row["logical_id"])
+                    payload = json.dumps(row, sort_keys=True, separators=(",", ":"), default=str)
+                    digest.update(payload.encode())
+                    counts[logical_type] = counts.get(logical_type, 0) + 1
+                    batch.append(
+                        (run_id, logical_type, logical_id, row.get("partition_id"), payload)
+                    )
+                    if len(batch) >= batch_size:
+                        flush()
+                flush()
+    return PostgresPersistenceResult(
+        schema_version=SCHEMA_VERSION,
+        row_counts=counts,
+        logical_fingerprint=digest.hexdigest(),
+    )
+
+
 __all__ = [
     "DSN_ENVIRONMENT",
     "PostgresPersistenceResult",
@@ -327,5 +390,6 @@ __all__ = [
     "database_status",
     "ensure_database_ready",
     "migrate_database",
+    "persist_scale_records",
     "persist_run",
 ]

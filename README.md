@@ -115,6 +115,15 @@ out-of-core tooling. The legacy Python API still materializes the canonical
 entity/behavior objects before persistence; use the `dev` profile locally and
 run 100M/1B profiles only through a streaming producer deployment.
 
+Producer integrations can use `fraudtwin.iter_scale_records(...)` as a lazy
+canonical entity/profile/payment/event/ledger stream and pass it to the scale
+partition writer without constructing a `BehaviorDataset`.
+
+Optional sinks expose corresponding bounded interfaces: use
+`KafkaPublisher.publish_records`, `persist_scale_records`, and
+`IcebergLakehouse.append_stream` for chunk iterators. Partitioned replay can
+be consumed with `iter_partition_replay_events`.
+
 For baseline model evaluation, install the optional ML dependencies and train on a previously built PIT dataset:
 
 ```bash

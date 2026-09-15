@@ -7,7 +7,7 @@ import os
 import struct
 import time
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any
@@ -362,18 +362,49 @@ class KafkaPublisher:
         *,
         mode: str = "batch",
     ) -> KafkaPublicationResult:
+        records = publication_records(
+            behavior, run_id, registry=self.registry, topic_prefix=self.config.topic_prefix
+        )
+        result = self.publish_records(records, run_id, mode=mode)
+        # Preserve the historical list-based fingerprint for the compatibility
+        # API; the streaming method uses an incremental equivalent.
+        return replace(result, publication_fingerprint=publication_fingerprint(records))
+
+    def publish_records(
+        self,
+        records: Iterable[PublicationRecord],
+        run_id: str,
+        *,
+        mode: str = "batch",
+    ) -> KafkaPublicationResult:
+        """Publish a pre-encoded stream without materializing all records."""
+
         if mode not in {"batch", "real_time", "accelerated"}:
             raise ValueError(f"unsupported Kafka publication mode: {mode}")
         if not self._schema_ids:
             self.prepare()
-        records = publication_records(
-            behavior, run_id, registry=self.registry, topic_prefix=self.config.topic_prefix
-        )
         errors: list[str] = []
         started = self.clock()
-        first_time = records[0].observable_time if records else None
+        first_time: datetime | None = None
+        counts = {subject: 0 for subject in SUBJECTS}
+        digest = sha256()
         for index, item in enumerate(records):
+            if first_time is None:
+                first_time = item.observable_time
             self._pace(item, index, first_time, started, mode)
+            counts[item.subject] = counts.get(item.subject, 0) + 1
+            digest.update(
+                canonical_json(
+                    {
+                        "subject": item.subject,
+                        "version": item.version,
+                        "fingerprint": item.fingerprint,
+                        "key": item.key,
+                        "record_id": item.record_id,
+                        "datum": item.datum,
+                    }
+                ).encode()
+            )
             schema_id = self._schema_ids.get(item.subject)
             if schema_id is None:
                 errors.append(f"{item.subject}: no remote schema ID")
@@ -398,7 +429,6 @@ class KafkaPublisher:
             errors.append(f"flush: {exc}")
         if errors:
             raise KafkaPublicationError("Kafka delivery failed: " + "; ".join(errors))
-        counts = {subject: sum(item.subject == subject for item in records) for subject in SUBJECTS}
         topics: dict[str, dict[str, object]] = {
             subject: {
                 "topic": topic_for(subject, self.config.topic_prefix),
@@ -414,7 +444,7 @@ class KafkaPublisher:
             mode=mode,
             max_events_per_second=self.config.max_events_per_second,
             accelerated_time_multiplier=self.config.accelerated_time_multiplier,
-            publication_fingerprint=publication_fingerprint(records),
+            publication_fingerprint=digest.hexdigest(),
         )
 
     def _pace(

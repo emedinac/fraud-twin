@@ -1,7 +1,7 @@
 """High-level Python API for generating deterministic FraudTwin runs."""
 
 import hashlib
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import timedelta
 from importlib.resources import files
@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal, cast, overload
 
 import yaml
+from pydantic import BaseModel
 
 from fraudtwin.calibration import (
     CalibrationProfile,
@@ -19,6 +20,7 @@ from fraudtwin.calibration import (
 )
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.difficulty import difficulty_metadata
+from fraudtwin.domain import LedgerEntry
 from fraudtwin.graph import build_graph
 from fraudtwin.kafka import publisher_from_environment
 from fraudtwin.manifest import RunManifest, create_manifest, write_manifest
@@ -35,6 +37,7 @@ from fraudtwin.scale import (
     resolve_scale_plan,
     write_scale_partitions,
 )
+from fraudtwin.seed import create_stream_rng
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
@@ -47,6 +50,7 @@ from fraudtwin.simulation.parquet import (
     write_graph_truth,
     write_label_observation_sidecar,
 )
+from fraudtwin.simulation.payments import PaymentGenerator
 
 
 @dataclass(frozen=True)
@@ -412,6 +416,102 @@ def _scale_records(
                 ordinal += 1
 
 
+def iter_scale_records(
+    config: SimulationRunConfig,
+    entities: EntityDataset,
+    *,
+    simulation_run_id: str,
+) -> Iterator[dict[str, object]]:
+    """Stream canonical entities, profiles, payments, events, and ledger rows.
+
+    This iterator is the scale writer's producer-facing API.  It deliberately
+    keeps only generator state and account balances; records are never
+    accumulated into a ``BehaviorDataset``.  Advanced fraud/graph stages still
+    use the compatibility generator until their own streaming implementations
+    are available.
+    """
+
+    behavior_generator = BehaviorGenerator(config, entities, simulation_run_id=simulation_run_id)
+    profiles = behavior_generator.generate_profiles()
+
+    def logical_rows(table_name: str, rows: Iterable[BaseModel]) -> Iterator[dict[str, object]]:
+        for ordinal, row in enumerate(rows):
+            values = row.model_dump(mode="json")
+            source_id = next(
+                (str(value) for key, value in values.items() if key.endswith("_id") and value),
+                f"row-{ordinal:08d}",
+            )
+            owner_id = next(
+                (
+                    str(values[key])
+                    for key in ("payer_account_id", "account_id", "customer_id")
+                    if values.get(key)
+                ),
+                source_id,
+            )
+            yield {
+                **values,
+                "logical_id": f"{table_name}:{source_id}",
+                "logical_type": table_name,
+                "source_id": source_id,
+                "partition_key": owner_id,
+            }
+
+    for table_name, rows in {**entities.all_tables(), "behavior_profiles": profiles}.items():
+        yield from logical_rows(table_name, rows)
+
+    payment_generator = PaymentGenerator(
+        config,
+        entities.accounts,
+        entities.cards,
+        entities.merchants,
+        entities.devices,
+        entities.pix_keys,
+        simulation_run_id=simulation_run_id,
+    )
+    lifecycle_rng = create_stream_rng(config.simulation.seed, "milestone-4:card-lifecycle")
+    pix_lifecycle_rng = create_stream_rng(config.simulation.seed, "milestone-5:pix-lifecycle")
+    balances = {account.account_id: account.ledger_balance for account in entities.accounts}
+    ledger_number = 0
+    for payment, initial_event in payment_generator.iter_generate(profiles):
+        if payment.payment_rail == "CARD":
+            payment, events = payment_generator._card_lifecycle(  # noqa: SLF001
+                payment, initial_event, lifecycle_rng
+            )
+        elif payment.payment_rail == "PIX":
+            payment, events = payment_generator._pix_lifecycle(  # noqa: SLF001
+                payment, initial_event, pix_lifecycle_rng
+            )
+        else:
+            events = (initial_event,)
+        yield from logical_rows("payments", (payment,))
+        yield from logical_rows("payment_events", events)
+        for event, account_id, raw_entry_type in payment_generator._ledger_specs(  # noqa: SLF001
+            payment, events
+        ):
+            ledger_number += 1
+            entry_type = cast(Literal["DEBIT", "CREDIT"], raw_entry_type)
+            delta = event.amount if entry_type == "CREDIT" else -event.amount
+            balance = round(balances[account_id] + delta, 2)
+            if balance < -payment_generator.accounts_by_id[account_id].overdraft_limit:
+                raise ValueError(f"ledger debit exceeds overdraft limit for {account_id}")
+            balances[account_id] = balance
+            ledger = LedgerEntry(
+                ledger_entry_id=f"LED-{event.event_id}-{ledger_number:02d}",
+                payment_id=event.payment_id,
+                account_id=account_id,
+                event_id=event.event_id,
+                entry_type=entry_type,
+                amount=event.amount,
+                currency=event.currency,
+                occurred_at=event.event_time,
+                effective_at=event.event_time,
+                posted_at=event.processed_at,
+                balance_after=balance,
+            )
+            yield from logical_rows("ledger_entries", (ledger,))
+
+
 def _scale_metadata(
     config: SimulationRunConfig,
     entities: EntityDataset,
@@ -771,4 +871,10 @@ def resume_generation(checkpoint: str | Path) -> GeneratedRun:
     return result
 
 
-__all__ = ["GeneratedData", "GeneratedRun", "generate", "resume_generation"]
+__all__ = [
+    "GeneratedData",
+    "GeneratedRun",
+    "generate",
+    "iter_scale_records",
+    "resume_generation",
+]

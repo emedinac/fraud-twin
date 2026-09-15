@@ -13,6 +13,7 @@ import json
 import os
 import platform
 import resource
+import sqlite3
 import sys
 import time
 from collections.abc import Iterable, Iterator, Mapping
@@ -122,6 +123,8 @@ class ReconciliationResult(BaseModel):
     ledger_balanced: bool = True
     shard_ledger_totals: dict[str, dict[str, float]] = Field(default_factory=dict)
     transfer_reconciliation_records: int = Field(default=0, ge=0)
+    account_balance_violations: int = Field(default=0, ge=0)
+    accounts_reconciled: int = Field(default=0, ge=0)
     valid: bool
     checks: dict[str, bool] = Field(default_factory=dict)
 
@@ -558,6 +561,18 @@ def load_checkpoint(path: str | Path) -> ScaleCheckpoint:
         raise ValueError(f"invalid scale checkpoint: {source}") from exc
 
 
+def _group_chunks(chunks: Iterable[ChunkCompletion]) -> tuple[tuple[ChunkCompletion, ...], ...]:
+    """Group chunks by shard/table in canonical ordinal order."""
+
+    grouped: dict[tuple[str, str], list[ChunkCompletion]] = {}
+    for chunk in chunks:
+        grouped.setdefault((chunk.shard_id, chunk.logical_type), []).append(chunk)
+    return tuple(
+        tuple(sorted(values, key=lambda item: item.chunk_index))
+        for _, values in sorted(grouped.items())
+    )
+
+
 def write_scale_partitions(
     run_dir: str | Path,
     plan: ScalePlan,
@@ -635,44 +650,156 @@ def write_scale_partitions(
                 continue
 
     # Route input rows to disk first.  This keeps the scale writer's resident
-    # memory bounded even when the producer is a billion-row iterator.
-    handles = {
-        item.shard_id: (spool_root / f"{item.shard_id}.jsonl").open("w", encoding="utf-8")
-        for item in descriptors
+    # memory bounded even when the producer is a billion-row iterator.  The
+    # completed spool marker is deliberately retained until all chunks are
+    # committed, so a process interrupted during chunk writing can resume
+    # without regenerating or re-spooling the producer input.
+    spool_manifest = spool_root / "manifest.json"
+    spool_identity = {
+        "configuration_hash": plan.configuration_hash,
+        "seed": plan.seed,
+        "seed_tree_version": plan.seed_tree_version,
+        "run_id": plan.run_id,
+        "shard_count": plan.shard_count,
     }
+    reused_spool = False
     total_rows = 0
     ledger_debit_total = Decimal("0")
     ledger_credit_total = Decimal("0")
     shard_ledger_totals: dict[str, dict[str, Decimal]] = {}
     transfer_reconciliation_records = 0
-    try:
-        for record in records:
-            row = dict(record)
-            logical_id = str(row["logical_id"])
-            # Account-local rows carry a stable partition key.  Legacy callers
-            # may omit it, in which case the logical ID remains the fallback.
-            owner_key = str(row.get("partition_key", logical_id))
-            row["partition_id"] = partition_id(owner_key, plan.shard_count)
-            if row.get("logical_type") == "ledger_entries":
-                amount = Decimal(str(row.get("amount", 0)))
-                shard_totals = shard_ledger_totals.setdefault(
-                    row["partition_id"], {"debit": Decimal("0"), "credit": Decimal("0")}
-                )
-                if row.get("entry_type") == "DEBIT":
-                    ledger_debit_total += amount
-                    shard_totals["debit"] += amount
-                elif row.get("entry_type") == "CREDIT":
-                    ledger_credit_total += amount
-                    shard_totals["credit"] += amount
-            if row.get("logical_type") == "transfer_reconciliation":
-                transfer_reconciliation_records += 1
-            handles[row["partition_id"]].write(
-                json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n"
+    account_balance_violations = 0
+    accounts_reconciled = 0
+    duplicate_logical_ids: list[str] = []
+    duplicate_count = 0
+    if spool_manifest.is_file():
+        try:
+            payload = json.loads(spool_manifest.read_text(encoding="utf-8"))
+            reused_spool = payload.get("identity") == spool_identity and all(
+                (spool_root / f"{item.shard_id}.jsonl").is_file() for item in descriptors
             )
-            total_rows += 1
-    finally:
-        for handle in handles.values():
-            handle.close()
+            if reused_spool:
+                total_rows = int(payload["total_rows"])
+                ledger_debit_total = Decimal(str(payload["ledger_debit_total"]))
+                ledger_credit_total = Decimal(str(payload["ledger_credit_total"]))
+                shard_ledger_totals = {
+                    str(shard): {
+                        "debit": Decimal(str(values.get("debit", 0))),
+                        "credit": Decimal(str(values.get("credit", 0))),
+                    }
+                    for shard, values in payload.get("shard_ledger_totals", {}).items()
+                }
+                transfer_reconciliation_records = int(
+                    payload.get("transfer_reconciliation_records", 0)
+                )
+                account_balance_violations = int(payload.get("account_balance_violations", 0))
+                accounts_reconciled = int(payload.get("accounts_reconciled", 0))
+                duplicate_count = int(payload.get("duplicate_count", 0))
+                duplicate_logical_ids = [
+                    str(item) for item in payload.get("duplicate_logical_ids", [])
+                ]
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            reused_spool = False
+    if not reused_spool:
+        (spool_root / "logical-ids.sqlite").unlink(missing_ok=True)
+        (spool_root / "ledger-state.sqlite").unlink(missing_ok=True)
+        id_database = sqlite3.connect(spool_root / "logical-ids.sqlite")
+        id_database.execute(
+            "CREATE TABLE IF NOT EXISTS logical_ids (logical_id TEXT PRIMARY KEY)"
+        )
+        id_database.execute("PRAGMA synchronous=OFF")
+        ledger_database = sqlite3.connect(spool_root / "ledger-state.sqlite")
+        ledger_database.execute(
+            "CREATE TABLE IF NOT EXISTS ledger_state "
+            "(account_id TEXT PRIMARY KEY, balance REAL NOT NULL, entries INTEGER NOT NULL)"
+        )
+        ledger_database.execute("PRAGMA synchronous=OFF")
+        handles = {
+            item.shard_id: (spool_root / f"{item.shard_id}.jsonl").open("w", encoding="utf-8")
+            for item in descriptors
+        }
+        try:
+            for record in records:
+                row = dict(record)
+                logical_id = str(row["logical_id"])
+                inserted = id_database.execute(
+                    "INSERT OR IGNORE INTO logical_ids(logical_id) VALUES (?)", (logical_id,)
+                ).rowcount
+                if inserted == 0:
+                    duplicate_count += 1
+                    if len(duplicate_logical_ids) < 100:
+                        duplicate_logical_ids.append(logical_id)
+                # Account-local rows carry a stable partition key.  Legacy callers
+                # may omit it, in which case the logical ID remains the fallback.
+                owner_key = str(row.get("partition_key", logical_id))
+                row["partition_id"] = partition_id(owner_key, plan.shard_count)
+                if row.get("logical_type") == "ledger_entries":
+                    amount = Decimal(str(row.get("amount", 0)))
+                    account_id = str(row.get("account_id", ""))
+                    previous = ledger_database.execute(
+                        "SELECT balance FROM ledger_state WHERE account_id = ?", (account_id,)
+                    ).fetchone()
+                    if previous is not None:
+                        delta = amount if row.get("entry_type") == "CREDIT" else -amount
+                        expected = round(float(previous[0]) + float(delta), 2)
+                        actual = round(float(row.get("balance_after", 0)), 2)
+                        if expected != actual:
+                            account_balance_violations += 1
+                        ledger_database.execute(
+                            "UPDATE ledger_state SET balance = ?, entries = entries + 1 "
+                            "WHERE account_id = ?",
+                            (actual, account_id),
+                        )
+                    else:
+                        accounts_reconciled += 1
+                        ledger_database.execute(
+                            "INSERT INTO ledger_state(account_id, balance, entries) "
+                            "VALUES (?, ?, 1)",
+                            (account_id, float(row.get("balance_after", 0))),
+                        )
+                    shard_totals = shard_ledger_totals.setdefault(
+                        row["partition_id"], {"debit": Decimal("0"), "credit": Decimal("0")}
+                    )
+                    if row.get("entry_type") == "DEBIT":
+                        ledger_debit_total += amount
+                        shard_totals["debit"] += amount
+                    elif row.get("entry_type") == "CREDIT":
+                        ledger_credit_total += amount
+                        shard_totals["credit"] += amount
+                if row.get("logical_type") == "transfer_reconciliation":
+                    transfer_reconciliation_records += 1
+                handles[row["partition_id"]].write(
+                    json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n"
+                )
+                total_rows += 1
+                if total_rows % 10_000 == 0:
+                    id_database.commit()
+                    ledger_database.commit()
+        finally:
+            for handle in handles.values():
+                handle.close()
+            id_database.commit()
+            id_database.close()
+            ledger_database.commit()
+            ledger_database.close()
+        spool_payload = {
+            "identity": spool_identity,
+            "total_rows": total_rows,
+            "ledger_debit_total": str(ledger_debit_total),
+            "ledger_credit_total": str(ledger_credit_total),
+            "shard_ledger_totals": {
+                shard: {name: str(amount) for name, amount in totals.items()}
+                for shard, totals in shard_ledger_totals.items()
+            },
+            "transfer_reconciliation_records": transfer_reconciliation_records,
+            "duplicate_count": duplicate_count,
+            "duplicate_logical_ids": duplicate_logical_ids,
+            "account_balance_violations": account_balance_violations,
+            "accounts_reconciled": accounts_reconciled,
+        }
+        temporary = spool_manifest.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(spool_payload, sort_keys=True) + "\n", encoding="utf-8")
+        os.replace(temporary, spool_manifest)
 
     def write_partition(
         descriptor: ShardDescriptor,
@@ -786,6 +913,9 @@ def write_scale_partitions(
     emitted_rows = sum(item.row_count for item in completions)
     for spool_file in spool_root.glob("*.jsonl"):
         spool_file.unlink()
+    spool_manifest.unlink(missing_ok=True)
+    (spool_root / "logical-ids.sqlite").unlink(missing_ok=True)
+    (spool_root / "ledger-state.sqlite").unlink(missing_ok=True)
     spool_root.rmdir()
 
     # Exact ID reconciliation remains available as a small-run API.  The
@@ -794,6 +924,7 @@ def write_scale_partitions(
     reconciliation = ReconciliationResult(
         logical_row_count=total_rows,
         partition_row_count=emitted_rows,
+        duplicate_logical_ids=tuple(sorted(set(duplicate_logical_ids))),
         ledger_debit_total=float(ledger_debit_total),
         ledger_credit_total=float(ledger_credit_total),
         ledger_balanced=ledger_debit_total == ledger_credit_total,
@@ -802,10 +933,62 @@ def write_scale_partitions(
             for shard_id, totals in shard_ledger_totals.items()
         },
         transfer_reconciliation_records=transfer_reconciliation_records,
-        valid=total_rows == emitted_rows and ledger_debit_total == ledger_credit_total,
+        account_balance_violations=account_balance_violations,
+        accounts_reconciled=accounts_reconciled,
+        valid=(
+            duplicate_count == 0
+            and total_rows == emitted_rows
+            and account_balance_violations == 0
+            and ledger_debit_total == ledger_credit_total
+            and all(
+                chunk.end_ordinal - chunk.start_ordinal == chunk.row_count
+                for chunk in chunks
+            )
+            and all(
+                grouped[0].start_ordinal == 0
+                and all(
+                    chunk.end_ordinal - chunk.start_ordinal == chunk.row_count
+                    for chunk in grouped
+                )
+                and all(
+                    chunk.start_ordinal == previous.end_ordinal
+                    for previous, chunk in zip(grouped, grouped[1:], strict=False)
+                )
+                for grouped in _group_chunks(chunks)
+            )
+            and all(
+                chunk.start_ordinal
+                == previous.end_ordinal
+                for grouped in _group_chunks(chunks)
+                for previous, chunk in zip(grouped, grouped[1:], strict=False)
+            )
+        ),
         checks={
             "row_counts": total_rows == emitted_rows,
-            "chunk_ranges": True,
+            "unique_logical_ids": duplicate_count == 0,
+            "account_balance_continuity": account_balance_violations == 0,
+            "chunk_ranges": all(
+                grouped[0].start_ordinal == 0
+                and all(
+                    chunk.end_ordinal - chunk.start_ordinal == chunk.row_count
+                    for chunk in grouped
+                )
+                and all(
+                    chunk.start_ordinal == previous.end_ordinal
+                    for previous, chunk in zip(grouped, grouped[1:], strict=False)
+                )
+                for grouped in _group_chunks(chunks)
+            )
+            and all(
+                chunk.end_ordinal - chunk.start_ordinal == chunk.row_count
+                for chunk in chunks
+            )
+            and all(
+                chunk.start_ordinal
+                == previous.end_ordinal
+                for grouped in _group_chunks(chunks)
+                for previous, chunk in zip(grouped, grouped[1:], strict=False)
+            ),
             "ledger_double_entry": ledger_debit_total == ledger_credit_total,
         },
     )
@@ -849,6 +1032,8 @@ def _checkpoint_integrity_payload(checkpoint: ScaleCheckpoint) -> dict[str, Any]
         if isinstance(reconciliation, dict):
             reconciliation.pop("shard_ledger_totals", None)
             reconciliation.pop("transfer_reconciliation_records", None)
+            reconciliation.pop("account_balance_violations", None)
+            reconciliation.pop("accounts_reconciled", None)
             if checkpoint.checkpoint_version == "M18-checkpoint-2":
                 reconciliation.pop("ledger_debit_total", None)
                 reconciliation.pop("ledger_credit_total", None)

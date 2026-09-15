@@ -66,6 +66,7 @@ from fraudtwin.generation import (
     GeneratedData,
     GeneratedRun,
     generate,
+    iter_scale_records,
     resume_generation,
 )
 from fraudtwin.graph import (
@@ -110,6 +111,7 @@ from fraudtwin.postgres import (
     ensure_database_ready,
     migrate_database,
     persist_run,
+    persist_scale_records,
 )
 from fraudtwin.quality_benchmark import (
     QualityAdapterMetadata,
@@ -193,10 +195,12 @@ __all__ = [
     "database_status",
     "ensure_database_ready",
     "migrate_database",
+    "persist_scale_records",
     "persist_run",
     "GeneratedData",
     "GeneratedRun",
     "generate",
+    "iter_scale_records",
     "resume_generation",
     "ScalePlan",
     "ShardDescriptor",

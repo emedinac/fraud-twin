@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from fraudtwin.config import ScaleConfig, SimulationRunConfig, load_config
-from fraudtwin.generation import generate, resume_generation
+from fraudtwin.generation import generate, iter_scale_records, resume_generation
 from fraudtwin.scale import (
     ScalePlan,
     aggregate_fingerprint,
@@ -20,7 +20,9 @@ from fraudtwin.scale import (
     reconcile_logical_ids,
     resolve_scale_plan,
     write_scale_benchmark_manifest,
+    write_scale_partitions,
 )
+from fraudtwin.simulation.generator import EntityGenerator
 
 
 def _scale_config():
@@ -155,3 +157,30 @@ def test_scale_plan_is_typed() -> None:
         configuration_hash="a" * 64,
     )
     assert plan.profile == "small"
+
+
+def test_streaming_scale_records_preserve_canonical_tables() -> None:
+    config = _scale_config()
+    entities = EntityGenerator(config).generate()
+    rows = iter_scale_records(config, entities, simulation_run_id="RUN-stream")
+    first_rows = [next(rows) for _ in range(20)]
+    assert {row["logical_type"] for row in first_rows} <= {
+        *entities.all_tables().keys(),
+        "behavior_profiles",
+    }
+
+
+def test_scale_writer_detects_duplicate_ids_without_global_memory(tmp_path: Path) -> None:
+    config = _scale_config()
+    plan = resolve_scale_plan(config, run_id="RUN-duplicate")
+    assert plan is not None
+    _, reconciliation, _ = write_scale_partitions(
+        tmp_path / "run",
+        plan,
+        (
+            {"logical_id": "PAY-1", "logical_type": "payments"},
+            {"logical_id": "PAY-1", "logical_type": "payments"},
+        ),
+    )
+    assert reconciliation.valid is False
+    assert reconciliation.duplicate_logical_ids == ("PAY-1",)
