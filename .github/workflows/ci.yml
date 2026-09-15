@@ -108,3 +108,71 @@ jobs:
           /tmp/fraudtwin-wheel/bin/fraudtwin schema validate
       - name: Diff check
         run: git diff --check
+
+  integration-smoke:
+    # External services are intentionally exercised only for pull requests;
+    # normal local/CI unit runs keep the optional stack out of the fast path.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_USER: fraudtwin
+      POSTGRES_PASSWORD: fraudtwin
+      POSTGRES_DB: fraudtwin
+      FRAUDTWIN_POSTGRES_DSN: postgresql://fraudtwin:fraudtwin@localhost:5432/fraudtwin
+      FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+      FRAUDTWIN_SCHEMA_REGISTRY_URL: http://localhost:8081
+      FRAUDTWIN_ICEBERG_CATALOG_URI: http://localhost:8181
+      FRAUDTWIN_ICEBERG_WAREHOUSE: s3://warehouse/
+      FRAUDTWIN_ICEBERG_S3_ENDPOINT: http://localhost:9000
+      FRAUDTWIN_ICEBERG_S3_ACCESS_KEY: minioadmin
+      FRAUDTWIN_ICEBERG_S3_SECRET_KEY: minioadmin
+      GRAFANA_ADMIN_PASSWORD: ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install integration dependencies
+        run: poetry install -E postgres -E kafka -E lakehouse
+      - name: Run PostgreSQL, Kafka, and Iceberg smoke tests
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker compose --profile integration --profile streaming --profile lakehouse down -v >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker compose --profile integration --profile streaming --profile lakehouse up -d \
+            postgres kafka schema-registry streaming-topics minio minio-init iceberg-rest
+
+          for _ in $(seq 1 60); do
+            if docker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          docker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+
+          for _ in $(seq 1 60); do
+            topics="$(docker compose exec -T kafka kafka-topics --bootstrap-server kafka:29092 --list 2>/dev/null || true)"
+            if curl -fsS http://localhost:8081/subjects >/dev/null 2>&1 && \
+               grep -q '^fraudsim\.payment\.events\.v1$' <<<"$topics"; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8081/subjects >/dev/null
+          docker compose exec -T kafka kafka-topics --bootstrap-server kafka:29092 --list | \
+            grep -q '^fraudsim\.payment\.events\.v1$'
+
+          for _ in $(seq 1 60); do
+            if curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && \
+               curl -fsS http://localhost:8181/v1/config >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://localhost:9000/minio/health/live >/dev/null
+          curl -fsS http://localhost:8181/v1/config >/dev/null
+
+          FRAUDTWIN_INTEGRATION_SMOKE=1 poetry run pytest tests/test_integration_smoke.py --no-cov -q

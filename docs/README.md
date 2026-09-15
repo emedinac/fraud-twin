@@ -27,6 +27,7 @@ FraudTwin is a deterministic synthetic payment world for fraud detection, graph 
 - [Configuration](configuration.md) - control populations, behavior, payment rails, fraud, labels, calibration, scale, and campaign dynamics.
 - [Data and evaluation workflows](workflows.md) - build point-in-time datasets, replay runs, backtest models, and evaluate predictions.
 - [Graph and benchmark workflows](graph-and-benchmarks.md) - export observable and oracle graph views and compare stress levels.
+- [Post-validation technical debt](technical-debt.md) - optional Debezium, Spark, feature-store, and GCP extensions.
 
 ## Package Reference
 

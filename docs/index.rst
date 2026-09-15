@@ -35,5 +35,7 @@ Documentation
    configuration
    workflows
    graph-and-benchmarks
+   m18-scale-todo
+   technical-debt
    development
    references

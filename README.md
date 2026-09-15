@@ -214,7 +214,7 @@ Calibration profiles contain only deterministic statistical summaries and proven
 | Native Kafka streaming (optional `kafka` extra) | Available |
 | Iceberg lakehouse (optional `lakehouse` extra) | Available |
 | CLI Prometheus metrics and Grafana dashboard (optional `observability` extra) | Available |
-| Flink, feature stores, and advanced models | Planned |
+| Spark, feature stores, and advanced models | Planned |
 
 ## Development
 
@@ -230,6 +230,8 @@ poetry build
 ```
 
 See [`DEVELOPMENT.md`](DEVELOPMENT.md) for the short contributor entry point and [`docs/development.md`](docs/development.md) for focused tests and working conventions.
+
+Pull-request CI runs three tiny external-service smoke tests for PostgreSQL, Kafka, and Iceberg; they are skipped in normal local test runs.
 
 ## License and references
 
