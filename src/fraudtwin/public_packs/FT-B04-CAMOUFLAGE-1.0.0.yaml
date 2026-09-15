@@ -1,0 +1,17 @@
+id: FT-B04-CAMOUFLAGE
+version: 1.0.0
+suite: camouflage
+generator_compatibility: ">=0.26.0,<0.27.0"
+seed: 42
+seed_tree_version: fraudtwin-named-streams-1
+difficulty: 7
+simulation_start: 2026-01-01T00:00:00Z
+simulation_end: 2026-01-13T00:00:00Z
+split_boundaries: {train_end: 2026-01-08T00:00:00Z, validation_end: 2026-01-10T00:00:00Z, test_end: 2026-01-13T00:00:00Z}
+scenario_definitions: {fraud: F01-F05 with equal default weights, graph: disabled, campaign_dynamics: disabled}
+stress_parameters: {camouflage: 0.75, feature_camouflage: 0.80, relation_camouflage: 0.70}
+label_observation_policy: {enabled: true, investigation_rate: 0.85, missing_fraud_rate: 0.10, preliminary_error_rate: 0.10, correction_rate: 0.10, reopening_rate: 0.05}
+metric_definitions: {pr_auc: average_precision over labelled test rows, recall_at_fixed_fpr: 0.01, f1: validation-selected threshold, detection_delay_seconds: mean test delay, drop_vs_baseline: relative PR-AUC change}
+resolved_configuration_hash: 73acba827d374fd0ec47e0bec64f10aa799f4d9e89cb3433799f2ad6096aa35e
+expected_descriptors: {"counterfactual_distance":null,"drift_strength":0,"feature_camouflage_score":0.8223844166666666,"fraud_prevalence":0.03865546218487395,"graph_coordination_score":0,"investigation_selection_rate":0.7586206896551724,"label_correction_rate":0.034482758620689655,"label_delay_distribution":{"count":22,"max_seconds":261957.383036,"median_seconds":95141.720319,"min_seconds":27190.010991},"missing_label_rate":0.3103448275862069,"reference_fidelity_score":null,"relation_camouflage_score":0.7,"scenario_coverage":{"configured":["F01","F02","F03","F04","F05"],"realized":["F01","F02"]}}
+expected_fingerprints: {"dataset":"958f3c6ab2a79536b7971dde9f4eb1e4e982d50b0f4e33ab3e62b5a88ecae4f2","descriptors":"5d8f208437a5c9ec1a94095df4d0d0c88034c89911863a56f7a02de25b3457f0","latent_truth":"fb78f1f7bce45556a0c5a70083312e6e7e99587bff76792d45d0b4e0e2d21703","observed_truth":"741abdf758dd2a39998cac0b7e4ed8663dd055a94bae12e7c3dea44f9ec6ff23","source":"62cd7c6ac85320a1cb45859ae2656f7bd9cee6e4433008cd961dec65bdf4515e"}

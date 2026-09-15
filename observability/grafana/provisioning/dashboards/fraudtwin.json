@@ -1,0 +1,66 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Generation rate",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{"expr": "events_generated_per_second{run_id=\"$run_id\"}", "refId": "A"}]
+    },
+    {
+      "type": "stat",
+      "title": "Fraud events",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{"expr": "fraud_events_total{run_id=\"$run_id\"}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Generated events",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [{"expr": "events_generated_total{run_id=\"$run_id\"}", "refId": "A"}]
+    },
+    {
+      "type": "timeseries",
+      "title": "Errors and reconciliation",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [
+        {"expr": "generator_errors_total{run_id=\"$run_id\"}", "legendFormat": "generator errors", "refId": "A"},
+        {"expr": "ledger_reconciliation_failures{run_id=\"$run_id\"}", "legendFormat": "ledger failures", "refId": "B"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Injected data-quality faults",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "targets": [
+        {"expr": "duplicate_rate{run_id=\"$run_id\"}", "legendFormat": "duplicate rate", "refId": "A"},
+        {"expr": "invalid_record_rate{run_id=\"$run_id\"}", "legendFormat": "invalid record rate", "refId": "B"},
+        {"expr": "late_event_count{run_id=\"$run_id\"}", "legendFormat": "late events", "refId": "C"}
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["fraudtwin", "observability"],
+  "templating": {
+    "list": [
+      {
+        "name": "run_id",
+        "label": "Run ID",
+        "type": "query",
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "query": "label_values(events_generated_total, run_id)",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "sort": 1
+      }
+    ]
+  },
+  "time": {"from": "now-15d", "to": "now"},
+  "title": "FraudTwin run observability",
+  "uid": "fraudtwin-m27",
+  "version": 1
+}

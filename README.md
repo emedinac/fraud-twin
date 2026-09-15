@@ -52,6 +52,9 @@ examples.
 - An opt-in label observation engine for selective, delayed, missing, preliminary, corrected, and reopened labels with point-in-time-safe history.
 - Opt-in large-scale generation profiles with stable sharding, bounded chunked Parquet output, parallel scheduling, checkpoint/resume, partition fingerprints, and cross-partition reconciliation.
 - Reproducible baseline ML oracles (Logistic Regression, LightGBM, XGBoost, CatBoost), point-in-time external prediction evaluation, fraud metrics, and optional MLflow tracking.
+- Generator-quality benchmark reports for native runs and capability-declared external generators, with immutable M22 profiles and `N/A`-aware scoring.
+- Source-controlled Avro contracts for clean observable operational events, with canonical fingerprints and `FULL_TRANSITIVE` compatibility validation.
+- Optional native Kafka streaming for the six Avro subjects, with remote Schema Registry verification and deterministic delivery pacing.
 
 FraudTwin is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and timing before introducing a larger streaming or production stack.
 
@@ -63,6 +66,7 @@ Requirements: Python 3.12 and Poetry 2.x.
 poetry install
 poetry run fraudtwin config validate configs/minimal.yaml
 poetry run fraudtwin generate configs/minimal.yaml
+poetry run fraudtwin schema validate
 ```
 
 To fit and reuse an aggregate-only calibration profile:
@@ -98,6 +102,27 @@ poetry install -E ml
 poetry run fraudtwin ml train runs/<run-id>/ml/dataset.parquet --output-dir runs/ml-evaluations
 poetry run fraudtwin ml evaluate runs/<run-id>/ml/dataset.parquet predictions.parquet
 ```
+
+Run the generator-quality protocol against all immutable M21 public packs:
+
+```bash
+poetry run fraudtwin quality-benchmark --profile standard-v1
+poetry run fraudtwin report RUN-<id>
+```
+
+The report keeps correctness, fidelity, fraud difficulty, scalability, engineering performance, and reproducibility independent. External generators may provide a normalized bundle or a `module:factory` adapter; unsupported dimensions are reported as `N/A`.
+
+For comparable results across machines and FraudTwin releases, run one of the
+bundled immutable public benchmark packs:
+
+```bash
+fraudtwin benchmark run FT-B04-CAMOUFLAGE@1.0
+fraudtwin benchmark describe FT-B04-CAMOUFLAGE@1.0.0
+```
+
+Pack definitions freeze their generation controls, PIT windows, metrics,
+calibration identity, descriptors, and logical fingerprints. Historical pack
+versions remain runnable; changes publish a new version.
 
 ## Generated output
 
@@ -146,7 +171,11 @@ Calibration profiles contain only deterministic statistical summaries and proven
 | Point-in-time datasets, replay, and rolling backtests | Available |
 | Graph campaigns and Neo4j/PyG exports | Available |
 | Difficulty and camouflage benchmarks | Available |
-| Kafka, PostgreSQL, Flink, feature stores, and advanced models | Planned |
+| PostgreSQL operational mirror | Available (optional `postgres` extra) |
+| Native Kafka streaming (optional `kafka` extra) | Available |
+| Iceberg lakehouse (optional `lakehouse` extra) | Available |
+| CLI Prometheus metrics and Grafana dashboard (optional `observability` extra) | Available |
+| Flink, feature stores, and advanced models | Planned |
 
 ## Development
 

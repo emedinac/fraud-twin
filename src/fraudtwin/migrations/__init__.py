@@ -1,0 +1,1 @@
+"""Packaged PostgreSQL schema migrations."""

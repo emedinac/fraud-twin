@@ -56,6 +56,18 @@ poetry run fraudtwin ml backtest configs/minimal.yaml \
 
 Windows are chronological and non-overlapping. A benchmark pack freezes its own label-maturity gap, regime policy, seed/configuration identity, and metric definition so later comparisons remain meaningful.
 
+For the immutable Milestone 21 public packs, use the separate public-pack
+commands:
+
+```bash
+fraudtwin benchmark run FT-B04-CAMOUFLAGE@1.0
+fraudtwin benchmark describe FT-B04-CAMOUFLAGE@1.0.0
+```
+
+These bundled definitions verify generator compatibility and logical output
+fingerprints. The existing M10 `--benchmark-pack` option remains for backtests
+over a previously generated run.
+
 ## Train baselines and evaluate external predictions
 
 The baseline workflow trains Logistic Regression, LightGBM, XGBoost, and CatBoost models on the same frozen point-in-time feature allowlist. Install the optional model stack before training:
@@ -74,6 +86,165 @@ poetry run fraudtwin ml evaluate runs/<run-id>/ml/dataset.parquet predictions.js
 ```
 
 The evaluator reports ranking, threshold, calibration, monetary, detection-delay, and segment metrics. It resolves labels and features at each prediction timestamp and records an immutable evaluation manifest. MLflow is used when a tracking URI is configured; otherwise local artifacts are sufficient.
+
+## Persist an operational run in PostgreSQL
+
+PostgreSQL is an optional mirror; it never changes generated records or their
+deterministic run ID. Install the extra, provide the connection string through
+the environment, and apply the packaged migrations before enabling the sink:
+
+```bash
+poetry install -E postgres
+export FRAUDTWIN_POSTGRES_DSN='postgresql://user:password@localhost:5432/fraudtwin'
+fraudtwin db migrate
+fraudtwin generate configs/minimal.yaml --output-dir runs
+```
+
+Set `outputs.postgres: true` in the configuration. Keep `outputs.parquet: true`
+when you want the normal file artifacts as well; both sinks receive the same
+observable records. PostgreSQL writes currently require `quality.profile:
+clean`, are committed transactionally, and are immutable per `run_id` (a
+matching repeat is an idempotent no-op). Credentials are never written to the
+resolved configuration or manifest. `fraud_truth` is not exposed in the
+operational database. Debezium CDC remains a separate later milestone; native
+Kafka publication is described below.
+
+## Publish a native Kafka stream
+
+Milestone 25 publishes the clean observable M24 contracts directly to Kafka. The
+bundled Avro registry remains authoritative; a remote Schema Registry is checked
+for matching canonical fingerprints and `FULL_TRANSITIVE` compatibility before
+any messages are sent.
+
+Start the local broker and registry with `docker compose --profile streaming up`.
+Install the optional client and provide connection settings through the
+environment:
+
+```bash
+poetry install -E kafka
+export FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+export FRAUDTWIN_SCHEMA_REGISTRY_URL=http://localhost:8081
+fraudtwin generate configs/minimal.yaml --output-dir runs
+```
+
+Set `outputs.kafka: true` and keep `quality.profile: clean`. The six topics use
+`payment_id` as their partition key; ordering is guaranteed only within a topic
+and key. Producers use idempotence and acknowledged delivery, but retries across
+process restarts remain at-least-once, so consumers deduplicate using the stable
+record ID header. `simulation.speed` controls publication pacing (`batch`,
+real-time, or accelerated); it never changes generated domain content.
+
+## Validate Avro operational contracts
+
+Milestone 24 ships a source-controlled Avro registry for the clean observable
+operational event projection. It contains `payment-event`, `customer-dispute`,
+`fraud-alert`, `fraud-case`, `fraud-case-confirmation`, and `fraud-label`
+subjects. The registry is local and bundled; it does not require a Schema
+Registry service or Kafka.
+
+The v1 record names and parsing-canonical fingerprints are recorded in
+`contracts/avro/registry.yaml`:
+
+| Subject | Avro record | Version | Canonical SHA-256 |
+| --- | --- | --- | --- |
+| `payment-event` | `fraudtwin.events.v1.PaymentEvent` | `1.0.0` | `e7f8a63404fb5037bd6e83333550ebd49755d29675564bcdf57a1216c238cd6e` |
+| `customer-dispute` | `fraudtwin.events.v1.CustomerDispute` | `1.0.0` | `046eae447f9e49061b5a01238fc613f1622b4a9533e7249fa92b56681c294c0b` |
+| `fraud-alert` | `fraudtwin.events.v1.FraudAlert` | `1.0.0` | `694f88da97f952b06729fa0b892a2e6dc783b8518c213b085d9a847a769f82ba` |
+| `fraud-case` | `fraudtwin.events.v1.FraudCase` | `1.0.0` | `e079a42c845527312a2d2efeb643fae0a09dbbdd2fc3c916afb5b1c5c1aae656` |
+| `fraud-case-confirmation` | `fraudtwin.events.v1.FraudCaseConfirmation` | `1.0.0` | `15c56944c6465f2e6b68c34eacf7bdcc7db467a29f92ae607f629544bcf957e4` |
+| `fraud-label` | `fraudtwin.events.v1.FraudLabel` | `1.0.0` | `b062e07420c417ba0c849b1a066b9853484c73e04fae95261319aa433c13b046` |
+
+All subjects use `FULL_TRANSITIVE` compatibility. New optional fields need a
+reader default and must remain bidirectionally compatible with every earlier
+version. A breaking change is published as a new major subject with
+`breaking: true` and `supersedes`, leaving the old subject unchanged.
+
+Validate all schemas, canonical fingerprints, and full transitive reader/writer
+compatibility with:
+
+```bash
+fraudtwin schema validate
+fraudtwin schema validate --registry path/to/contracts/avro
+```
+
+Timestamps are timezone-aware UTC `timestamp-micros` values and monetary fields
+are two-decimal Avro `decimal` values. Fraud truth and other oracle-only fields
+are not part of the operational contracts. A compatible revision must provide
+reader defaults for new fields; an incompatible revision requires an explicit
+breaking major subject with `supersedes` metadata. Kafka producers and remote
+registry registration are deferred to Milestone 25.
+
+## Publish a lakehouse run
+
+Milestone 26 keeps the normal Parquet run as the deterministic source and
+adds an optional Iceberg publication.  Start the local MinIO, REST Catalog,
+and Spark profile with:
+
+```bash
+docker compose --profile lakehouse up -d
+export FRAUDTWIN_ICEBERG_CATALOG_URI='http://localhost:8181'
+export FRAUDTWIN_ICEBERG_WAREHOUSE='s3://warehouse/'
+export FRAUDTWIN_ICEBERG_S3_ENDPOINT='http://localhost:9000'
+export FRAUDTWIN_ICEBERG_S3_ACCESS_KEY='minioadmin'
+export FRAUDTWIN_ICEBERG_S3_SECRET_KEY='minioadmin'
+fraudtwin lakehouse init
+fraudtwin lakehouse ingest-run RUN-... --runs-dir runs
+```
+
+`ingest-run` creates an immutable materialization manifest under the source
+run's `lakehouse/` directory.  Use `--local-only` to build and verify that
+manifest without optional Iceberg dependencies or services.  The normal
+observable namespaces never contain latent fraud truth; `--include-oracle`
+publishes the separate oracle namespace explicitly.
+
+M25 topics can be consumed incrementally with `fraudtwin lakehouse consume`.
+The consumer preserves raw framed payloads and transport metadata in Bronze,
+then applies deterministic Silver deduplication.  A complete batch bootstrap
+is still required for entity, ledger, graph, and PIT Gold tables because those
+records are not M25 Kafka subjects.
+
+The consumer reads `FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS` and optionally
+`FRAUDTWIN_KAFKA_TOPIC_PREFIX` / `FRAUDTWIN_LAKEHOUSE_CONSUMER_GROUP`.
+Namespaces are prefixed (`fraudtwin_bronze`, `fraudtwin_silver`,
+`fraudtwin_gold`, and `fraudtwin_oracle` by default); the logical tables and
+partition specs are recorded in every materialization manifest.  Additive
+columns are applied through Iceberg schema metadata.  Breaking changes require
+a new versioned contract/table, leaving prior snapshots readable.
+
+Use `fraudtwin lakehouse verify runs/RUN-.../lakehouse/LH-....json` to inspect
+source checksums, logical fingerprints, and committed snapshot IDs.  Snapshot
+expiration and orphan-file removal are intentionally operator-controlled.
+`fraudtwin lakehouse maintenance ...` is dry-run by default; expiration
+requires an explicit snapshot ID and retained run snapshots are never expired
+implicitly.  Compaction and orphan cleanup are delegated to the Spark profile.
+
+## Observe a generated run
+
+Milestone 27 provides a small optional Prometheus/Grafana surface for local
+batch runs. Install the client and choose a non-default Grafana password:
+
+```bash
+poetry install -E observability
+export GRAFANA_ADMIN_PASSWORD='choose-a-local-password'
+docker compose --profile observability up -d
+```
+
+Run the generator with its temporary scrape endpoint. The endpoint is held
+after completion so Prometheus can collect the final batch values:
+
+```bash
+fraudtwin generate configs/minimal.yaml --output-dir runs \
+  --metrics-host 0.0.0.0 --metrics-port 9464 --metrics-hold-seconds 15
+```
+
+Open Grafana at `http://localhost:3000` and select a `run_id` in the
+**FraudTwin run observability** dashboard. Prometheus retains local samples for
+15 days. The target is expected to be down between CLI invocations because M27
+does not add a permanent generator daemon, Pushgateway, or remote metrics
+storage. The dashboard shows generation rate and fraud volume together with
+generator/ledger failures, duplicate rate, invalid-record rate, and late-event
+counts. `fraudtwin validate-ledger` accepts the same metrics options and records
+the selected run's reconciliation result.
 
 ## A practical evaluation sequence
 

@@ -451,167 +451,138 @@ class QualityFaultInjector:
             audit=audit,
         )
 
-    def _invalid_enums(
-        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
+    def _apply_event_mutation(
+        self,
+        events: tuple[PaymentEvent, ...],
+        audit: list[dict[str, object]],
+        *,
+        probability_name: str,
+        stream_name: str,
+        fault: str,
+        expected_rule: str,
+        mutation: Callable[[PaymentEvent], tuple[dict[str, object], object]],
     ) -> tuple[tuple[PaymentEvent, ...], int]:
-        probability = self.quality.probability("invalid_enum")
-        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:invalid-enums")
+        """Apply one deterministic event fault and record its audit entries."""
+
+        probability = self.quality.probability(probability_name)
+        rng = create_stream_rng(self.config.simulation.seed, f"milestone-8:{stream_name}")
         result: list[PaymentEvent] = []
         count = 0
         for event in events:
             if rng.random() >= probability:
                 result.append(event)
                 continue
-            invalid_value = f"INVALID_ENUM:{event.event_id}"
-            result.append(event.model_copy(update={"event_type": invalid_value}))
+            updates, mutation_description = mutation(event)
+            result.append(event.model_copy(update=updates))
             audit.append(
                 {
-                    "fault": "invalid_enum",
+                    "fault": fault,
                     "target": event.event_id,
                     "requested_probability": probability,
-                    "mutation": {"event_type": invalid_value},
+                    "mutation": mutation_description,
                     "logical_identity_preserved": True,
                     "affected_boundary": "typed_output",
-                    "expected_validation_rule": "event_type is a registered payment event",
+                    "expected_validation_rule": expected_rule,
                 }
             )
             count += 1
         return tuple(result), count
+
+    def _invalid_enums(
+        self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
+    ) -> tuple[tuple[PaymentEvent, ...], int]:
+        return self._apply_event_mutation(
+            events,
+            audit,
+            probability_name="invalid_enum",
+            stream_name="invalid-enums",
+            fault="invalid_enum",
+            expected_rule="event_type is a registered payment event",
+            mutation=lambda event: (
+                {"event_type": f"INVALID_ENUM:{event.event_id}"},
+                {"event_type": f"INVALID_ENUM:{event.event_id}"},
+            ),
+        )
 
     def _invalid_references(
         self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
     ) -> tuple[tuple[PaymentEvent, ...], int]:
-        probability = self.quality.probability("invalid_reference")
-        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:invalid-references")
-        result: list[PaymentEvent] = []
-        count = 0
-        for event in events:
-            if rng.random() >= probability:
-                result.append(event)
-                continue
-            invalid_payment_id = f"PAYMENT-UNKNOWN-{event.event_id}"
-            result.append(event.model_copy(update={"payment_id": invalid_payment_id}))
-            audit.append(
-                {
-                    "fault": "invalid_reference",
-                    "target": event.event_id,
-                    "requested_probability": probability,
-                    "mutation": {"payment_id": invalid_payment_id},
-                    "logical_identity_preserved": True,
-                    "affected_boundary": "typed_output",
-                    "expected_validation_rule": "payment_id references payments.payment_id",
-                }
-            )
-            count += 1
-        return tuple(result), count
+        return self._apply_event_mutation(
+            events,
+            audit,
+            probability_name="invalid_reference",
+            stream_name="invalid-references",
+            fault="invalid_reference",
+            expected_rule="payment_id references payments.payment_id",
+            mutation=lambda event: (
+                {"payment_id": f"PAYMENT-UNKNOWN-{event.event_id}"},
+                {"payment_id": f"PAYMENT-UNKNOWN-{event.event_id}"},
+            ),
+        )
 
     def _corrupt_timestamps(
         self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
     ) -> tuple[tuple[PaymentEvent, ...], int]:
-        probability = self.quality.probability("corrupted_timestamp")
-        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:corrupted-timestamps")
-        result: list[PaymentEvent] = []
-        count = 0
-        for event in events:
-            if rng.random() >= probability:
-                result.append(event)
-                continue
-            value = event.event_time - timedelta(seconds=1)
-            result.append(event.model_copy(update={"source_available_at": value}))
-            audit.append(
-                {
-                    "fault": "corrupted_timestamp",
-                    "target": event.event_id,
-                    "requested_probability": probability,
-                    "mutation": {"source_available_at": value.isoformat()},
-                    "logical_identity_preserved": True,
-                    "affected_boundary": "typed_output",
-                    "expected_validation_rule": "event_time <= source_available_at",
-                }
-            )
-            count += 1
-        return tuple(result), count
+        return self._apply_event_mutation(
+            events,
+            audit,
+            probability_name="corrupted_timestamp",
+            stream_name="corrupted-timestamps",
+            fault="corrupted_timestamp",
+            expected_rule="event_time <= source_available_at",
+            mutation=lambda event: (
+                {"source_available_at": event.event_time - timedelta(seconds=1)},
+                {"source_available_at": (event.event_time - timedelta(seconds=1)).isoformat()},
+            ),
+        )
 
     def _timezone_errors(
         self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
     ) -> tuple[tuple[PaymentEvent, ...], int]:
-        probability = self.quality.probability("timezone_error")
-        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:timezone-errors")
-        result: list[PaymentEvent] = []
-        count = 0
-        for event in events:
-            if rng.random() >= probability:
-                result.append(event)
-                continue
-            value = event.event_time.replace(tzinfo=None)
-            result.append(event.model_copy(update={"event_time": value}))
-            audit.append(
+        return self._apply_event_mutation(
+            events,
+            audit,
+            probability_name="timezone_error",
+            stream_name="timezone-errors",
+            fault="timezone_error",
+            expected_rule="timestamps include a timezone",
+            mutation=lambda event: (
+                {"event_time": event.event_time.replace(tzinfo=None)},
                 {
-                    "fault": "timezone_error",
-                    "target": event.event_id,
-                    "requested_probability": probability,
-                    "mutation": {"event_time": value.isoformat(), "timezone": None},
-                    "logical_identity_preserved": True,
-                    "affected_boundary": "typed_output",
-                    "expected_validation_rule": "timestamps include a timezone",
-                }
-            )
-            count += 1
-        return tuple(result), count
+                    "event_time": event.event_time.replace(tzinfo=None).isoformat(),
+                    "timezone": None,
+                },
+            ),
+        )
 
     def _schema_mismatches(
         self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
     ) -> tuple[tuple[PaymentEvent, ...], int]:
-        probability = self.quality.probability("schema_mismatch")
-        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:schema-mismatches")
-        result: list[PaymentEvent] = []
-        count = 0
-        for event in events:
-            if rng.random() >= probability:
-                result.append(event)
-                continue
-            value = f"unregistered-{event.schema_version}-{event.event_id}"
-            result.append(event.model_copy(update={"schema_version": value}))
-            audit.append(
-                {
-                    "fault": "schema_mismatch",
-                    "target": event.event_id,
-                    "requested_probability": probability,
-                    "mutation": {"schema_version": value},
-                    "logical_identity_preserved": True,
-                    "affected_boundary": "typed_output",
-                    "expected_validation_rule": "schema_version is registered",
-                }
-            )
-            count += 1
-        return tuple(result), count
+        return self._apply_event_mutation(
+            events,
+            audit,
+            probability_name="schema_mismatch",
+            stream_name="schema-mismatches",
+            fault="schema_mismatch",
+            expected_rule="schema_version is registered",
+            mutation=lambda event: (
+                {"schema_version": f"unregistered-{event.schema_version}-{event.event_id}"},
+                {"schema_version": f"unregistered-{event.schema_version}-{event.event_id}"},
+            ),
+        )
 
     def _extreme_values(
         self, events: tuple[PaymentEvent, ...], audit: list[dict[str, object]]
     ) -> tuple[tuple[PaymentEvent, ...], int]:
-        probability = self.quality.probability("extreme_value")
-        rng = create_stream_rng(self.config.simulation.seed, "milestone-8:extreme-values")
-        result: list[PaymentEvent] = []
-        count = 0
-        for event in events:
-            if rng.random() >= probability:
-                result.append(event)
-                continue
-            value = 1.0e15
-            result.append(event.model_copy(update={"amount": value}))
-            audit.append(
-                {
-                    "fault": "extreme_value",
-                    "target": event.event_id,
-                    "requested_probability": probability,
-                    "mutation": {"amount": value},
-                    "logical_identity_preserved": True,
-                    "affected_boundary": "typed_output",
-                    "expected_validation_rule": "amount is within configured business bounds",
-                }
-            )
-            count += 1
-        return tuple(result), count
+        return self._apply_event_mutation(
+            events,
+            audit,
+            probability_name="extreme_value",
+            stream_name="extreme-values",
+            fault="extreme_value",
+            expected_rule="amount is within configured business bounds",
+            mutation=lambda _event: ({"amount": 1.0e15}, {"amount": 1.0e15}),
+        )
 
     def _encoding_errors(
         self,

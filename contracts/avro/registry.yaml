@@ -1,0 +1,52 @@
+format: avro
+registry_version: "1"
+compatibility: FULL_TRANSITIVE
+subjects:
+  - name: payment-event
+    record_name: fraudtwin.events.v1.PaymentEvent
+    latest: 1.0.0
+    versions:
+      - version: 1.0.0
+        path: payment-event/1.0.0.avsc
+        canonical_sha256: e7f8a63404fb5037bd6e83333550ebd49755d29675564bcdf57a1216c238cd6e
+        breaking: false
+  - name: customer-dispute
+    record_name: fraudtwin.events.v1.CustomerDispute
+    latest: 1.0.0
+    versions:
+      - version: 1.0.0
+        path: customer-dispute/1.0.0.avsc
+        canonical_sha256: 046eae447f9e49061b5a01238fc613f1622b4a9533e7249fa92b56681c294c0b
+        breaking: false
+  - name: fraud-alert
+    record_name: fraudtwin.events.v1.FraudAlert
+    latest: 1.0.0
+    versions:
+      - version: 1.0.0
+        path: fraud-alert/1.0.0.avsc
+        canonical_sha256: 694f88da97f952b06729fa0b892a2e6dc783b8518c213b085d9a847a769f82ba
+        breaking: false
+  - name: fraud-case
+    record_name: fraudtwin.events.v1.FraudCase
+    latest: 1.0.0
+    versions:
+      - version: 1.0.0
+        path: fraud-case/1.0.0.avsc
+        canonical_sha256: e079a42c845527312a2d2efeb643fae0a09dbbdd2fc3c916afb5b1c5c1aae656
+        breaking: false
+  - name: fraud-case-confirmation
+    record_name: fraudtwin.events.v1.FraudCaseConfirmation
+    latest: 1.0.0
+    versions:
+      - version: 1.0.0
+        path: fraud-case-confirmation/1.0.0.avsc
+        canonical_sha256: 15c56944c6465f2e6b68c34eacf7bdcc7db467a29f92ae607f629544bcf957e4
+        breaking: false
+  - name: fraud-label
+    record_name: fraudtwin.events.v1.FraudLabel
+    latest: 1.0.0
+    versions:
+      - version: 1.0.0
+        path: fraud-label/1.0.0.avsc
+        canonical_sha256: b062e07420c417ba0c849b1a066b9853484c73e04fae95261319aa433c13b046
+        breaking: false

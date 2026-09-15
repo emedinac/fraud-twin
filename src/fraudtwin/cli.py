@@ -1,4 +1,7 @@
 import json
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal, cast
@@ -6,17 +9,33 @@ from typing import Annotated, Literal, cast
 import polars as pl
 import typer
 
-from fraudtwin.benchmark import BenchmarkRequest, SuiteName, run_benchmark
+from fraudtwin.benchmark import (
+    BenchmarkRequest,
+    SuiteName,
+    load_public_pack,
+    run_benchmark,
+    run_public_benchmark,
+)
 from fraudtwin.calibration import (
     fit_calibration_profile,
     load_reference_data,
     write_calibration_profile,
 )
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
+from fraudtwin.contracts import ContractValidationError, load_contract_registry
 from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
 from fraudtwin.generation import generate as generate_library
 from fraudtwin.generation import resume_generation
 from fraudtwin.graph import GraphDataset, build_graph, validate_graph, write_graph
+from fraudtwin.lakehouse import (
+    IcebergLakehouse,
+    LakehouseConfigurationError,
+    LakehouseDependencyError,
+    LakehouseEnvironment,
+    consume_kafka_once,
+    materialize_run,
+    verify_materialization,
+)
 from fraudtwin.ml import (
     BenchmarkPack,
     PointInTimeDatasetBuilder,
@@ -32,6 +51,9 @@ from fraudtwin.ml import (
     write_evaluation,
     write_point_in_time_dataset,
 )
+from fraudtwin.observability import MetricsSession
+from fraudtwin.postgres import database_status, migrate_database
+from fraudtwin.quality_benchmark import report_run, run_quality_benchmark
 from fraudtwin.replay import ReplayOrder, replay_run, write_replay
 from fraudtwin.simulation.graph_fraud import GraphFraudDataset
 from fraudtwin.simulation.parquet import (
@@ -50,10 +72,252 @@ counterfactual_app = typer.Typer(help="Generate deterministic M14 counterfactual
 campaign_app = typer.Typer(help="Evolve deterministic M15 campaign sidecars.")
 app.add_typer(counterfactual_app, name="counterfactual")
 app.add_typer(campaign_app, name="campaign")
+benchmark_app = typer.Typer(help="Run generic M20 suites or immutable M21 public packs.")
+app.add_typer(benchmark_app, name="benchmark")
+db_app = typer.Typer(help="Manage the optional PostgreSQL operational schema.")
+app.add_typer(db_app, name="db")
+schema_app = typer.Typer(help="Validate bundled Avro event contracts.")
+app.add_typer(schema_app, name="schema")
+lakehouse_app = typer.Typer(help="Manage the optional Iceberg lakehouse.")
+app.add_typer(lakehouse_app, name="lakehouse")
 
 
-@app.command("benchmark")
-def benchmark_command(
+@schema_app.command("validate")
+def validate_schema_registry(
+    registry: Annotated[
+        Path | None,
+        typer.Option("--registry", help="Registry directory or registry.yaml path."),
+    ] = None,
+) -> None:
+    """Validate Avro syntax, fingerprints, and FULL_TRANSITIVE compatibility."""
+
+    try:
+        loaded = load_contract_registry(registry)
+        report = loaded.validate()
+    except (ContractValidationError, FileNotFoundError, OSError, ValueError) as exc:
+        typer.echo(f"Schema registry validation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Schema registry is valid: {report.path}")
+    typer.echo(f"Subjects: {report.subjects}; versions: {report.versions}")
+    for key, fingerprint in sorted(report.fingerprints.items()):
+        typer.echo(f"{key}: {fingerprint}")
+
+
+@db_app.command("migrate")
+def postgres_migrate() -> None:
+    """Apply packaged PostgreSQL migrations using FRAUDTWIN_POSTGRES_DSN."""
+
+    try:
+        version = migrate_database()
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"PostgreSQL migration failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"PostgreSQL schema is at version: {version}")
+
+
+@db_app.command("status")
+def postgres_status() -> None:
+    """Show applied PostgreSQL migrations without changing the database."""
+
+    try:
+        versions = database_status()
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"PostgreSQL status failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    for version in versions:
+        typer.echo(version)
+
+
+@lakehouse_app.command("init")
+def lakehouse_init() -> None:
+    """Create the Bronze/Silver/Gold/oracle Iceberg namespaces."""
+
+    try:
+        lakehouse = IcebergLakehouse(LakehouseEnvironment.from_environment())
+        for namespace in lakehouse.initialize():
+            typer.echo(namespace)
+    except (LakehouseConfigurationError, LakehouseDependencyError, OSError, RuntimeError) as exc:
+        typer.echo(f"Lakehouse initialization failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
+@lakehouse_app.command("ingest-run")
+def lakehouse_ingest_run(
+    run_id: Annotated[str, typer.Argument(help="Existing generated run identifier.")],
+    runs_dir: Annotated[
+        Path, typer.Option("--runs-dir", help="Directory containing generated runs.")
+    ] = Path("runs"),
+    include_oracle: Annotated[
+        bool, typer.Option("--include-oracle", help="Publish the isolated oracle namespace.")
+    ] = False,
+    local_only: Annotated[
+        bool,
+        typer.Option("--local-only", help="Build and verify manifests without Iceberg services."),
+    ] = False,
+) -> None:
+    """Backfill one complete generated run into the lakehouse."""
+
+    try:
+        environment = None if local_only else LakehouseEnvironment.from_environment()
+        result = materialize_run(
+            runs_dir / run_id,
+            environment=environment,
+            write_iceberg=not local_only,
+            include_oracle=include_oracle,
+        )
+    except (
+        LakehouseConfigurationError,
+        LakehouseDependencyError,
+        OSError,
+        RuntimeError,
+        ValueError,
+    ) as exc:
+        typer.echo(f"Lakehouse ingestion failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Materialization: {result.materialization_id}")
+    typer.echo(f"Manifest: {result.manifest_path}")
+    typer.echo(f"Fingerprint: {result.logical_fingerprint}")
+
+
+@lakehouse_app.command("consume")
+def lakehouse_consume(
+    max_messages: Annotated[int, typer.Option("--max-messages", min=1)] = 100,
+    timeout_seconds: Annotated[float, typer.Option("--timeout-seconds", min=0.1)] = 5.0,
+) -> None:
+    """Consume a bounded batch of M25 Kafka records into Bronze/Silver."""
+
+    try:
+        environment = LakehouseEnvironment.from_environment()
+        lakehouse = IcebergLakehouse(environment)
+        lakehouse.initialize()
+        count = consume_kafka_once(
+            environment=environment,
+            lakehouse=lakehouse,
+            max_messages=max_messages,
+            timeout_seconds=timeout_seconds,
+        )
+    except (
+        LakehouseConfigurationError,
+        LakehouseDependencyError,
+        OSError,
+        RuntimeError,
+        ValueError,
+    ) as exc:
+        typer.echo(f"Lakehouse Kafka consumption failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Consumed records: {count}")
+
+
+@lakehouse_app.command("verify")
+def lakehouse_verify(
+    manifest: Annotated[Path, typer.Argument(help="Lakehouse materialization manifest JSON.")],
+) -> None:
+    """Verify the required fields of a lakehouse materialization manifest."""
+
+    try:
+        payload = verify_materialization(manifest)
+    except (LakehouseConfigurationError, OSError, ValueError) as exc:
+        typer.echo(f"Lakehouse verification failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+@lakehouse_app.command("maintenance")
+def lakehouse_maintenance(
+    table: Annotated[str, typer.Argument(help="Logical table, e.g. bronze.records.")],
+    operation: Annotated[
+        str,
+        typer.Argument(help="expire_snapshots, compact, or remove_orphan_files."),
+    ],
+    snapshot_id: Annotated[
+        int | None,
+        typer.Option("--snapshot-id", help="Required for snapshot expiration."),
+    ] = None,
+    execute: Annotated[
+        bool,
+        typer.Option("--execute", help="Apply the operation; default is a dry-run."),
+    ] = False,
+) -> None:
+    """Plan or explicitly execute a protected Iceberg maintenance action."""
+
+    try:
+        environment = LakehouseEnvironment.from_environment()
+        result = IcebergLakehouse(environment).maintenance(
+            table,
+            operation,
+            snapshot_id=snapshot_id,
+            execute=execute,
+        )
+    except (LakehouseConfigurationError, LakehouseDependencyError, OSError, RuntimeError) as exc:
+        typer.echo(f"Lakehouse maintenance failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(result, indent=2, sort_keys=True))
+
+
+@app.command("quality-benchmark")
+def quality_benchmark_command(
+    profile: Annotated[
+        str, typer.Option("--profile", help="Bundled M22 profile or YAML path.")
+    ] = "standard-v1",
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for quality benchmark artifacts.")
+    ] = Path("runs/quality-benchmarks"),
+    adapter: Annotated[
+        str | None, typer.Option("--adapter", help="External generator module:factory.")
+    ] = None,
+    bundle: Annotated[
+        Path | None, typer.Option("--bundle", help="Normalized external artifact bundle JSON.")
+    ] = None,
+) -> None:
+    """Run the Milestone 22 generator-quality protocol."""
+
+    try:
+        result = run_quality_benchmark(
+            profile,
+            output_dir=output_dir,
+            adapter=adapter,
+            bundle=bundle,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Quality benchmark failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Quality benchmark generated: {result.report_id}")
+    typer.echo(f"Report: {result.report_path}")
+
+
+@app.command("report")
+def report_command(
+    run_id: Annotated[str, typer.Argument(help="Existing generated run identifier.")],
+    runs_dir: Annotated[
+        Path, typer.Option("--runs-dir", help="Directory containing generated runs.")
+    ] = Path("runs"),
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for quality reports.")
+    ] = Path("runs/quality-reports"),
+) -> None:
+    """Report correctness and provenance checks for an existing run."""
+
+    try:
+        report_path = report_run(run_id, runs_dir=runs_dir, output_dir=output_dir)
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Report failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Report: {report_path}")
+    report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+    if any(value == "FAIL" for value in report_payload.get("correctness", {}).values()):
+        raise typer.Exit(code=1)
+
+
+def _selected_models(models: list[str] | None) -> tuple[str, ...]:
+    return tuple(
+        item.strip()
+        for value in (models or ["deterministic_heuristic"])
+        for item in value.split(",")
+        if item.strip()
+    )
+
+
+def _run_generic_benchmark(
     suite: Annotated[
         str,
         typer.Option(
@@ -89,12 +353,7 @@ def benchmark_command(
 ) -> None:
     """Generate and evaluate a reproducible fraud stress benchmark."""
 
-    selected_models = tuple(
-        item.strip()
-        for value in (models or ["deterministic_heuristic"])
-        for item in value.split(",")
-        if item.strip()
-    )
+    selected_models = _selected_models(models)
     try:
         result = run_benchmark(
             BenchmarkRequest(
@@ -116,6 +375,98 @@ def benchmark_command(
     typer.echo(f"Descriptors: {result.descriptors_path}")
 
 
+@benchmark_app.callback(invoke_without_command=True)
+def benchmark_command(
+    ctx: typer.Context,
+    suite: Annotated[
+        str,
+        typer.Option(
+            "--suite",
+            help=(
+                "Legacy M20 suite or all: baseline, temporal, boundary, camouflage, "
+                "graph, observability, calibrated, mixed."
+            ),
+        ),
+    ] = "mixed",
+    difficulty: Annotated[int, typer.Option("--difficulty", min=1, max=10)] = 7,
+    seed: Annotated[int, typer.Option("--seed", min=0)] = 42,
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for benchmark artifacts.")
+    ] = Path("runs/benchmarks"),
+    models: Annotated[
+        list[str] | None,
+        typer.Option("--models", help="Built-in model ID; repeat or comma-separate."),
+    ] = None,
+    runners: Annotated[
+        list[str] | None,
+        typer.Option("--runner", help="External runner module:factory; repeat this option."),
+    ] = None,
+    calibration_profile: Annotated[
+        Path | None, typer.Option("--calibration-profile", help="M16 calibration profile YAML.")
+    ] = None,
+) -> None:
+    """Run the backwards-compatible generic M20 benchmark command."""
+
+    if ctx.invoked_subcommand is not None:
+        return
+    _run_generic_benchmark(
+        suite=suite,
+        difficulty=difficulty,
+        seed=seed,
+        output_dir=output_dir,
+        models=models,
+        runners=runners,
+        calibration_profile=calibration_profile,
+    )
+
+
+@benchmark_app.command("run")
+def benchmark_pack_run(
+    pack_ref: Annotated[str, typer.Argument(help="Immutable pack, e.g. FT-B04-CAMOUFLAGE@1.0")],
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for benchmark artifacts.")
+    ] = Path("runs/benchmarks"),
+    models: Annotated[
+        list[str] | None,
+        typer.Option("--models", help="Built-in model ID; repeat or comma-separate."),
+    ] = None,
+    runners: Annotated[
+        list[str] | None,
+        typer.Option("--runner", help="External runner module:factory; repeat this option."),
+    ] = None,
+) -> None:
+    """Run one immutable M21 public benchmark pack."""
+
+    try:
+        result = run_public_benchmark(
+            pack_ref,
+            output_dir=output_dir,
+            models=_selected_models(models),
+            runners=tuple(runners or ()),
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Public benchmark failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Public benchmark generated: {result.benchmark_id}")
+    typer.echo(f"Manifest: {result.manifest_path}")
+    typer.echo(f"Results: {result.results_path}")
+    typer.echo(f"Descriptors: {result.descriptors_path}")
+
+
+@benchmark_app.command("describe")
+def benchmark_pack_describe(
+    pack_ref: Annotated[str, typer.Argument(help="Immutable pack reference.")],
+) -> None:
+    """Describe the frozen definition of one M21 public benchmark pack."""
+
+    try:
+        pack = load_public_pack(pack_ref)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Public benchmark lookup failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(pack.model_dump(mode="json"), indent=2, sort_keys=True))
+
+
 def _load_or_exit(
     path: Path, *, calibration_profile_override: Path | None = None
 ) -> SimulationRunConfig:
@@ -124,6 +475,22 @@ def _load_or_exit(
     except (FileNotFoundError, ValueError) as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
+
+
+@contextmanager
+def _metrics_session(
+    host: str, port: int | None, hold_seconds: float
+) -> Iterator[MetricsSession | None]:
+    """Start optional metrics and always release its short-lived server."""
+
+    metrics = MetricsSession(host, port, hold_seconds) if port is not None else None
+    if metrics is not None:
+        metrics.start()
+    try:
+        yield metrics
+    finally:
+        if metrics is not None:
+            metrics.finish()
 
 
 def _parse_optional_timestamp(value: str | None) -> datetime | None:
@@ -155,19 +522,44 @@ def generate(
     seed: Annotated[int | None, typer.Option("--seed")] = None,
     workers: Annotated[int | None, typer.Option("--workers")] = None,
     checkpoint_dir: Annotated[Path | None, typer.Option("--checkpoint-dir")] = None,
+    metrics_host: Annotated[
+        str, typer.Option("--metrics-host", help="Address for the optional Prometheus endpoint.")
+    ] = "127.0.0.1",
+    metrics_port: Annotated[
+        int | None,
+        typer.Option("--metrics-port", min=1, max=65535, help="Enable Prometheus metrics."),
+    ] = None,
+    metrics_hold_seconds: Annotated[
+        float,
+        typer.Option(
+            "--metrics-hold-seconds",
+            min=0,
+            help="Seconds to keep /metrics available after the command completes.",
+        ),
+    ] = 15.0,
 ) -> None:
     """Validate a configuration and generate a reproducible batch dataset."""
 
     config = _load_or_exit(path, calibration_profile_override=profile)
-    result = generate_library(
-        config,
-        write=True,
-        output_dir=output_dir,
-        profile=profile,
-        seed=seed,
-        workers=workers,
-        checkpoint_dir=checkpoint_dir,
-    )
+    started = time.monotonic()
+    with _metrics_session(metrics_host, metrics_port, metrics_hold_seconds) as metrics:
+        try:
+            result = generate_library(
+                config,
+                write=True,
+                output_dir=output_dir,
+                profile=profile,
+                seed=seed,
+                workers=workers,
+                checkpoint_dir=checkpoint_dir,
+            )
+        except Exception:
+            if metrics is not None:
+                metrics.record_generator_error()
+            raise
+        else:
+            if metrics is not None:
+                metrics.observe_manifest(result.manifest, time.monotonic() - started)
     manifest = result.manifest
     entity_counts = manifest.entity_counts
     event_counts = manifest.event_counts
@@ -338,32 +730,55 @@ def validate_ledger_command(
         Path,
         typer.Option("--output-dir", help="Directory containing generated runs."),
     ] = Path("runs"),
+    metrics_host: Annotated[
+        str, typer.Option("--metrics-host", help="Address for the optional Prometheus endpoint.")
+    ] = "127.0.0.1",
+    metrics_port: Annotated[
+        int | None,
+        typer.Option("--metrics-port", min=1, max=65535, help="Enable Prometheus metrics."),
+    ] = None,
+    metrics_hold_seconds: Annotated[
+        float,
+        typer.Option(
+            "--metrics-hold-seconds",
+            min=0,
+            help="Seconds to keep /metrics available after validation.",
+        ),
+    ] = 15.0,
 ) -> None:
     """Validate transfer ledger entries for a generated run."""
 
     run_dir = output_dir / run_id
-    try:
-        accounts = tuple(
-            Account.model_validate(row)
-            for row in pl.read_parquet(run_dir / "entities" / "accounts.parquet").to_dicts()
-        )
-        payments = tuple(
-            Payment.model_validate(row)
-            for row in pl.read_parquet(run_dir / "payments" / "payments.parquet").to_dicts()
-        )
-        events = tuple(
-            PaymentEvent.model_validate(row)
-            for row in pl.read_parquet(run_dir / "payments" / "payment_events.parquet").to_dicts()
-        )
-        entries = tuple(
-            LedgerEntry.model_validate(row)
-            for row in pl.read_parquet(run_dir / "ledger" / "ledger_entries.parquet").to_dicts()
-        )
-        validate_ledger(accounts, payments, events, entries)
-    except (FileNotFoundError, OSError, ValueError) as exc:
-        typer.echo(f"Ledger validation failed: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
-    typer.echo(f"Ledger is valid for run {run_id}.")
+    with _metrics_session(metrics_host, metrics_port, metrics_hold_seconds) as metrics:
+        try:
+            accounts = tuple(
+                Account.model_validate(row)
+                for row in pl.read_parquet(run_dir / "entities" / "accounts.parquet").to_dicts()
+            )
+            payments = tuple(
+                Payment.model_validate(row)
+                for row in pl.read_parquet(run_dir / "payments" / "payments.parquet").to_dicts()
+            )
+            events = tuple(
+                PaymentEvent.model_validate(row)
+                for row in pl.read_parquet(
+                    run_dir / "payments" / "payment_events.parquet"
+                ).to_dicts()
+            )
+            entries = tuple(
+                LedgerEntry.model_validate(row)
+                for row in pl.read_parquet(run_dir / "ledger" / "ledger_entries.parquet").to_dicts()
+            )
+            validate_ledger(accounts, payments, events, entries)
+        except (FileNotFoundError, OSError, ValueError) as exc:
+            if metrics is not None:
+                metrics.record_ledger_validation(run_id, failed=True)
+            typer.echo(f"Ledger validation failed: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        else:
+            if metrics is not None:
+                metrics.record_ledger_validation(run_id, failed=False)
+            typer.echo(f"Ledger is valid for run {run_id}.")
 
 
 @graph_app.command("export")

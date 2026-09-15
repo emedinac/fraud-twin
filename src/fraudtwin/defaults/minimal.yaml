@@ -80,6 +80,7 @@ outputs:
   parquet: true
   postgres: false
   kafka: false
+  iceberg: false
 
 calibration:
   enabled: false

@@ -942,9 +942,12 @@ def validate_graph_scenarios(dataset: GraphDataset) -> None:
             raise ValueError("campaign membership references an unavailable payment")
         campaign_members[membership.campaign_id].add(membership.member_id)
     for pattern in dataset.patterns:
-        if pattern.campaign_id and pattern.campaign_id in campaign_members:
-            if not set(pattern.member_ids).issubset(campaign_members[pattern.campaign_id]):
-                raise ValueError("pattern membership is not closed over campaign members")
+        if (
+            pattern.campaign_id
+            and pattern.campaign_id in campaign_members
+            and not set(pattern.member_ids).issubset(campaign_members[pattern.campaign_id])
+        ):
+            raise ValueError("pattern membership is not closed over campaign members")
         if pattern.truth_label == "CONTROL" and pattern.pattern_type != "RANDOM_ALERT_CONTROL":
             raise ValueError("only random-alert patterns may carry CONTROL truth")
     for edge in dataset.edges:

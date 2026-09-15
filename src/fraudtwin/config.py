@@ -334,13 +334,15 @@ class FraudConfig(_StrictModel):
 
     @model_validator(mode="after")
     def enabled_scenarios_must_be_selectable(self) -> "FraudConfig":
-        if self.enabled and self.target_rate > 0 and self.scenario_count > 0:
-            if not any(
+        if (
+            self.enabled
+            and self.target_rate > 0
+            and self.scenario_count > 0
+            and not any(
                 settings.enabled and settings.weight > 0 for settings in self.scenarios.values()
-            ):
-                raise ValueError(
-                    "enabled fraud generation requires a scenario with positive weight"
-                )
+            )
+        ):
+            raise ValueError("enabled fraud generation requires a scenario with positive weight")
         return self
 
 
@@ -742,6 +744,46 @@ class OutputsConfig(_StrictModel):
     parquet: bool = False
     postgres: bool = False
     kafka: bool = False
+    iceberg: bool = False
+
+
+class KafkaConfig(_StrictModel):
+    """Delivery controls for the optional native Kafka sink (Milestone 25)."""
+
+    topic_prefix: str = Field(default="fraudsim", min_length=1, max_length=128)
+    max_events_per_second: float | None = Field(default=None, gt=0)
+    delivery_timeout_seconds: Annotated[float, Field(gt=0)] = 120.0
+    accelerated_time_multiplier: Annotated[float, Field(ge=1)] = 100.0
+
+    @field_validator("topic_prefix")
+    @classmethod
+    def topic_prefix_must_be_kafka_safe(cls, value: str) -> str:
+        if not all(char.isalnum() or char in "._-" for char in value):
+            raise ValueError(
+                "Kafka topic_prefix may contain only letters, numbers, '.', '_' or '-'"
+            )
+        return value
+
+
+class LakehouseConfig(_StrictModel):
+    """Optional Iceberg lakehouse publication controls (Milestone 26).
+
+    Connection details are deliberately not configuration fields: the catalog,
+    object-store endpoint, and credentials are supplied through the environment
+    by the lakehouse adapter.
+    """
+
+    catalog_name: str = Field(default="fraudtwin")
+    namespace_prefix: str = Field(default="fraudtwin")
+    include_oracle: bool = False
+    checkpoint_location: str = Field(default="/tmp/fraudtwin-iceberg-checkpoints")
+
+    @field_validator("catalog_name", "namespace_prefix")
+    @classmethod
+    def names_must_be_safe(cls, value: str) -> str:
+        if not value or not all(char.isalnum() or char in "_-" for char in value):
+            raise ValueError("lakehouse names may contain only letters, numbers, '_' or '-'")
+        return value
 
 
 class TemporalSplitConfig(_StrictModel):
@@ -768,12 +810,18 @@ class TemporalSplitConfig(_StrictModel):
     def split_fractions_must_form_distribution(self) -> "TemporalSplitConfig":
         if abs(self.train_fraction + self.validation_fraction + self.test_fraction - 1.0) > 1e-9:
             raise ValueError("temporal split fractions must sum to 1.0")
-        if self.train_end is not None and self.validation_end is not None:
-            if self.validation_end <= self.train_end:
-                raise ValueError("validation_end must be after train_end")
-        if self.validation_end is not None and self.test_end is not None:
-            if self.test_end <= self.validation_end:
-                raise ValueError("test_end must be after validation_end")
+        if (
+            self.train_end is not None
+            and self.validation_end is not None
+            and self.validation_end <= self.train_end
+        ):
+            raise ValueError("validation_end must be after train_end")
+        if (
+            self.validation_end is not None
+            and self.test_end is not None
+            and self.test_end <= self.validation_end
+        ):
+            raise ValueError("test_end must be after validation_end")
         return self
 
 
@@ -1207,11 +1255,13 @@ class CounterfactualConfig(_StrictModel):
             raise ValueError(
                 "enabled counterfactual generation requires requests or include_enabled_objectives"
             )
-        if self.distance_function != "weighted_changed_dimensions_v1":
-            # Registered custom functions are resolved at runtime; names are
-            # intentionally accepted here for extension compatibility.
-            if not self.distance_function.strip():
-                raise ValueError("counterfactual distance_function must not be empty")
+        # Registered custom functions are resolved at runtime; names are
+        # intentionally accepted here for extension compatibility.
+        if (
+            self.distance_function != "weighted_changed_dimensions_v1"
+            and not self.distance_function.strip()
+        ):
+            raise ValueError("counterfactual distance_function must not be empty")
         seen_objectives: set[str] = set()
         required_dimensions: dict[str, set[CounterfactualDimension]] = {
             "F03": {"device", "beneficiary"},
@@ -1807,6 +1857,8 @@ class SimulationRunConfig(_StrictModel):
     scale: ScaleConfig = Field(default_factory=ScaleConfig)
     quality: QualityConfig
     outputs: OutputsConfig
+    kafka: KafkaConfig = Field(default_factory=KafkaConfig)
+    lakehouse: LakehouseConfig = Field(default_factory=LakehouseConfig)
     dataset: PointInTimeDatasetConfig = Field(default_factory=PointInTimeDatasetConfig)
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
     graph: GraphConfig = Field(default_factory=GraphConfig)
@@ -1828,15 +1880,14 @@ class SimulationRunConfig(_StrictModel):
     @model_validator(mode="after")
     def card_lifecycle_must_fit_simulation_window(self) -> "SimulationRunConfig":
         window_seconds = self.simulation.duration_days * 24 * 60 * 60
-        if self.labels.enabled:
-            if (
-                self.fraud_workflow.alert_probability != 1.0
-                or self.fraud_workflow.case_open_probability != 1.0
-            ):
-                raise ValueError(
-                    "labels.enabled makes labels.investigation_rate the sole "
-                    "workflow selection control"
-                )
+        if self.labels.enabled and (
+            self.fraud_workflow.alert_probability != 1.0
+            or self.fraud_workflow.case_open_probability != 1.0
+        ):
+            raise ValueError(
+                "labels.enabled makes labels.investigation_rate the sole "
+                "workflow selection control"
+            )
         if (
             self.card_lifecycle.maximum_delay_seconds + CARD_EVENT_ENVELOPE_DELAY_SECONDS
             >= window_seconds
@@ -2010,24 +2061,17 @@ class SimulationRunConfig(_StrictModel):
             raise ValueError(
                 "benchmark difficulty requires fraud or graph generation to be enabled"
             )
-        if self.benchmark.enabled:
-            if self.fraud.enabled and self.fraud.target_rate > 0:
-                if self.payments.daily_target == 0 or self.population.customers == 0:
-                    raise ValueError(
-                        "difficulty-enabled fraud generation requires payment capacity"
-                    )
-                if self.population.cards == 0 or self.population.merchants == 0:
-                    raise ValueError(
-                        "difficulty-enabled fraud generation requires cards and merchants"
-                    )
-                if self.population.accounts < 2:
-                    raise ValueError("difficulty-enabled fraud generation requires two accounts")
-                if self.fraud.scenario_count > min(
-                    self.population.cards, self.population.merchants, self.population.accounts
-                ):
-                    raise ValueError(
-                        "difficulty-enabled fraud scenario count exceeds entity capacity"
-                    )
+        if self.benchmark.enabled and self.fraud.enabled and self.fraud.target_rate > 0:
+            if self.payments.daily_target == 0 or self.population.customers == 0:
+                raise ValueError("difficulty-enabled fraud generation requires payment capacity")
+            if self.population.cards == 0 or self.population.merchants == 0:
+                raise ValueError("difficulty-enabled fraud generation requires cards and merchants")
+            if self.population.accounts < 2:
+                raise ValueError("difficulty-enabled fraud generation requires two accounts")
+            if self.fraud.scenario_count > min(
+                self.population.cards, self.population.merchants, self.population.accounts
+            ):
+                raise ValueError("difficulty-enabled fraud scenario count exceeds entity capacity")
         if self.counterfactual.active:
             if self.payments.daily_target == 0:
                 raise ValueError("counterfactual generation requires legitimate payment capacity")
@@ -2179,6 +2223,20 @@ def _canonical_config(
     # M18 is opt-in; disabled scale controls must preserve legacy identities.
     if not config.scale.enabled:
         payload.pop("scale", None)
+    # Output sinks are delivery concerns, not generator inputs.  In
+    # particular, enabling the M23 PostgreSQL mirror must not change the
+    # generated records, stream seeds, run ID, or frozen M21 pack hashes.
+    outputs_payload = payload.get("outputs")
+    if isinstance(outputs_payload, dict):
+        outputs_payload["postgres"] = False
+        # Kafka is a delivery concern; enabling/configuring it must not alter
+        # generated identities or the deterministic source stream.
+        outputs_payload["kafka"] = False
+        # Iceberg publication is also a delivery concern; table/catalog
+        # settings must never perturb source-run identities.
+        outputs_payload.pop("iceberg", None)
+    payload.pop("kafka", None)
+    payload.pop("lakehouse", None)
     # Keep run identities backward-compatible when newly optional methodology
     # controls remain at their neutral defaults.
     neutral_defaults: dict[str, dict[str, object]] = {

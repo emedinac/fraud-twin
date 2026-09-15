@@ -1,6 +1,12 @@
-__version__ = "0.25.0"
+__version__ = "0.32.0"
 
-from fraudtwin.calibration import (  # noqa: E402
+from fraudtwin.benchmark import (
+    PublicBenchmarkPack,
+    list_public_packs,
+    load_public_pack,
+    run_public_benchmark,
+)
+from fraudtwin.calibration import (
     CalibrationMetric,
     CalibrationModel,
     CalibrationProfile,
@@ -24,13 +30,13 @@ from fraudtwin.calibration import (  # noqa: E402
     validate_calibration_output,
     write_calibration_profile,
 )
-from fraudtwin.camouflage import (  # noqa: E402
+from fraudtwin.camouflage import (
     CamouflagePlan,
     ResolvedCamouflage,
     apply_camouflage,
     resolve_camouflage,
 )
-from fraudtwin.campaign_dynamics import (  # noqa: E402
+from fraudtwin.campaign_dynamics import (
     DynamicCampaignDataset,
     evolve_campaigns,
     register_intensity_model,
@@ -38,7 +44,7 @@ from fraudtwin.campaign_dynamics import (  # noqa: E402
     resolve_campaign_dynamics,
     validate_campaign_dynamics,
 )
-from fraudtwin.counterfactual import (  # noqa: E402
+from fraudtwin.counterfactual import (
     CounterfactualChangeSet,
     CounterfactualDataset,
     CounterfactualScope,
@@ -50,19 +56,19 @@ from fraudtwin.counterfactual import (  # noqa: E402
     resolve_counterfactual,
     select_source_trajectories,
 )
-from fraudtwin.difficulty import (  # noqa: E402
+from fraudtwin.difficulty import (
     ResolvedDifficulty,
     ScenarioDifficultyPlan,
     apply_difficulty,
     resolve_difficulty,
 )
-from fraudtwin.generation import (  # noqa: E402
+from fraudtwin.generation import (
     GeneratedData,
     GeneratedRun,
     generate,
     resume_generation,
 )
-from fraudtwin.graph import (  # noqa: E402
+from fraudtwin.graph import (
     GraphCampaign,
     GraphDataset,
     GraphEdge,
@@ -76,14 +82,51 @@ from fraudtwin.graph import (  # noqa: E402
     validate_graph_scenarios,
     write_graph,
 )
-from fraudtwin.label_observation import (  # noqa: E402
+from fraudtwin.label_observation import (
     apply_label_observation,
     reconstruct_label_history,
     resolve_label_observation,
     validate_label_observation,
     visible_label_at,
 )
-from fraudtwin.scale import (  # noqa: E402
+from fraudtwin.lakehouse import (
+    BronzeRecord,
+    IcebergLakehouse,
+    LakehouseConfigurationError,
+    LakehouseDependencyError,
+    LakehouseEnvironment,
+    LakehouseMaterializationResult,
+    build_bronze_records,
+    consume_kafka_once,
+    deduplicate_records,
+    materialize_dataset,
+    materialize_run,
+    silver_rows,
+    verify_materialization,
+)
+from fraudtwin.postgres import (
+    PostgresPersistenceResult,
+    database_status,
+    ensure_database_ready,
+    migrate_database,
+    persist_run,
+)
+from fraudtwin.quality_benchmark import (
+    QualityAdapterMetadata,
+    QualityAdapterRequest,
+    QualityArtifactBundle,
+    QualityBenchmarkProfile,
+    QualityBenchmarkRequest,
+    QualityBenchmarkResult,
+    QualityCandidateReport,
+    QualityCapability,
+    QualityGeneratorAdapter,
+    QualityMetric,
+    load_quality_profile,
+    report_run,
+    run_quality_benchmark,
+)
+from fraudtwin.scale import (
     ChunkDescriptor,
     PartitionCompletion,
     ReconciliationResult,
@@ -125,6 +168,24 @@ __all__ = [
     "resolve_calibration_configuration",
     "validate_calibration_output",
     "write_calibration_profile",
+    "QualityAdapterMetadata",
+    "QualityAdapterRequest",
+    "QualityArtifactBundle",
+    "QualityBenchmarkProfile",
+    "QualityBenchmarkRequest",
+    "QualityBenchmarkResult",
+    "QualityCandidateReport",
+    "QualityCapability",
+    "QualityGeneratorAdapter",
+    "QualityMetric",
+    "load_quality_profile",
+    "report_run",
+    "run_quality_benchmark",
+    "PostgresPersistenceResult",
+    "database_status",
+    "ensure_database_ready",
+    "migrate_database",
+    "persist_run",
     "GeneratedData",
     "GeneratedRun",
     "generate",
@@ -175,6 +236,19 @@ __all__ = [
     "validate_graph",
     "validate_graph_scenarios",
     "write_graph",
+    "BronzeRecord",
+    "IcebergLakehouse",
+    "LakehouseConfigurationError",
+    "LakehouseDependencyError",
+    "LakehouseEnvironment",
+    "LakehouseMaterializationResult",
+    "build_bronze_records",
+    "consume_kafka_once",
+    "deduplicate_records",
+    "materialize_dataset",
+    "materialize_run",
+    "silver_rows",
+    "verify_materialization",
     "CounterfactualChangeSet",
     "CounterfactualDataset",
     "CounterfactualScope",
@@ -185,4 +259,8 @@ __all__ = [
     "register_distance_function",
     "resolve_counterfactual",
     "select_source_trajectories",
+    "PublicBenchmarkPack",
+    "list_public_packs",
+    "load_public_pack",
+    "run_public_benchmark",
 ]

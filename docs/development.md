@@ -48,6 +48,7 @@ Use the narrowest test while iterating, then run the full suite:
 | Difficulty | `poetry run pytest tests/test_m12.py` |
 | Camouflage | `poetry run pytest tests/test_m13.py` |
 | Campaign dynamics | `poetry run pytest tests/test_m15.py` |
+| Observability | `poetry run pytest tests/test_m27.py` |
 
 For a generated-run smoke test:
 

@@ -1,5 +1,54 @@
 # Release notes
 
+## 0.32.0 — Milestone 27 Minimal Observability
+
+- Added optional Prometheus metrics for generated runs and ledger validation,
+  with run-level generation, fraud, error, throughput, and data-quality
+  signals.
+- Added a local Prometheus/Grafana Compose profile with provisioned dashboards,
+  loopback-only ports, explicit 15-day Prometheus retention, and required
+  non-default Grafana credentials.
+- Preserved deterministic generator identities, manifests, contracts, Kafka,
+  and Iceberg outputs; metrics are disabled unless explicitly requested.
+
+## 0.31.0 — Milestone 26 Lakehouse
+
+- Added optional MinIO/Iceberg lakehouse publication with immutable Bronze,
+  deterministic Silver, reproducible Gold, and an isolated opt-in oracle
+  namespace.
+- Added complete-run Parquet backfill, bounded M25 Kafka ingestion, snapshot
+  lineage manifests, local lakehouse Compose services, and lakehouse CLI
+  workflows without changing generator identities.
+
+## 0.30.0 — Milestone 25 Native Kafka Streaming
+
+- Added optional native Kafka publication for all six M24 observable Avro subjects with remote Schema Registry reconciliation, idempotent delivery, deterministic ordering, pacing, and run-manifest fingerprints.
+- Added clean-contract enforcement, stable topic/key/header conventions, streaming Compose services, and focused producer, registry, ordering, pacing, and identity-regression tests.
+
+## 0.29.0 — Milestone 24 Avro Contracts + Schema Registry
+
+- Added six bundled observable operational Avro contracts with deterministic parsing-canonical fingerprints and a source-controlled `FULL_TRANSITIVE` registry.
+- Added `fraudtwin schema validate`, typed timestamp/decimal datum mapping, compatibility checks, and wheel-packaged registry assets.
+- Preserved Parquet, PostgreSQL, oracle/observable boundaries, M8 quality mutations, and existing generator identities; Kafka publication and remote registry integration remain deferred to M25.
+
+
+## Milestone 23 PostgreSQL Operational Mode
+
+- Added an optional transactional PostgreSQL operational mirror with versioned SQL migrations and `fraudtwin db migrate/status` commands.
+- Preserved deterministic file outputs and generator identities when PostgreSQL is enabled; added run-scoped relational constraints, provenance, idempotent writes, and observable fraud-case persistence.
+- Added the optional `postgres` dependency extra, PostgreSQL workflow documentation, and M23 compatibility/invariant tests.
+
+## Milestone 22 Generator Quality Benchmark
+
+- Added immutable `standard-v1` quality profiles covering all eight M21 public packs, with opt-in medium, large, xlarge, and billion variants.
+- Added `fraudtwin quality-benchmark` and `fraudtwin report` commands with separate correctness, fidelity, difficulty, scalability, engineering, and reproducibility sections.
+- Added normalized external generator adapter/bundle contracts with capability-aware `N/A` reporting.
+
+## 0.26.0 — Milestone 21 Versioned Public Benchmark Packs
+
+- Added eight immutable, bundled FT-B01–FT-B08 public benchmark packs with semantic versions, compatibility checks, fixed PIT windows, calibration provenance, and logical fingerprints.
+- Added `fraudtwin benchmark run` and `fraudtwin benchmark describe` while preserving the generic M20 benchmark command.
+
 ## 0.25.0 — Milestone 20 Fraud Stress Benchmark
 
 - Added reproducible baseline, temporal, boundary, camouflage, graph, observability, calibrated, mixed, and all-suite benchmark orchestration.

@@ -19,12 +19,14 @@ from fraudtwin.calibration import (
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.difficulty import difficulty_metadata
 from fraudtwin.graph import build_graph
+from fraudtwin.kafka import publisher_from_environment
 from fraudtwin.manifest import RunManifest, create_manifest, write_manifest
 from fraudtwin.ml import (
     PointInTimeDataset,
     PointInTimeDatasetBuilder,
     write_point_in_time_dataset,
 )
+from fraudtwin.postgres import ensure_database_ready, persist_run
 from fraudtwin.reproducibility import sha256_json
 from fraudtwin.scale import (
     ScaleCheckpoint,
@@ -508,6 +510,24 @@ def generate(
 
     output_root = Path(output_dir)
     run_dir = output_root / base_manifest.run_id
+    if write and resolved_config.outputs.postgres:
+        if resolved_config.quality.profile != "clean":
+            raise ValueError("PostgreSQL output currently requires quality.profile: clean")
+        ensure_database_ready()
+    kafka_publisher = None
+    lakehouse_environment = None
+    if write and resolved_config.outputs.kafka:
+        if resolved_config.quality.profile != "clean":
+            raise ValueError("Kafka output currently requires quality.profile: clean")
+        # Validate and reconcile contracts before writing files or producing data.
+        kafka_publisher = publisher_from_environment(config=resolved_config.kafka)
+        kafka_publisher.prepare()
+    if write and resolved_config.outputs.iceberg:
+        from fraudtwin.lakehouse import LakehouseEnvironment
+
+        if resolved_config.quality.profile != "clean":
+            raise ValueError("Iceberg output currently requires quality.profile: clean")
+        lakehouse_environment = LakehouseEnvironment.from_environment(resolved_config.lakehouse)
     if write and calibration.enabled and run_dir.exists():
         raise FileExistsError(f"calibrated run artifacts already exist: {run_dir}")
     fresh_output = not run_dir.exists()
@@ -545,6 +565,36 @@ def generate(
         scale_metadata=scale_metadata,
         calibration=calibration,
     )
+
+    postgres_metadata: dict[str, object] | None = None
+    if write and resolved_config.outputs.postgres:
+        persistence = persist_run(entities, behavior, manifest)
+        postgres_metadata = {
+            "schema_version": persistence.schema_version,
+            "row_counts": persistence.row_counts,
+            "logical_fingerprint": persistence.logical_fingerprint,
+            "idempotent": persistence.idempotent,
+        }
+        manifest = manifest.model_copy(update={"postgres": postgres_metadata})
+
+    if write and kafka_publisher is not None:
+        publication = kafka_publisher.publish(
+            behavior,
+            manifest.run_id,
+            mode=resolved_config.simulation.speed,
+        )
+        manifest = manifest.model_copy(
+            update={
+                "kafka": {
+                    "topics": publication.topics,
+                    "record_counts": publication.record_counts,
+                    "mode": publication.mode,
+                    "max_events_per_second": publication.max_events_per_second,
+                    "accelerated_time_multiplier": publication.accelerated_time_multiplier,
+                    "publication_fingerprint": publication.publication_fingerprint,
+                }
+            }
+        )
 
     dataset: PointInTimeDataset | None = None
     dataset_path: Path | None = None
@@ -606,6 +656,23 @@ def generate(
                     }
                 }
             )
+
+    # Lakehouse publication is an optional sink.  Materialize from the already
+    # generated in-memory objects so the source manifest can include its
+    # immutable snapshot metadata before it is first published.
+    if write and resolved_config.outputs.iceberg:
+        from fraudtwin.lakehouse import materialize_dataset
+
+        lakehouse_result = materialize_dataset(
+            run_dir,
+            entities,
+            behavior,
+            manifest,
+            config=resolved_config.lakehouse,
+            environment=lakehouse_environment,
+            write_iceberg=True,
+        )
+        manifest = manifest.model_copy(update={"lakehouse": lakehouse_result.as_dict()})
 
     if not write:
         return GeneratedData(

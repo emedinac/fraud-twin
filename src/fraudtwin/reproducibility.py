@@ -3,6 +3,7 @@
 import hashlib
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 
@@ -16,6 +17,17 @@ def sha256_json(value: Any) -> str:
     """Return the SHA-256 fingerprint of a canonical JSON value."""
 
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def write_json(path: Path, value: Any) -> Path:
+    """Write one stable, human-readable JSON artifact and return its path."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True, default=str) + "\n",
+        encoding="utf-8",
+    )
+    return path
 
 
 def as_utc(value: datetime, *, error_message: str) -> datetime:

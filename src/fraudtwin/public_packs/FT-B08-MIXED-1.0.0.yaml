@@ -1,0 +1,18 @@
+id: FT-B08-MIXED
+version: 1.0.0
+suite: mixed
+generator_compatibility: ">=0.26.0,<0.27.0"
+seed: 42
+seed_tree_version: fraudtwin-named-streams-1
+difficulty: 7
+simulation_start: 2026-01-01T00:00:00Z
+simulation_end: 2026-01-13T00:00:00Z
+split_boundaries: {train_end: 2026-01-08T00:00:00Z, validation_end: 2026-01-10T00:00:00Z, test_end: 2026-01-13T00:00:00Z}
+scenario_definitions: {fraud: F01-F05 with equal default weights, graph: MULE_NETWORK/CYCLIC_RING/DENSE_CAMPAIGN, campaign_dynamics: linear/rotating_ring/adaptive_network, counterfactual: F01/F03/F04, temporal: stable/sudden/gradual/recurring}
+stress_parameters: {camouflage: 0.75, feature_camouflage: 0.80, relation_camouflage: 0.70, quality_profile: realistic, duplicate_record_probability: 0.0, duplicate_event_probability: 0.0}
+label_observation_policy: {enabled: true, investigation_rate: 0.85, missing_fraud_rate: 0.10, preliminary_error_rate: 0.10, correction_rate: 0.10, reopening_rate: 0.05}
+calibration: {resource: calibration-v1.yaml, profile_id: CAL-2a3593eb1d4b619c45ca, profile_version: "1", fingerprint: 8aa16df6173e330afc93cc6ece3e930cf83055a4104dea36bfee3f5684f08b5a}
+metric_definitions: {pr_auc: average_precision over labelled test rows, recall_at_fixed_fpr: 0.01, f1: validation-selected threshold, detection_delay_seconds: mean test delay, drop_vs_baseline: relative PR-AUC change}
+resolved_configuration_hash: ea05fc4a440630514a8cdf37d40c49af51995b91b88dcce327eb2be83cbdb2c8
+expected_descriptors: {"counterfactual_distance":1,"drift_strength":1.7,"feature_camouflage_score":0.6055751111111111,"fraud_prevalence":0.08979591836734693,"graph_coordination_score":0,"investigation_selection_rate":0.8133333333333334,"label_correction_rate":0.09333333333333334,"label_delay_distribution":{"count":63,"max_seconds":377274.321461,"median_seconds":96543.780809,"min_seconds":27190.010991},"missing_label_rate":0.28,"reference_fidelity_score":1,"relation_camouflage_score":0.7,"scenario_coverage":{"configured":["F01","F02","F03","F04","F05"],"realized":["F02","F04","F05","G01","G02","G11"]}}
+expected_fingerprints: {"dataset":"1638328ea7a8963543c9342bd586246a5e0f776a2c2760a9f31c90fc104f5f0a","descriptors":"f26aa4c14dbf4f8ec42df1c48093ea1da69db76e3c6d55de667903879132750a","latent_truth":"ce3c4e8860290ed47fbad7202abf8a555ad6cf105e321faa913d5f2b1ac8dd5c","observed_truth":"3628192399222d3b2ada8462092688c1af3ccefdd46655a21fdf212e17f52181","source":"197ef62c340a2522b24e89d1383c387170e2b06b01819269fd8220860e5d78ea"}
