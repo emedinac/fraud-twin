@@ -28,8 +28,12 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict, Field
 
 from fraudtwin.config import (
+    DEFAULT_SCALE_FEATURES,
     PartitionMapping,
+    ScaleFeature,
     ScaleProfile,
+    ScaleStateBackend,
+    ScaleStorageBackend,
     SimulationRunConfig,
     config_hash,
 )
@@ -57,6 +61,24 @@ class ScalePlan(BaseModel):
     configuration_hash: str
     target_payments: int = Field(default=0, ge=0)
     seed_tree_version: str = SEED_TREE_VERSION
+    features: tuple[ScaleFeature, ...] = DEFAULT_SCALE_FEATURES
+    storage_backend: ScaleStorageBackend = "local"
+    storage_uri: str | None = None
+    state_backend: ScaleStateBackend = "duckdb"
+    manifest_version: str = "M18-scale-1"
+
+
+def validate_scale_feature_matrix(config: SimulationRunConfig) -> tuple[ScaleFeature, ...]:
+    """Validate optional scale stages before any generation work starts."""
+
+    features = config.scale.features
+    if "graph" in features and not config.graph.enabled:
+        raise ValueError("scale feature 'graph' requires graph.enabled")
+    if "pit" in features and not config.dataset.enabled:
+        raise ValueError("scale feature 'pit' requires dataset.enabled")
+    if "backtest" in features and not config.backtest.regimes:
+        raise ValueError("scale feature 'backtest' requires backtest configuration")
+    return features
 
 
 class ShardDescriptor(BaseModel):
@@ -157,6 +179,7 @@ def resolve_scale_plan(
     profile = config.scale.profile
     if profile is None:
         return None
+    validate_scale_feature_matrix(config)
     resolved_hash = config_hash(config)
     return ScalePlan(
         profile=profile,
@@ -171,6 +194,11 @@ def resolve_scale_plan(
         run_id=run_id or f"RUN-{resolved_hash[:16]}",
         configuration_hash=resolved_hash,
         target_payments=config.scale.resolved_target_payments or 0,
+        features=config.scale.features,
+        storage_backend=config.scale.storage_backend,
+        storage_uri=config.scale.storage_uri,
+        state_backend=config.scale.state_backend,
+        manifest_version=config.scale.manifest_version,
     )
 
 
@@ -307,9 +335,19 @@ def iter_partition_table(
 
     if not logical_type:
         raise ValueError("logical_type must not be empty")
-    for row in iter_partition_rows(run_dir, shard_id=shard_id, columns=columns):
-        if row.get("logical_type") == logical_type:
+    # Keep the discriminator available for filtering even when callers ask
+    # for a projected column set.  Return only the requested columns after
+    # filtering so projection remains useful for out-of-core consumers.
+    read_columns = columns
+    if columns is not None and "logical_type" not in columns:
+        read_columns = [*columns, "logical_type"]
+    for row in iter_partition_rows(run_dir, shard_id=shard_id, columns=read_columns):
+        if row.get("logical_type") != logical_type:
+            continue
+        if columns is None:
             yield row
+        else:
+            yield {name: row[name] for name in columns if name in row}
 
 
 def iter_partition_query(
@@ -473,12 +511,11 @@ def run_scale_benchmark(
 
     if not config.scale.enabled:
         raise ValueError("scale benchmark requires an enabled scale profile")
-    from fraudtwin.generation import generate
+    from fraudtwin.generation import generate_scale
 
     started = time.perf_counter()
-    result = generate(
+    result = generate_scale(
         config,
-        write=True,
         output_dir=output_dir,
         checkpoint_dir=checkpoint_dir,
     )

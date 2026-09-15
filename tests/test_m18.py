@@ -6,7 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from fraudtwin.config import ScaleConfig, SimulationRunConfig, load_config
-from fraudtwin.generation import generate, iter_scale_records, resume_generation
+from fraudtwin.generation import (
+    generate,
+    generate_scale,
+    iter_scale_records,
+    iter_scale_run,
+    resume_generation,
+)
 from fraudtwin.scale import (
     ScalePlan,
     aggregate_fingerprint,
@@ -116,6 +122,8 @@ def test_scale_generation_and_resume_are_reproducible(tmp_path: Path) -> None:
     assert len(rows) == checkpoint.reconciliation.partition_row_count
     assert checkpoint.completed_chunks
     assert tuple(iter_partition_table(first.run_dir, "payments"))
+    projected = next(iter_partition_table(first.run_dir, "payments", columns=["logical_id"]))
+    assert set(projected) == {"logical_id"}
 
 
 def test_scale_benchmark_manifest_records_target_and_host(tmp_path: Path) -> None:
@@ -166,6 +174,15 @@ def test_streaming_scale_records_preserve_canonical_tables() -> None:
     first_rows = [next(rows) for _ in range(20)]
     assert {row["logical_type"] for row in first_rows} <= {
         *entities.all_tables().keys(),
+        "behavior_profiles",
+    }
+
+
+def test_explicit_scale_api_and_partition_reader(tmp_path: Path) -> None:
+    result = generate_scale(_scale_config(), output_dir=tmp_path / "runs")
+    rows = iter_scale_run(run_dir=result.run_dir)
+    assert next(rows)["logical_type"] in {
+        *result.manifest.entity_counts.keys(),
         "behavior_profiles",
     }
 

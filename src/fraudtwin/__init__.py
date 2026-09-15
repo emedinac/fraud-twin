@@ -66,7 +66,9 @@ from fraudtwin.generation import (
     GeneratedData,
     GeneratedRun,
     generate,
+    generate_scale,
     iter_scale_records,
+    iter_scale_run,
     resume_generation,
 )
 from fraudtwin.graph import (
@@ -153,6 +155,7 @@ from fraudtwin.scale import (
     write_checkpoint,
     write_scale_benchmark_manifest,
 )
+from fraudtwin.storage import FsspecScaleStorage, LocalScaleStorage, storage_for
 
 __all__ = [
     "__version__",
@@ -197,9 +200,14 @@ __all__ = [
     "migrate_database",
     "persist_scale_records",
     "persist_run",
+    "FsspecScaleStorage",
+    "LocalScaleStorage",
+    "storage_for",
     "GeneratedData",
     "GeneratedRun",
     "generate",
+    "generate_scale",
+    "iter_scale_run",
     "iter_scale_records",
     "resume_generation",
     "ScalePlan",

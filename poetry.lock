@@ -1862,7 +1862,7 @@ description = "File-system specification"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "extra == \"lakehouse\" or extra == \"graph\""
+markers = "extra == \"scale-storage\" or extra == \"lakehouse\" or extra == \"graph\""
 files = [
     {file = "fsspec-2026.7.0-py3-none-any.whl", hash = "sha256:b57ddbafedfaef7018c1ecab32aa200a9d7ca26b77965f64e48b70061249d279"},
     {file = "fsspec-2026.7.0.tar.gz", hash = "sha256:c803c40f4cf860b49dea58ee3e1c33cb9c790520e233537e1340049f89b82a88"},
@@ -7687,8 +7687,9 @@ mlflow = ["mlflow"]
 observability = ["prometheus-client"]
 postgres = ["psycopg"]
 scale = ["duckdb", "pyarrow"]
+scale-storage = ["fsspec"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "b10efaf200576e63f8710f08709e5b76fb02dfc078a6263659f2252e2c8497d3"
+content-hash = "bba3ee632e3864954836f04038c923191c42fc48358bb11eda6798b665a35bee"

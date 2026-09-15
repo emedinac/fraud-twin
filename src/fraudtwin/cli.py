@@ -25,6 +25,7 @@ from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.contracts import ContractValidationError, load_contract_registry
 from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
 from fraudtwin.generation import generate as generate_library
+from fraudtwin.generation import generate_scale as generate_scale_library
 from fraudtwin.generation import resume_generation
 from fraudtwin.graph import GraphDataset, build_graph, validate_graph, write_graph
 from fraudtwin.lakehouse import (
@@ -582,15 +583,25 @@ def generate(
     started = time.monotonic()
     with _metrics_session(metrics_host, metrics_port, metrics_hold_seconds) as metrics:
         try:
-            result = generate_library(
-                config,
-                write=True,
-                output_dir=output_dir,
-                profile=profile,
-                seed=seed,
-                workers=workers,
-                checkpoint_dir=checkpoint_dir,
-            )
+            if config.scale.enabled and config.scale.profile != "dev":
+                result = generate_scale_library(
+                    config,
+                    output_dir=output_dir,
+                    profile=profile,
+                    seed=seed,
+                    workers=workers,
+                    checkpoint_dir=checkpoint_dir,
+                )
+            else:
+                result = generate_library(
+                    config,
+                    write=True,
+                    output_dir=output_dir,
+                    profile=profile,
+                    seed=seed,
+                    workers=workers,
+                    checkpoint_dir=checkpoint_dir,
+                )
         except Exception:
             if metrics is not None:
                 metrics.record_generator_error()

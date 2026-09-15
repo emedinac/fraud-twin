@@ -39,6 +39,7 @@ fraudtwin = "fraudtwin.cli:main"
 
 [project.optional-dependencies]
 scale = ["pyarrow>=15.0,<26.0", "duckdb>=1.0,<2.0"]
+scale-storage = ["fsspec>=2024.0,<2027.0"]
 postgres = ["psycopg[binary]>=3.2,<4.0"]
 kafka = ["confluent-kafka>=2.5,<3.0"]
 lakehouse = ["pyiceberg[pyarrow,s3fs]>=0.8,<1.0", "pyspark>=3.5,<4.0"]

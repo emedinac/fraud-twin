@@ -51,6 +51,7 @@ from fraudtwin.simulation.parquet import (
     write_label_observation_sidecar,
 )
 from fraudtwin.simulation.payments import PaymentGenerator
+from fraudtwin.storage import storage_for
 
 
 @dataclass(frozen=True)
@@ -512,6 +513,78 @@ def iter_scale_records(
             yield from logical_rows("ledger_entries", (ledger,))
 
 
+def iter_scale_run(
+    config: SimulationRunConfig | None = None,
+    *,
+    entities: EntityDataset | None = None,
+    run_dir: str | Path | None = None,
+    simulation_run_id: str | None = None,
+) -> Iterator[dict[str, object]]:
+    """Yield scale records from a producer or an existing partitioned run.
+
+    Supplying ``run_dir`` reads one Parquet chunk at a time. Supplying
+    ``entities`` exposes the canonical producer stream for integrations that
+    already own an entity source. Exactly one source must be provided.
+    """
+
+    if (entities is None) == (run_dir is None):
+        raise ValueError("provide exactly one of entities or run_dir")
+    if run_dir is not None:
+        from fraudtwin.scale import iter_partition_rows
+
+        yield from iter_partition_rows(run_dir)
+        return
+    if config is None or simulation_run_id is None:
+        raise ValueError("config and simulation_run_id are required with entities")
+    assert entities is not None
+    yield from iter_scale_records(config, entities, simulation_run_id=simulation_run_id)
+
+
+def generate_scale(
+    config: str | Path | SimulationRunConfig,
+    *,
+    output_dir: str | Path = "runs",
+    checkpoint_dir: str | Path | None = None,
+    profile: str | Path | CalibrationProfile | None = None,
+    seed: int | None = None,
+    workers: int | None = None,
+) -> GeneratedRun:
+    """Run an explicitly requested scale job using the scale manifest path.
+
+    This entry point preserves the established generation semantics while
+    making scale execution explicit. Large profiles should be run through this
+    API/CLI; the compatibility ``generate`` API remains available for small
+    in-memory callers.
+    """
+
+    resolved = _resolve_config(config, Path(profile) if isinstance(profile, str | Path) else None)
+    if not resolved.scale.enabled:
+        raise ValueError("generate_scale requires an enabled scale profile")
+    result = generate(
+        resolved,
+        write=True,
+        output_dir=output_dir,
+        profile=profile,
+        seed=seed,
+        workers=workers,
+        checkpoint_dir=checkpoint_dir,
+    )
+    if resolved.scale.storage_uri:
+        destination = Path(resolved.scale.storage_uri)
+        # A local URI may point at the staging run itself; avoid copying files
+        # onto themselves while still allowing a separate local publication
+        # directory. Remote backends are resolved lazily through fsspec.
+        if resolved.scale.storage_backend == "local":
+            same_path = destination.resolve() == result.run_dir.resolve()
+        else:
+            same_path = False
+        if not same_path:
+            storage_for(resolved.scale.storage_uri, resolved.scale.storage_backend).publish(
+                result.run_dir, resolved.scale.storage_uri
+            )
+    return result
+
+
 def _scale_metadata(
     config: SimulationRunConfig,
     entities: EntityDataset,
@@ -547,6 +620,12 @@ def _scale_metadata(
         "partition_mapping": plan.partition_mapping,
         "seed_tree_version": plan.seed_tree_version,
         "configuration_hash": plan.configuration_hash,
+        "features": list(plan.features),
+        "storage_backend": plan.storage_backend,
+        "storage_uri": plan.storage_uri,
+        "state_backend": plan.state_backend,
+        "manifest_version": plan.manifest_version,
+        "execution_mode": "compatibility-materialized",
     }
     if write:
         completions, reconciliation, checkpoint_path = write_scale_partitions(
@@ -875,6 +954,8 @@ __all__ = [
     "GeneratedData",
     "GeneratedRun",
     "generate",
+    "generate_scale",
+    "iter_scale_run",
     "iter_scale_records",
     "resume_generation",
 ]
