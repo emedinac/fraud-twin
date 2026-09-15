@@ -53,6 +53,7 @@ examples.
 - Opt-in large-scale generation profiles with stable sharding, bounded chunked Parquet output, parallel scheduling, checkpoint/resume, partition fingerprints, and cross-partition reconciliation.
 - Reproducible baseline ML oracles (Logistic Regression, LightGBM, XGBoost, CatBoost), point-in-time external prediction evaluation, fraud metrics, and optional MLflow tracking.
 - Generator-quality benchmark reports for native runs and capability-declared external generators, with immutable M22 profiles and `N/A`-aware scoring.
+- Source-controlled Avro contracts for clean observable operational events, with canonical fingerprints and `FULL_TRANSITIVE` compatibility validation.
 
 FraudTwin is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and timing before introducing a larger streaming or production stack.
 
@@ -64,6 +65,7 @@ Requirements: Python 3.12 and Poetry 2.x.
 poetry install
 poetry run fraudtwin config validate configs/minimal.yaml
 poetry run fraudtwin generate configs/minimal.yaml
+poetry run fraudtwin schema validate
 ```
 
 To fit and reuse an aggregate-only calibration profile:

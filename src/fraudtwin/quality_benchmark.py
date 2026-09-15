@@ -29,7 +29,7 @@ from fraudtwin.calibration import load_calibration_profile
 from fraudtwin.domain import validate_ledger, validate_payment_lifecycle
 from fraudtwin.label_observation import validate_label_observation
 from fraudtwin.ml import load_generated_run
-from fraudtwin.reproducibility import sha256_json
+from fraudtwin.reproducibility import sha256_json, write_json
 
 QUALITY_PROFILE_RESOURCE_DIR = "quality_profiles"
 QUALITY_PROFILE_VERSION = "1"
@@ -219,14 +219,6 @@ def load_quality_profile(reference: str | Path = "standard-v1") -> QualityBenchm
     if not isinstance(raw, dict):
         raise ValueError("quality benchmark profile must be a mapping")
     return QualityBenchmarkProfile.from_payload(cast(dict[str, Any], raw))
-
-
-def _json_write(path: Path, value: Any) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(value, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
-    )
-    return path
 
 
 def _metric(
@@ -719,8 +711,8 @@ def run_quality_benchmark(
         "platform": platform.platform(),
         "candidate": candidate.model_dump(mode="json"),
     }
-    report_path = _json_write(root / "quality_report.json", report)
-    _json_write(
+    report_path = write_json(root / "quality_report.json", report)
+    write_json(
         root / "execution_manifest.json",
         {
             "report_id": report_id,
@@ -778,7 +770,7 @@ def report_run(
         )[:16]
     )
     destination = output_dir / report_id / "quality_report.json"
-    _json_write(
+    write_json(
         destination,
         {
             "report_id": report_id,

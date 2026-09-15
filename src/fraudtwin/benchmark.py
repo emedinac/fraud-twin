@@ -35,7 +35,7 @@ from fraudtwin.ml import (
     train_baselines,
     write_evaluation,
 )
-from fraudtwin.reproducibility import sha256_json
+from fraudtwin.reproducibility import sha256_json, write_json
 
 SuiteName = Literal[
     "baseline",
@@ -210,6 +210,12 @@ class PublicBenchmarkPack(BaseModel):
         return sha256_json(self.model_dump(mode="json"))
 
 
+# Public packs freeze generator behavior, not integration-only package
+# additions. M24 keeps the M21 generator line compatible while adding Avro
+# contracts and a registry that do not participate in generation.
+_FROZEN_GENERATOR_COMPATIBILITY_VERSION = "0.26.0"
+
+
 def _base_values(seed: int) -> dict[str, Any]:
     raw = yaml.safe_load(files("fraudtwin").joinpath("defaults/minimal.yaml").read_text())
     if not isinstance(raw, dict):
@@ -364,11 +370,6 @@ def build_suite_config(
             "summary_names": ["merchant_frequency", "customer_activity", "transaction_count"],
         }
     return SimulationRunConfig.model_validate(values)
-
-
-def _json_write(path: Path, value: object) -> Path:
-    path.write_text(json.dumps(value, indent=2, sort_keys=True, default=str) + "\n")
-    return path
 
 
 def _public_pack_resources() -> tuple[Any, ...]:
@@ -754,7 +755,7 @@ def _run_one(
     }
     catalog_path = root / "catalog" / f"{role}.json"
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
-    _json_write(catalog_path, catalog)
+    write_json(catalog_path, catalog)
     metadata = {
         "manifest": manifest,
         "catalog": catalog,
@@ -895,8 +896,8 @@ def run_benchmark(request: BenchmarkRequest) -> BenchmarkResult:
     }
     results_path = root / "model_results.parquet"
     pl.DataFrame(all_rows).write_parquet(results_path)
-    _json_write(root / "model_results.jsonl", all_rows)
-    descriptors_path = _json_write(root / "descriptors.json", descriptors)
+    write_json(root / "model_results.jsonl", all_rows)
+    descriptors_path = write_json(root / "descriptors.json", descriptors)
     manifest = {
         **payload,
         "benchmark_id": benchmark_id,
@@ -917,7 +918,7 @@ def run_benchmark(request: BenchmarkRequest) -> BenchmarkResult:
         "results": str(results_path.relative_to(root)),
         "output_fingerprint": sha256_json({"rows": all_rows, "descriptors": descriptors}),
     }
-    manifest_path = _json_write(root / "benchmark_manifest.json", manifest)
+    manifest_path = write_json(root / "benchmark_manifest.json", manifest)
     return BenchmarkResult(
         benchmark_id, root, manifest_path, results_path, descriptors_path, tuple(all_rows)
     )
@@ -956,7 +957,7 @@ def _version_tuple(value: str) -> tuple[int, int, int]:
 
 def _pack_supports_generator(pack: PublicBenchmarkPack) -> bool:
     lower, upper = pack.generator_compatibility.split(",")
-    current = _version_tuple(__version__)
+    current = _version_tuple(_FROZEN_GENERATOR_COMPATIBILITY_VERSION)
     lower_version = _version_tuple(lower.removeprefix(">="))
     upper_version = _version_tuple(upper.removeprefix("<"))
     return lower_version <= current < upper_version
@@ -1027,9 +1028,7 @@ def run_public_benchmark(
             "descriptors_match": True,
         },
     }
-    result.manifest_path.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
-    )
+    write_json(result.manifest_path, manifest)
     return result
 
 

@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.29.0 — Milestone 24 Avro Contracts + Schema Registry
+
+- Added six bundled observable operational Avro contracts with deterministic parsing-canonical fingerprints and a source-controlled `FULL_TRANSITIVE` registry.
+- Added `fraudtwin schema validate`, typed timestamp/decimal datum mapping, compatibility checks, and wheel-packaged registry assets.
+- Preserved Parquet, PostgreSQL, oracle/observable boundaries, M8 quality mutations, and existing generator identities; Kafka publication and remote registry integration remain deferred to M25.
+
 
 ## Milestone 23 PostgreSQL Operational Mode
 

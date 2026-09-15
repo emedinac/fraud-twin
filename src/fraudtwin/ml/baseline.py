@@ -24,7 +24,7 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from fraudtwin import __version__
-from fraudtwin.reproducibility import sha256_json
+from fraudtwin.reproducibility import sha256_json, write_json
 
 MODEL_NAMES = ("logistic_regression", "lightgbm", "xgboost", "catboost")
 ALL_MODEL_NAMES = MODEL_NAMES + ("deterministic_heuristic",)
@@ -892,9 +892,7 @@ def write_evaluation(result: EvaluationResult, output_dir: Path) -> tuple[Path, 
         encoding="utf-8",
     )
     manifest_path = output_dir / "evaluation_manifest.json"
-    manifest_path.write_text(
-        json.dumps(result.manifest, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
-    )
+    write_json(manifest_path, result.manifest)
     tracking_uri = result.manifest.get("configuration", {}).get("tracking_uri")
     if tracking_uri:
         try:

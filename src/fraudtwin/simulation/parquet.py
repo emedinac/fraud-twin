@@ -21,7 +21,7 @@ from fraudtwin.domain import (
     GraphPattern,
     LabelObservation,
 )
-from fraudtwin.reproducibility import sha256_json
+from fraudtwin.reproducibility import sha256_json, write_json
 from fraudtwin.simulation.generator import EntityDataset
 
 if TYPE_CHECKING:
@@ -718,14 +718,6 @@ def _write_json_lines(rows: Iterable[Mapping[str, object]], path: Path) -> None:
     )
 
 
-def _write_json_document(value: object, path: Path) -> None:
-    """Write one deterministic, human-readable JSON artifact."""
-
-    path.write_text(
-        json.dumps(value, sort_keys=True, indent=2, default=str) + "\n", encoding="utf-8"
-    )
-
-
 def _write_quality_artifacts(dataset: BehaviorDataset, run_dir: Path) -> None:
     """Write optional M8 artifacts without affecting typed Parquet tables."""
 
@@ -735,9 +727,7 @@ def _write_quality_artifacts(dataset: BehaviorDataset, run_dir: Path) -> None:
         return
     quality_dir = run_dir / "quality"
     quality_dir.mkdir(parents=True, exist_ok=True)
-    _write_json_document(
-        dataset.quality_diagnostics.get("fault_audit", []), quality_dir / "fault_audit.json"
-    )
+    write_json(quality_dir / "fault_audit.json", dataset.quality_diagnostics.get("fault_audit", []))
     if dataset.quality_raw_faults:
         _write_json_lines(dataset.quality_raw_faults, quality_dir / "raw_faults.jsonl")
     if dataset.schema_evolution_rows:
@@ -946,9 +936,7 @@ def write_label_observation_sidecar(
         "lineage": {"source_run_id": source_run_id, "append_only": True},
     }
     manifest_path = root / "label_observation_manifest.json"
-    manifest_path.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    write_json(manifest_path, manifest)
     return root, manifest_path
 
 
@@ -1090,7 +1078,7 @@ def write_campaign_dynamics_sidecar(
         "checksums": checksums,
     }
     manifest_path = root / "campaign_dynamics_manifest.json"
-    manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_json(manifest_path, payload)
     return root, manifest_path
 
 
@@ -1206,33 +1194,28 @@ def write_counterfactual_sidecar(
             if records:
                 _write_table(records, GRAPH_TRUTH_SCHEMAS[name], graph_oracle / f"{name}.parquet")
     manifest_path = root / "counterfactual_manifest.json"
-    manifest_path.write_text(
-        json.dumps(
-            {
-                "counterfactual_id": dataset.counterfactual_id,
-                "metadata": dataset.metadata,
-                "counts": {
-                    "original_payments": len(dataset.original_payments),
-                    "modified_payments": len(dataset.modified_payments),
-                    "fraud_records": len(dataset.fraud_records),
-                    "fraud_alerts": len(dataset.alerts),
-                    "fraud_cases": len(dataset.fraud_cases),
-                    "case_confirmations": len(dataset.case_confirmations),
-                    "customer_disputes": len(dataset.customer_disputes),
-                    "fraud_labels": len(dataset.fraud_labels),
-                    "change_sets": len(dataset.change_sets),
-                    "rejected": len(dataset.rejected),
-                },
-                "artifacts": {
-                    "original": str(observable_original),
-                    "modified": str(observable_modified),
-                    "oracle": str(oracle),
-                },
+    write_json(
+        manifest_path,
+        {
+            "counterfactual_id": dataset.counterfactual_id,
+            "metadata": dataset.metadata,
+            "counts": {
+                "original_payments": len(dataset.original_payments),
+                "modified_payments": len(dataset.modified_payments),
+                "fraud_records": len(dataset.fraud_records),
+                "fraud_alerts": len(dataset.alerts),
+                "fraud_cases": len(dataset.fraud_cases),
+                "case_confirmations": len(dataset.case_confirmations),
+                "customer_disputes": len(dataset.customer_disputes),
+                "fraud_labels": len(dataset.fraud_labels),
+                "change_sets": len(dataset.change_sets),
+                "rejected": len(dataset.rejected),
             },
-            sort_keys=True,
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
+            "artifacts": {
+                "original": str(observable_original),
+                "modified": str(observable_modified),
+                "oracle": str(oracle),
+            },
+        },
     )
     return root, manifest_path

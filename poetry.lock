@@ -312,6 +312,22 @@ files = [
 ]
 
 [[package]]
+name = "avro"
+version = "1.12.2"
+description = "Avro is a serialization and RPC framework."
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "avro-1.12.2-py3-none-any.whl", hash = "sha256:bcbed5da65d298cb4ceb1e61f1a61b5b9fb180049c904f4045022338a95bf686"},
+    {file = "avro-1.12.2.tar.gz", hash = "sha256:e900e7b59a4781f63d9e935e88f6ec50c4d60be3f4adf9c63b51ed39d578fe08"},
+]
+
+[package.extras]
+snappy = ["python-snappy"]
+zstandard = ["zstandard"]
+
+[[package]]
 name = "babel"
 version = "2.18.0"
 description = "Internationalization utilities"
@@ -6790,4 +6806,4 @@ postgres = ["psycopg"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "31c07fea60a0a92b2eb1a9c9106921c9ff0a46acbc0c4cd89c0d7fe29b47527c"
+content-hash = "07557224d48614c78eccd07cf1d3b63e71b3f1e97e970aea8758c50ed7634e55"

@@ -1,0 +1,29 @@
+{
+  "type": "record",
+  "name": "FraudLabel",
+  "namespace": "fraudtwin.events.v1",
+  "doc": "Observable delayed fraud label; latent truth is intentionally absent.",
+  "fields": [
+    {"name": "label_id", "type": "string"},
+    {"name": "fraud_case_id", "type": "string"},
+    {"name": "fraud_alert_id", "type": "string"},
+    {"name": "fraud_record_id", "type": "string"},
+    {"name": "customer_id", "type": "string"},
+    {"name": "payment_id", "type": "string"},
+    {"name": "event_id", "type": "string"},
+    {"name": "scenario_id", "type": "string"},
+    {"name": "scenario_type", "type": "string"},
+    {"name": "label", "type": "string"},
+    {"name": "fraud_occurred_at", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+    {"name": "fraud_confirmed_at", "type": ["null", {"type": "long", "logicalType": "timestamp-micros"}], "default": null},
+    {"name": "dispute_event_at", "type": ["null", {"type": "long", "logicalType": "timestamp-micros"}], "default": null},
+    {"name": "label_available_at", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+    {"name": "investigation_outcome", "type": "string"},
+    {"name": "amount", "type": {"type": "bytes", "logicalType": "decimal", "precision": 18, "scale": 2}},
+    {"name": "currency", "type": "string"},
+    {"name": "correlation_id", "type": "string"},
+    {"name": "causation_id", "type": "string"},
+    {"name": "simulation_run_id", "type": ["null", "string"], "default": null},
+    {"name": "affected_entity_ids", "type": {"type": "array", "items": "string"}, "default": []}
+  ]
+}

@@ -109,6 +109,46 @@ resolved configuration or manifest. `fraud_truth` is not exposed in the
 operational database. Debezium CDC and Kafka publication are separate later
 milestones.
 
+## Validate Avro operational contracts
+
+Milestone 24 ships a source-controlled Avro registry for the clean observable
+operational event projection. It contains `payment-event`, `customer-dispute`,
+`fraud-alert`, `fraud-case`, `fraud-case-confirmation`, and `fraud-label`
+subjects. The registry is local and bundled; it does not require a Schema
+Registry service or Kafka.
+
+The v1 record names and parsing-canonical fingerprints are recorded in
+`contracts/avro/registry.yaml`:
+
+| Subject | Avro record | Version | Canonical SHA-256 |
+| --- | --- | --- | --- |
+| `payment-event` | `fraudtwin.events.v1.PaymentEvent` | `1.0.0` | `e7f8a63404fb5037bd6e83333550ebd49755d29675564bcdf57a1216c238cd6e` |
+| `customer-dispute` | `fraudtwin.events.v1.CustomerDispute` | `1.0.0` | `046eae447f9e49061b5a01238fc613f1622b4a9533e7249fa92b56681c294c0b` |
+| `fraud-alert` | `fraudtwin.events.v1.FraudAlert` | `1.0.0` | `694f88da97f952b06729fa0b892a2e6dc783b8518c213b085d9a847a769f82ba` |
+| `fraud-case` | `fraudtwin.events.v1.FraudCase` | `1.0.0` | `e079a42c845527312a2d2efeb643fae0a09dbbdd2fc3c916afb5b1c5c1aae656` |
+| `fraud-case-confirmation` | `fraudtwin.events.v1.FraudCaseConfirmation` | `1.0.0` | `15c56944c6465f2e6b68c34eacf7bdcc7db467a29f92ae607f629544bcf957e4` |
+| `fraud-label` | `fraudtwin.events.v1.FraudLabel` | `1.0.0` | `b062e07420c417ba0c849b1a066b9853484c73e04fae95261319aa433c13b046` |
+
+All subjects use `FULL_TRANSITIVE` compatibility. New optional fields need a
+reader default and must remain bidirectionally compatible with every earlier
+version. A breaking change is published as a new major subject with
+`breaking: true` and `supersedes`, leaving the old subject unchanged.
+
+Validate all schemas, canonical fingerprints, and full transitive reader/writer
+compatibility with:
+
+```bash
+fraudtwin schema validate
+fraudtwin schema validate --registry path/to/contracts/avro
+```
+
+Timestamps are timezone-aware UTC `timestamp-micros` values and monetary fields
+are two-decimal Avro `decimal` values. Fraud truth and other oracle-only fields
+are not part of the operational contracts. A compatible revision must provide
+reader defaults for new fields; an incompatible revision requires an explicit
+breaking major subject with `supersedes` metadata. Kafka producers and remote
+registry registration are deferred to Milestone 25.
+
 ## A practical evaluation sequence
 
 1. Generate a clean source run and validate its ledger.

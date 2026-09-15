@@ -1,4 +1,4 @@
-__version__ = "0.26.0"
+__version__ = "0.29.0"
 
 from fraudtwin.benchmark import (  # noqa: E402
     PublicBenchmarkPack,

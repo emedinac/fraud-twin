@@ -19,6 +19,7 @@ from fraudtwin.calibration import (
     write_calibration_profile,
 )
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
+from fraudtwin.contracts import ContractValidationError, load_contract_registry
 from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
 from fraudtwin.generation import generate as generate_library
 from fraudtwin.generation import resume_generation
@@ -62,6 +63,29 @@ benchmark_app = typer.Typer(help="Run generic M20 suites or immutable M21 public
 app.add_typer(benchmark_app, name="benchmark")
 db_app = typer.Typer(help="Manage the optional PostgreSQL operational schema.")
 app.add_typer(db_app, name="db")
+schema_app = typer.Typer(help="Validate bundled Avro event contracts.")
+app.add_typer(schema_app, name="schema")
+
+
+@schema_app.command("validate")
+def validate_schema_registry(
+    registry: Annotated[
+        Path | None,
+        typer.Option("--registry", help="Registry directory or registry.yaml path."),
+    ] = None,
+) -> None:
+    """Validate Avro syntax, fingerprints, and FULL_TRANSITIVE compatibility."""
+
+    try:
+        loaded = load_contract_registry(registry)
+        report = loaded.validate()
+    except (ContractValidationError, FileNotFoundError, OSError, ValueError) as exc:
+        typer.echo(f"Schema registry validation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Schema registry is valid: {report.path}")
+    typer.echo(f"Subjects: {report.subjects}; versions: {report.versions}")
+    for key, fingerprint in sorted(report.fingerprints.items()):
+        typer.echo(f"{key}: {fingerprint}")
 
 
 @db_app.command("migrate")
