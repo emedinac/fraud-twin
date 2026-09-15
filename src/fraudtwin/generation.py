@@ -1,6 +1,7 @@
 """High-level Python API for generating deterministic FraudTwin runs."""
 
 import hashlib
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import timedelta
 from importlib.resources import files
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import Literal, cast, overload
 
 import yaml
+from pydantic import BaseModel
 
 from fraudtwin.calibration import (
     CalibrationProfile,
@@ -18,6 +20,7 @@ from fraudtwin.calibration import (
 )
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.difficulty import difficulty_metadata
+from fraudtwin.domain import LedgerEntry
 from fraudtwin.graph import build_graph
 from fraudtwin.kafka import publisher_from_environment
 from fraudtwin.manifest import RunManifest, create_manifest, write_manifest
@@ -34,6 +37,7 @@ from fraudtwin.scale import (
     resolve_scale_plan,
     write_scale_partitions,
 )
+from fraudtwin.seed import create_stream_rng
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
@@ -46,6 +50,8 @@ from fraudtwin.simulation.parquet import (
     write_graph_truth,
     write_label_observation_sidecar,
 )
+from fraudtwin.simulation.payments import PaymentGenerator
+from fraudtwin.storage import storage_for
 
 
 @dataclass(frozen=True)
@@ -357,29 +363,231 @@ def _label_observation_metadata(
     return metadata
 
 
-def _scale_records(behavior: BehaviorDataset) -> tuple[dict[str, object], ...]:
-    """Build stable logical records for the M18 partition writer."""
+def _scale_records(
+    entities: EntityDataset, behavior: BehaviorDataset
+) -> Iterator[dict[str, object]]:
+    """Yield stable logical records for the M18 partition writer."""
 
-    records: list[dict[str, object]] = []
-    for table_name, table_rows in behavior.tables().items():
+    ordinal = 0
+    for table_name, table_rows in {**entities.all_tables(), **behavior.tables()}.items():
         for row in table_rows:
             values = row.model_dump(mode="json")
             source_id = next(
                 (str(value) for key, value in values.items() if key.endswith("_id") and value),
-                f"row-{len(records):08d}",
+                f"row-{ordinal:08d}",
             )
-            records.append(
-                {
-                    "logical_id": f"{table_name}:{source_id}",
-                    "logical_type": table_name,
-                    "source_id": source_id,
+            owner_id = next(
+                (
+                    str(values[key])
+                    for key in ("payer_account_id", "account_id", "customer_id")
+                    if values.get(key)
+                ),
+                source_id,
+            )
+            # Keep the canonical row fields in the partition artifact.  The
+            # logical metadata is additive and lets the mixed scale reader
+            # route/filter rows without retaining a global ID index.
+            yield {
+                **values,
+                "logical_id": f"{table_name}:{source_id}",
+                "logical_type": table_name,
+                "source_id": source_id,
+                "partition_key": owner_id,
+            }
+            ordinal += 1
+            # Cross-account transfers are owned by the payer shard.  Emit a
+            # deterministic payee-side reconciliation marker so downstream
+            # consumers can close the cross-shard balance without a global
+            # account map.
+            payer = values.get("payer_account_id")
+            payee = values.get("payee_account_id")
+            if payer and payee and payer != payee and values.get("payment_id"):
+                payment_id = str(values["payment_id"])
+                yield {
+                    "logical_id": f"transfer_reconciliation:{payment_id}",
+                    "logical_type": "transfer_reconciliation",
+                    "source_id": payment_id,
+                    "payment_id": payment_id,
+                    "payer_account_id": str(payer),
+                    "payee_account_id": str(payee),
+                    "amount": values.get("amount"),
+                    "partition_key": str(payee),
+                    "reconciliation": "PAYEE_SIDE",
                 }
+                ordinal += 1
+
+
+def iter_scale_records(
+    config: SimulationRunConfig,
+    entities: EntityDataset,
+    *,
+    simulation_run_id: str,
+) -> Iterator[dict[str, object]]:
+    """Stream canonical entities, profiles, payments, events, and ledger rows.
+
+    This iterator is the scale writer's producer-facing API.  It deliberately
+    keeps only generator state and account balances; records are never
+    accumulated into a ``BehaviorDataset``.  Advanced fraud/graph stages still
+    use the compatibility generator until their own streaming implementations
+    are available.
+    """
+
+    behavior_generator = BehaviorGenerator(config, entities, simulation_run_id=simulation_run_id)
+    profiles = behavior_generator.generate_profiles()
+
+    def logical_rows(table_name: str, rows: Iterable[BaseModel]) -> Iterator[dict[str, object]]:
+        for ordinal, row in enumerate(rows):
+            values = row.model_dump(mode="json")
+            source_id = next(
+                (str(value) for key, value in values.items() if key.endswith("_id") and value),
+                f"row-{ordinal:08d}",
             )
-    return tuple(records)
+            owner_id = next(
+                (
+                    str(values[key])
+                    for key in ("payer_account_id", "account_id", "customer_id")
+                    if values.get(key)
+                ),
+                source_id,
+            )
+            yield {
+                **values,
+                "logical_id": f"{table_name}:{source_id}",
+                "logical_type": table_name,
+                "source_id": source_id,
+                "partition_key": owner_id,
+            }
+
+    for table_name, rows in {**entities.all_tables(), "behavior_profiles": profiles}.items():
+        yield from logical_rows(table_name, rows)
+
+    payment_generator = PaymentGenerator(
+        config,
+        entities.accounts,
+        entities.cards,
+        entities.merchants,
+        entities.devices,
+        entities.pix_keys,
+        simulation_run_id=simulation_run_id,
+    )
+    lifecycle_rng = create_stream_rng(config.simulation.seed, "milestone-4:card-lifecycle")
+    pix_lifecycle_rng = create_stream_rng(config.simulation.seed, "milestone-5:pix-lifecycle")
+    balances = {account.account_id: account.ledger_balance for account in entities.accounts}
+    ledger_number = 0
+    for payment, initial_event in payment_generator.iter_generate(profiles):
+        if payment.payment_rail == "CARD":
+            payment, events = payment_generator._card_lifecycle(  # noqa: SLF001
+                payment, initial_event, lifecycle_rng
+            )
+        elif payment.payment_rail == "PIX":
+            payment, events = payment_generator._pix_lifecycle(  # noqa: SLF001
+                payment, initial_event, pix_lifecycle_rng
+            )
+        else:
+            events = (initial_event,)
+        yield from logical_rows("payments", (payment,))
+        yield from logical_rows("payment_events", events)
+        for event, account_id, raw_entry_type in payment_generator._ledger_specs(  # noqa: SLF001
+            payment, events
+        ):
+            ledger_number += 1
+            entry_type = cast(Literal["DEBIT", "CREDIT"], raw_entry_type)
+            delta = event.amount if entry_type == "CREDIT" else -event.amount
+            balance = round(balances[account_id] + delta, 2)
+            if balance < -payment_generator.accounts_by_id[account_id].overdraft_limit:
+                raise ValueError(f"ledger debit exceeds overdraft limit for {account_id}")
+            balances[account_id] = balance
+            ledger = LedgerEntry(
+                ledger_entry_id=f"LED-{event.event_id}-{ledger_number:02d}",
+                payment_id=event.payment_id,
+                account_id=account_id,
+                event_id=event.event_id,
+                entry_type=entry_type,
+                amount=event.amount,
+                currency=event.currency,
+                occurred_at=event.event_time,
+                effective_at=event.event_time,
+                posted_at=event.processed_at,
+                balance_after=balance,
+            )
+            yield from logical_rows("ledger_entries", (ledger,))
+
+
+def iter_scale_run(
+    config: SimulationRunConfig | None = None,
+    *,
+    entities: EntityDataset | None = None,
+    run_dir: str | Path | None = None,
+    simulation_run_id: str | None = None,
+) -> Iterator[dict[str, object]]:
+    """Yield scale records from a producer or an existing partitioned run.
+
+    Supplying ``run_dir`` reads one Parquet chunk at a time. Supplying
+    ``entities`` exposes the canonical producer stream for integrations that
+    already own an entity source. Exactly one source must be provided.
+    """
+
+    if (entities is None) == (run_dir is None):
+        raise ValueError("provide exactly one of entities or run_dir")
+    if run_dir is not None:
+        from fraudtwin.scale import iter_partition_rows
+
+        yield from iter_partition_rows(run_dir)
+        return
+    if config is None or simulation_run_id is None:
+        raise ValueError("config and simulation_run_id are required with entities")
+    assert entities is not None
+    yield from iter_scale_records(config, entities, simulation_run_id=simulation_run_id)
+
+
+def generate_scale(
+    config: str | Path | SimulationRunConfig,
+    *,
+    output_dir: str | Path = "runs",
+    checkpoint_dir: str | Path | None = None,
+    profile: str | Path | CalibrationProfile | None = None,
+    seed: int | None = None,
+    workers: int | None = None,
+) -> GeneratedRun:
+    """Run an explicitly requested scale job using the scale manifest path.
+
+    This entry point preserves the established generation semantics while
+    making scale execution explicit. Large profiles should be run through this
+    API/CLI; the compatibility ``generate`` API remains available for small
+    in-memory callers.
+    """
+
+    resolved = _resolve_config(config, Path(profile) if isinstance(profile, str | Path) else None)
+    if not resolved.scale.enabled:
+        raise ValueError("generate_scale requires an enabled scale profile")
+    result = generate(
+        resolved,
+        write=True,
+        output_dir=output_dir,
+        profile=profile,
+        seed=seed,
+        workers=workers,
+        checkpoint_dir=checkpoint_dir,
+    )
+    if resolved.scale.storage_uri:
+        destination = Path(resolved.scale.storage_uri)
+        # A local URI may point at the staging run itself; avoid copying files
+        # onto themselves while still allowing a separate local publication
+        # directory. Remote backends are resolved lazily through fsspec.
+        if resolved.scale.storage_backend == "local":
+            same_path = destination.resolve() == result.run_dir.resolve()
+        else:
+            same_path = False
+        if not same_path:
+            storage_for(resolved.scale.storage_uri, resolved.scale.storage_backend).publish(
+                result.run_dir, resolved.scale.storage_uri
+            )
+    return result
 
 
 def _scale_metadata(
     config: SimulationRunConfig,
+    entities: EntityDataset,
     behavior: BehaviorDataset,
     run_dir: Path,
     *,
@@ -390,11 +598,20 @@ def _scale_metadata(
     plan = resolve_scale_plan(config, run_id=run_id)
     if plan is None:
         return None
-    records = _scale_records(behavior)
+    realized_logical_rows = sum(len(rows) for rows in behavior.tables().values())
+    if write and len(behavior.payments) < plan.target_payments:
+        raise ValueError(
+            "scale target not met: expected at least "
+            f"{plan.target_payments} payments, realized {len(behavior.payments)}"
+        )
     metadata: dict[str, object] = {
         "profile": plan.profile,
+        "target_unit": "payments",
+        "target_payments": plan.target_payments,
+        "payments_realized": len(behavior.payments),
+        "target_met": len(behavior.payments) >= plan.target_payments,
         "target_logical_events": plan.target_logical_events,
-        "logical_events_realized": len(records),
+        "logical_events_realized": realized_logical_rows,
         "shard_count": plan.shard_count,
         "chunk_size": plan.chunk_size,
         "worker_count": plan.worker_count,
@@ -403,12 +620,18 @@ def _scale_metadata(
         "partition_mapping": plan.partition_mapping,
         "seed_tree_version": plan.seed_tree_version,
         "configuration_hash": plan.configuration_hash,
+        "features": list(plan.features),
+        "storage_backend": plan.storage_backend,
+        "storage_uri": plan.storage_uri,
+        "state_backend": plan.state_backend,
+        "manifest_version": plan.manifest_version,
+        "execution_mode": "compatibility-materialized",
     }
     if write:
         completions, reconciliation, checkpoint_path = write_scale_partitions(
             run_dir,
             plan,
-            records,
+            _scale_records(entities, behavior),
             checkpoint_dir=checkpoint_dir,
             resolved_configuration=config.model_dump(mode="json"),
         )
@@ -418,6 +641,8 @@ def _scale_metadata(
                 "partition_fingerprints": {item.shard_id: item.fingerprint for item in completions},
                 "checkpoint": str(checkpoint_path),
                 "reconciliation": reconciliation.model_dump(mode="json"),
+                "derived_counts": behavior.event_counts,
+                "target_met": len(behavior.payments) >= plan.target_payments,
             }
         )
     return metadata
@@ -507,6 +732,12 @@ def generate(
         simulation_run_id=base_manifest.run_id,
         calibration=calibration,
     ).generate()
+    scale_plan = resolve_scale_plan(resolved_config, run_id=base_manifest.run_id)
+    if write and scale_plan is not None and len(behavior.payments) < scale_plan.target_payments:
+        raise ValueError(
+            "scale target not met: expected at least "
+            f"{scale_plan.target_payments} payments, realized {len(behavior.payments)}"
+        )
 
     output_root = Path(output_dir)
     run_dir = output_root / base_manifest.run_id
@@ -536,6 +767,7 @@ def generate(
 
     scale_metadata = _scale_metadata(
         resolved_config,
+        entities,
         behavior,
         run_dir,
         write=write,
@@ -718,4 +950,12 @@ def resume_generation(checkpoint: str | Path) -> GeneratedRun:
     return result
 
 
-__all__ = ["GeneratedData", "GeneratedRun", "generate", "resume_generation"]
+__all__ = [
+    "GeneratedData",
+    "GeneratedRun",
+    "generate",
+    "generate_scale",
+    "iter_scale_run",
+    "iter_scale_records",
+    "resume_generation",
+]

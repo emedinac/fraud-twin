@@ -35,5 +35,6 @@ Documentation
    configuration
    workflows
    graph-and-benchmarks
+   release-readiness
    development
    references

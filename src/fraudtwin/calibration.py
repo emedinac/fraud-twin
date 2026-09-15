@@ -750,6 +750,23 @@ def resolve_calibration(
         if isinstance(outputs_payload, dict):
             outputs_payload["kafka"] = False
             outputs_payload.pop("iceberg", None)
+        # M18's new target field must not perturb the calibrated identity of
+        # older runs. Keep the legacy disabled-scale payload shape intact.
+        scale_payload = config_payload.get("scale")
+        if isinstance(scale_payload, dict) and scale_payload.get("profile") is None:
+            # Disabled scale controls are not part of calibrated source
+            # identity. Remove both the original target field and the newer
+            # storage/feature controls so legacy calibration goldens remain
+            # byte-for-byte reproducible.
+            for key in (
+                "target_payments",
+                "features",
+                "storage_backend",
+                "storage_uri",
+                "state_backend",
+                "manifest_version",
+            ):
+                scale_payload.pop(key, None)
         calibration_payload = config_payload.get("calibration")
         if isinstance(calibration_payload, dict):
             # A source path is an access detail, not a simulation parameter;

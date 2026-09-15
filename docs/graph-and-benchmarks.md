@@ -137,6 +137,16 @@ poetry run fraudtwin quality-benchmark --profile standard-v1
 poetry run fraudtwin report RUN-<id>
 ```
 
+Scalability metrics are populated from an explicitly executed M18 job; this
+keeps large workloads out of normal quality runs.  Pass its evidence manifest
+to the matching profile:
+
+```bash
+poetry run fraudtwin quality-benchmark \
+  --profile standard-v1-dev \
+  --scale-manifest runs/scale-benchmarks/<run>-benchmark.json
+```
+
 The default profile uses the small workload. The immutable
 `standard-v1-medium`, `standard-v1-large`, `standard-v1-xlarge`, and
 `standard-v1-billion` profiles are opt-in and require documented hardware.

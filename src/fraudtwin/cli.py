@@ -25,6 +25,7 @@ from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.contracts import ContractValidationError, load_contract_registry
 from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
 from fraudtwin.generation import generate as generate_library
+from fraudtwin.generation import generate_scale as generate_scale_library
 from fraudtwin.generation import resume_generation
 from fraudtwin.graph import GraphDataset, build_graph, validate_graph, write_graph
 from fraudtwin.lakehouse import (
@@ -55,6 +56,7 @@ from fraudtwin.observability import MetricsSession
 from fraudtwin.postgres import database_status, migrate_database
 from fraudtwin.quality_benchmark import report_run, run_quality_benchmark
 from fraudtwin.replay import ReplayOrder, replay_run, write_replay
+from fraudtwin.scale import run_scale_benchmark
 from fraudtwin.simulation.graph_fraud import GraphFraudDataset
 from fraudtwin.simulation.parquet import (
     write_campaign_dynamics_sidecar,
@@ -268,6 +270,13 @@ def quality_benchmark_command(
     bundle: Annotated[
         Path | None, typer.Option("--bundle", help="Normalized external artifact bundle JSON.")
     ] = None,
+    scale_manifest: Annotated[
+        Path | None,
+        typer.Option(
+            "--scale-manifest",
+            help="Optional M18 scale benchmark evidence JSON for scalability metrics.",
+        ),
+    ] = None,
 ) -> None:
     """Run the Milestone 22 generator-quality protocol."""
 
@@ -277,12 +286,42 @@ def quality_benchmark_command(
             output_dir=output_dir,
             adapter=adapter,
             bundle=bundle,
+            scale_manifest=scale_manifest,
         )
     except (OSError, RuntimeError, ValueError) as exc:
         typer.echo(f"Quality benchmark failed: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"Quality benchmark generated: {result.report_id}")
     typer.echo(f"Report: {result.report_path}")
+
+
+@app.command("scale-benchmark")
+def scale_benchmark_command(
+    path: Annotated[Path, typer.Argument(help="Scale-enabled YAML configuration file.")],
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for generated run artifacts.")
+    ] = Path("runs/scale-benchmarks"),
+    checkpoint_dir: Annotated[
+        Path | None, typer.Option("--checkpoint-dir", help="Directory for chunk checkpoints.")
+    ] = None,
+    evidence_dir: Annotated[
+        Path | None, typer.Option("--evidence-dir", help="Directory for benchmark evidence JSON.")
+    ] = None,
+) -> None:
+    """Run a manual M18 scale job and write machine benchmark evidence."""
+
+    config = _load_or_exit(path)
+    try:
+        evidence = run_scale_benchmark(
+            config,
+            output_dir=output_dir,
+            checkpoint_dir=checkpoint_dir,
+            evidence_dir=evidence_dir,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Scale benchmark failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Scale benchmark evidence: {evidence}")
 
 
 @app.command("report")
@@ -544,15 +583,25 @@ def generate(
     started = time.monotonic()
     with _metrics_session(metrics_host, metrics_port, metrics_hold_seconds) as metrics:
         try:
-            result = generate_library(
-                config,
-                write=True,
-                output_dir=output_dir,
-                profile=profile,
-                seed=seed,
-                workers=workers,
-                checkpoint_dir=checkpoint_dir,
-            )
+            if config.scale.enabled and config.scale.profile != "dev":
+                result = generate_scale_library(
+                    config,
+                    output_dir=output_dir,
+                    profile=profile,
+                    seed=seed,
+                    workers=workers,
+                    checkpoint_dir=checkpoint_dir,
+                )
+            else:
+                result = generate_library(
+                    config,
+                    write=True,
+                    output_dir=output_dir,
+                    profile=profile,
+                    seed=seed,
+                    workers=workers,
+                    checkpoint_dir=checkpoint_dir,
+                )
         except Exception:
             if metrics is not None:
                 metrics.record_generator_error()

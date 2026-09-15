@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,7 @@ from fraudtwin import __version__
 from fraudtwin.manifest import ReplayManifest
 from fraudtwin.ml.dataset import load_generated_run
 from fraudtwin.reproducibility import as_utc, sha256_json
+from fraudtwin.scale import iter_partition_table
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
 from fraudtwin.simulation.parquet import (
@@ -455,6 +457,52 @@ def replay_run(
     return ReplayResult(selected_entities, behavior, envelopes, manifest)
 
 
+def iter_partition_replay_events(
+    run_dir: Path,
+    from_time: datetime,
+    to_time: datetime,
+    *,
+    order: Literal["original_delivery"] = "original_delivery",
+) -> Iterator[dict[str, Any]]:
+    """Stream replay envelopes directly from M18 partitioned Parquet."""
+
+    if order != "original_delivery":
+        raise ValueError("partition replay supports order='original_delivery' only")
+    start, end = _utc(from_time), _utc(to_time)
+    if end <= start:
+        raise ValueError("replay to must be after replay from")
+    sequence = 0
+    for table_name in ("payment_events", "customer_disputes"):
+        for row_number, row in enumerate(iter_partition_table(run_dir, table_name)):
+            event_time = row.get("event_time")
+            if event_time is None:
+                continue
+            try:
+                timestamp = _utc(event_time)
+            except (TypeError, ValueError):
+                continue
+            if not (start <= timestamp < end):
+                continue
+            sequence += 1
+            yield {
+                "replay_sequence": sequence,
+                "source_table": table_name,
+                "source_row_number": row_number,
+                "event_id": row.get("event_id"),
+                "event_type": row.get("event_type"),
+                "payment_id": row.get("payment_id"),
+                "customer_id": row.get("customer_id"),
+                "event_time": timestamp,
+                "source_created_at": row.get("source_created_at"),
+                "source_available_at": row.get("source_available_at"),
+                "ingested_at": row.get("ingested_at"),
+                "processed_at": row.get("processed_at"),
+                "correlation_id": row.get("correlation_id"),
+                "causation_id": row.get("causation_id"),
+                "scenario_id": row.get("scenario_id"),
+            }
+
+
 def write_replay(result: ReplayResult, output_dir: Path) -> tuple[Path, Path]:
     """Write a replay artifact below the supplied destination root."""
 
@@ -478,4 +526,11 @@ def write_replay(result: ReplayResult, output_dir: Path) -> tuple[Path, Path]:
     return envelope_path, manifest_path
 
 
-__all__ = ["REPLAY_EVENT_SCHEMA", "ReplayOrder", "ReplayResult", "replay_run", "write_replay"]
+__all__ = [
+    "REPLAY_EVENT_SCHEMA",
+    "ReplayOrder",
+    "ReplayResult",
+    "iter_partition_replay_events",
+    "replay_run",
+    "write_replay",
+]

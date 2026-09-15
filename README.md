@@ -86,6 +86,19 @@ poetry run fraudtwin generate configs/minimal.yaml \
 
 The minimal configuration creates 10 customers, 10 behavior profiles, and 100 target payments. Fraud is disabled in this baseline; enable it in a copied YAML file or start with a fixture under `configs/benchmarks/`.
 
+For a laptop-scale smoke run, use the bounded `dev` profile (1,000 payments)
+and keep the normal feature path small. The 100k–1B profiles are manual
+benchmarks for suitable hardware:
+
+```yaml
+scale:
+  profile: dev
+  target_payments: 1000
+  shard_count: 2
+  chunk_size: 100
+  worker_count: 2
+```
+
 For deterministic large-run generation, use a scale profile such as `configs/scale-1b.yaml`:
 
 ```bash
@@ -93,7 +106,26 @@ poetry run fraudtwin generate configs/scale-1b.yaml --workers 16 --checkpoint-di
 poetry run fraudtwin resume .fraudtwin/run-1b
 ```
 
-Scale execution uses the same canonical simulator. Worker scheduling does not change logical IDs or partition fingerprints, and checkpoints support deterministic retry/resume. The billion profile is a documented benchmark target for suitable hardware, not a test-suite requirement.
+Scale execution uses the same canonical simulator and writes partitioned
+Parquet chunks. Worker scheduling does not change logical IDs or partition
+fingerprints, and checkpoints support deterministic retry/resume. The billion
+profile is a documented benchmark target for suitable hardware, not a
+test-suite requirement. Install `-E scale` when using DuckDB/PyArrow
+out-of-core tooling. The legacy Python API still materializes the canonical
+entity/behavior objects before persistence; use the `dev` profile locally and
+run 100M/1B profiles only through a streaming producer deployment.
+
+Producer integrations can use `fraudtwin.iter_scale_records(...)` as a lazy
+canonical entity/profile/payment/event/ledger stream and pass it to the scale
+partition writer without constructing a `BehaviorDataset`.
+
+Optional sinks expose corresponding bounded interfaces: use
+`KafkaPublisher.publish_records`, `persist_scale_records`, and
+`IcebergLakehouse.append_stream` for chunk iterators. Partitioned replay can
+be consumed with `iter_partition_replay_events`.
+
+See the [v2.0.0 release-readiness roadmap](docs/release-readiness.md) for M18
+scale gates and deferred platform integrations.
 
 For baseline model evaluation, install the optional ML dependencies and train on a previously built PIT dataset:
 
@@ -111,6 +143,14 @@ poetry run fraudtwin report RUN-<id>
 ```
 
 The report keeps correctness, fidelity, fraud difficulty, scalability, engineering performance, and reproducibility independent. External generators may provide a normalized bundle or a `module:factory` adapter; unsupported dimensions are reported as `N/A`.
+
+To include measured M18 scalability evidence without running a large workload
+as part of the quality command, pass the completed scale manifest:
+
+```bash
+poetry run fraudtwin quality-benchmark --profile standard-v1-dev \
+  --scale-manifest runs/scale-benchmarks/<run>-benchmark.json
+```
 
 For comparable results across machines and FraudTwin releases, run one of the
 bundled immutable public benchmark packs:
@@ -175,7 +215,7 @@ Calibration profiles contain only deterministic statistical summaries and proven
 | Native Kafka streaming (optional `kafka` extra) | Available |
 | Iceberg lakehouse (optional `lakehouse` extra) | Available |
 | CLI Prometheus metrics and Grafana dashboard (optional `observability` extra) | Available |
-| Flink, feature stores, and advanced models | Planned |
+| Spark, feature stores, and advanced models | Planned |
 
 ## Development
 
@@ -191,6 +231,8 @@ poetry build
 ```
 
 See [`DEVELOPMENT.md`](DEVELOPMENT.md) for the short contributor entry point and [`docs/development.md`](docs/development.md) for focused tests and working conventions.
+
+Pull-request CI runs three tiny external-service smoke tests for PostgreSQL, Kafka, and Iceberg; they are skipped in normal local test runs.
 
 ## License and references
 

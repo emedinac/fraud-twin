@@ -389,9 +389,9 @@ def logical_fingerprint(rows: Iterable[Mapping[str, Any]]) -> str:
 
 def _require_iceberg() -> tuple[Any, Any, Any]:  # pragma: no cover - optional dependency
     try:
-        import pyarrow as pa  # type: ignore[import-not-found]
-        from pyiceberg.catalog import load_catalog  # type: ignore[import-not-found]
-        from pyiceberg.exceptions import NoSuchTableError  # type: ignore[import-not-found]
+        pa = importlib.import_module("pyarrow")
+        load_catalog = importlib.import_module("pyiceberg.catalog").load_catalog
+        NoSuchTableError = importlib.import_module("pyiceberg.exceptions").NoSuchTableError
     except ImportError as exc:  # pragma: no cover - optional integration dependency
         raise LakehouseDependencyError(
             "Iceberg output requires the optional 'lakehouse' dependency"
@@ -480,6 +480,28 @@ class IcebergLakehouse:  # pragma: no cover - optional integration dependency
         iceberg_table.append(pa.Table.from_pylist(typed_rows, schema=schema))
         snapshot = iceberg_table.current_snapshot()
         return int(snapshot.snapshot_id) if snapshot is not None else None
+
+    def append_stream(
+        self,
+        table: str,
+        rows: Iterable[Mapping[str, Any]],
+        *,
+        batch_size: int = 10_000,
+    ) -> int | None:
+        """Append an unbounded row stream in bounded batches."""
+
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        batch: list[Mapping[str, Any]] = []
+        snapshot: int | None = None
+        for row in rows:
+            batch.append(row)
+            if len(batch) >= batch_size:
+                snapshot = self.append(table, batch)
+                batch.clear()
+        if batch:
+            snapshot = self.append(table, batch)
+        return snapshot
 
     def maintenance(
         self,
