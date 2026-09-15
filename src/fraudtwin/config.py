@@ -1905,28 +1905,76 @@ class CampaignDynamicsConfig(_StrictModel):
 class SimulationRunConfig(_StrictModel):
     """Top-level configuration accepted by the CLI."""
 
-    simulation: SimulationConfig
-    population: PopulationConfig
-    payments: PaymentsConfig
-    behavior: BehaviorConfig = Field(default_factory=BehaviorConfig)
-    card_lifecycle: CardLifecycleConfig = Field(default_factory=CardLifecycleConfig)
-    pix_lifecycle: PixLifecycleConfig = Field(default_factory=PixLifecycleConfig)
-    fraud: FraudConfig
-    fraud_workflow: FraudWorkflowConfig = Field(default_factory=FraudWorkflowConfig)
-    labels: LabelObservationConfig = Field(default_factory=LabelObservationConfig)
-    scale: ScaleConfig = Field(default_factory=ScaleConfig)
-    quality: QualityConfig
-    outputs: OutputsConfig
-    kafka: KafkaConfig = Field(default_factory=KafkaConfig)
-    lakehouse: LakehouseConfig = Field(default_factory=LakehouseConfig)
-    dataset: PointInTimeDatasetConfig = Field(default_factory=PointInTimeDatasetConfig)
-    backtest: BacktestConfig = Field(default_factory=BacktestConfig)
-    graph: GraphConfig = Field(default_factory=GraphConfig)
-    benchmark: BenchmarkConfig = Field(default_factory=BenchmarkConfig)
-    stress: StressConfig = Field(default_factory=StressConfig)
-    counterfactual: CounterfactualConfig = Field(default_factory=CounterfactualConfig)
-    campaign_dynamics: CampaignDynamicsConfig = Field(default_factory=CampaignDynamicsConfig)
-    calibration: CalibrationConfig = Field(default_factory=CalibrationConfig)
+    simulation: SimulationConfig = Field(description="Clock, seed, duration, and execution speed.")
+    population: PopulationConfig = Field(description="Requested entity population sizes.")
+    payments: PaymentsConfig = Field(description="Payment volume and payment-rail weights.")
+    behavior: BehaviorConfig = Field(
+        default_factory=BehaviorConfig,
+        description="Customer behavior and legitimate payment controls.",
+    )
+    card_lifecycle: CardLifecycleConfig = Field(
+        default_factory=CardLifecycleConfig,
+        description="Card authorization, settlement, refund, and chargeback timing.",
+    )
+    pix_lifecycle: PixLifecycleConfig = Field(
+        default_factory=PixLifecycleConfig,
+        description="PIX-like validation, settlement, timeout, and return timing.",
+    )
+    fraud: FraudConfig = Field(description="Fraud scenario selection and prevalence controls.")
+    fraud_workflow: FraudWorkflowConfig = Field(
+        default_factory=FraudWorkflowConfig,
+        description="Alert, case, dispute, confirmation, and label timing.",
+    )
+    labels: LabelObservationConfig = Field(
+        default_factory=LabelObservationConfig,
+        description="Selection-dependent observed-label and correction behavior.",
+    )
+    scale: ScaleConfig = Field(
+        default_factory=ScaleConfig,
+        description="Optional deterministic sharding, chunking, and checkpoint controls.",
+    )
+    quality: QualityConfig = Field(description="Optional deterministic data-quality faults.")
+    outputs: OutputsConfig = Field(description="Parquet and optional sink output policy.")
+    kafka: KafkaConfig = Field(
+        default_factory=KafkaConfig,
+        description="Optional Kafka publication settings.",
+    )
+    lakehouse: LakehouseConfig = Field(
+        default_factory=LakehouseConfig,
+        description="Optional Iceberg lakehouse materialization settings.",
+    )
+    dataset: PointInTimeDatasetConfig = Field(
+        default_factory=PointInTimeDatasetConfig,
+        description="Point-in-time feature, label, and temporal split settings.",
+    )
+    backtest: BacktestConfig = Field(
+        default_factory=BacktestConfig,
+        description="Rolling backtest windows, regimes, and benchmark settings.",
+    )
+    graph: GraphConfig = Field(
+        default_factory=GraphConfig,
+        description="Fraud-network campaign and graph export settings.",
+    )
+    benchmark: BenchmarkConfig = Field(
+        default_factory=BenchmarkConfig,
+        description="Difficulty and benchmark stress controls.",
+    )
+    stress: StressConfig = Field(
+        default_factory=StressConfig,
+        description="Camouflage controls for feature and relation stress.",
+    )
+    counterfactual: CounterfactualConfig = Field(
+        default_factory=CounterfactualConfig,
+        description="Minimum-change counterfactual trajectory settings.",
+    )
+    campaign_dynamics: CampaignDynamicsConfig = Field(
+        default_factory=CampaignDynamicsConfig,
+        description="Optional phase-based campaign evolution settings.",
+    )
+    calibration: CalibrationConfig = Field(
+        default_factory=CalibrationConfig,
+        description="Optional reference-derived aggregate calibration settings.",
+    )
 
     def effective_label_delay_seconds(self) -> int:
         """Return the dataset label delay, falling back to workflow settings."""

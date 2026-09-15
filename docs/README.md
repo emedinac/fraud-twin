@@ -6,7 +6,7 @@ FraudTwin is a deterministic synthetic payment world for fraud detection, graph 
 
 - [Quickstart](quickstart.md) - install FraudTwin and generate your first run.
 - [Python package and CLI](../README.md#quick-start) - choose between the Python API and command-line workflows.
-- Build the documentation with `poetry run sphinx-build -b html docs docs/_build/html`.
+- Build the documentation with `poetry run sphinx-build -E -W --keep-going -b html docs docs/_build/html`.
 
 ## Get Started
 
@@ -31,7 +31,9 @@ FraudTwin is a deterministic synthetic payment world for fraud detection, graph 
 
 ## Package Reference
 
-- [Python API reference](api.rst) - generated documentation for the public `fraudtwin` API.
+- [Python API reference](api.rst) - curated, generated documentation for the public `fraudtwin` API.
+- [CLI reference](cli.rst) - command groups, validation commands, and workflow entry points.
+- [Data contracts](data-contracts.rst) - generated-run artifacts, grains, and oracle boundaries.
 - [Source code on GitHub](https://github.com/emedinac/fraud-twin) - implementation, tests, and issue tracker.
 
 ## Cheatsheets
