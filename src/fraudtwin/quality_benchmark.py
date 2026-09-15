@@ -570,9 +570,7 @@ def _scale_metrics(
         _metric(
             "resume_overhead",
             score=(
-                resume_elapsed / elapsed
-                if resume_elapsed is not None and elapsed > 0
-                else None
+                resume_elapsed / elapsed if resume_elapsed is not None and elapsed > 0 else None
             ),
             details={**details, "resume_elapsed_seconds": resume_elapsed},
             status=("MEASURED" if resume_elapsed is not None and elapsed > 0 else "N/A"),
@@ -721,9 +719,7 @@ def run_quality_benchmark(
                 "bundle": str(bundle),
                 "scale_manifest": str(scale_manifest),
             }
-        )[
-            :16
-        ]
+        )[:16]
     )
     root.mkdir(parents=True, exist_ok=False)
     if bundle is not None:

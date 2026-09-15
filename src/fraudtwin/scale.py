@@ -741,9 +741,7 @@ def write_scale_partitions(
         (spool_root / "logical-ids.sqlite").unlink(missing_ok=True)
         (spool_root / "ledger-state.sqlite").unlink(missing_ok=True)
         id_database = sqlite3.connect(spool_root / "logical-ids.sqlite")
-        id_database.execute(
-            "CREATE TABLE IF NOT EXISTS logical_ids (logical_id TEXT PRIMARY KEY)"
-        )
+        id_database.execute("CREATE TABLE IF NOT EXISTS logical_ids (logical_id TEXT PRIMARY KEY)")
         id_database.execute("PRAGMA synchronous=OFF")
         ledger_database = sqlite3.connect(spool_root / "ledger-state.sqlite")
         ledger_database.execute(
@@ -874,10 +872,7 @@ def write_scale_partitions(
                 # checkpoints used the logical fingerprint in this field;
                 # accept those for compatibility but never trust a mismatched
                 # current file.
-                and (
-                    prior.checksum == prior.fingerprint
-                    or prior.checksum == _file_checksum(path)
-                )
+                and (prior.checksum == prior.fingerprint or prior.checksum == _file_checksum(path))
             ):
                 chunk_completions.append(prior)
             else:
@@ -977,15 +972,11 @@ def write_scale_partitions(
             and total_rows == emitted_rows
             and account_balance_violations == 0
             and ledger_debit_total == ledger_credit_total
-            and all(
-                chunk.end_ordinal - chunk.start_ordinal == chunk.row_count
-                for chunk in chunks
-            )
+            and all(chunk.end_ordinal - chunk.start_ordinal == chunk.row_count for chunk in chunks)
             and all(
                 grouped[0].start_ordinal == 0
                 and all(
-                    chunk.end_ordinal - chunk.start_ordinal == chunk.row_count
-                    for chunk in grouped
+                    chunk.end_ordinal - chunk.start_ordinal == chunk.row_count for chunk in grouped
                 )
                 and all(
                     chunk.start_ordinal == previous.end_ordinal
@@ -994,8 +985,7 @@ def write_scale_partitions(
                 for grouped in _group_chunks(chunks)
             )
             and all(
-                chunk.start_ordinal
-                == previous.end_ordinal
+                chunk.start_ordinal == previous.end_ordinal
                 for grouped in _group_chunks(chunks)
                 for previous, chunk in zip(grouped, grouped[1:], strict=False)
             )
@@ -1007,8 +997,7 @@ def write_scale_partitions(
             "chunk_ranges": all(
                 grouped[0].start_ordinal == 0
                 and all(
-                    chunk.end_ordinal - chunk.start_ordinal == chunk.row_count
-                    for chunk in grouped
+                    chunk.end_ordinal - chunk.start_ordinal == chunk.row_count for chunk in grouped
                 )
                 and all(
                     chunk.start_ordinal == previous.end_ordinal
@@ -1016,13 +1005,9 @@ def write_scale_partitions(
                 )
                 for grouped in _group_chunks(chunks)
             )
+            and all(chunk.end_ordinal - chunk.start_ordinal == chunk.row_count for chunk in chunks)
             and all(
-                chunk.end_ordinal - chunk.start_ordinal == chunk.row_count
-                for chunk in chunks
-            )
-            and all(
-                chunk.start_ordinal
-                == previous.end_ordinal
+                chunk.start_ordinal == previous.end_ordinal
                 for grouped in _group_chunks(chunks)
                 for previous, chunk in zip(grouped, grouped[1:], strict=False)
             ),
