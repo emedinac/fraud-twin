@@ -14,6 +14,7 @@ from fraudtwin.calibration import (
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
 from fraudtwin.generation import generate as generate_library
+from fraudtwin.generation import resume_generation
 from fraudtwin.graph import GraphDataset, build_graph, validate_graph, write_graph
 from fraudtwin.ml import (
     BenchmarkPack,
@@ -81,11 +82,21 @@ def generate(
     ] = Path("runs"),
     profile: Annotated[Path | None, typer.Option("--profile")] = None,
     seed: Annotated[int | None, typer.Option("--seed")] = None,
+    workers: Annotated[int | None, typer.Option("--workers")] = None,
+    checkpoint_dir: Annotated[Path | None, typer.Option("--checkpoint-dir")] = None,
 ) -> None:
     """Validate a configuration and generate a reproducible batch dataset."""
 
     config = _load_or_exit(path, calibration_profile_override=profile)
-    result = generate_library(config, write=True, output_dir=output_dir, profile=profile, seed=seed)
+    result = generate_library(
+        config,
+        write=True,
+        output_dir=output_dir,
+        profile=profile,
+        seed=seed,
+        workers=workers,
+        checkpoint_dir=checkpoint_dir,
+    )
     manifest = result.manifest
     entity_counts = manifest.entity_counts
     event_counts = manifest.event_counts
@@ -101,6 +112,21 @@ def generate(
     typer.echo("Generated payment counts:")
     for event_name, count in event_counts.items():
         typer.echo(f"  {event_name}: {count}")
+
+
+@app.command()
+def resume(
+    checkpoint_dir: Annotated[Path, typer.Argument(help="Scale checkpoint directory.")],
+) -> None:
+    """Resume a deterministic scale run from its checkpoint manifest."""
+
+    try:
+        result = resume_generation(checkpoint_dir)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Resume failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Run resumed: {result.run_id}")
+    typer.echo(f"Manifest: {result.manifest_path}")
 
 
 @app.command()

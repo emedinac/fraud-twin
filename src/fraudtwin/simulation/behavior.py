@@ -19,6 +19,7 @@ from fraudtwin.domain import (
     Customer,
     CustomerDispute,
     DelayedFraudLabel,
+    FinalObservedLabel,
     FraudAlert,
     FraudCase,
     FraudCaseConfirmation,
@@ -29,8 +30,10 @@ from fraudtwin.domain import (
     GraphHyperedge,
     GraphHyperedgeMembership,
     GraphPattern,
+    LabelObservation,
 )
 from fraudtwin.domain.payments import LedgerEntry, Payment, PaymentEvent
+from fraudtwin.label_observation import apply_label_observation
 from fraudtwin.seed import create_stream_rng
 from fraudtwin.simulation.cases import FraudWorkflowGenerator
 from fraudtwin.simulation.fraud import (
@@ -70,6 +73,8 @@ class BehaviorDataset:
     case_confirmations: tuple[FraudCaseConfirmation, ...] = ()
     customer_disputes: tuple[CustomerDispute, ...] = ()
     fraud_labels: tuple[DelayedFraudLabel, ...] = ()
+    label_observations: tuple[LabelObservation, ...] = ()
+    final_observed_labels: tuple[FinalObservedLabel, ...] = ()
     quality_fault_counts: dict[str, int] = field(default_factory=dict)
     quality_fault_rates: dict[str, float] = field(default_factory=dict)
     quality_diagnostics: dict[str, object] = field(default_factory=dict)
@@ -428,6 +433,52 @@ class BehaviorGenerator:
             self.entities,
             workflow_source,
         ).generate()
+        label_observations: tuple[LabelObservation, ...] = ()
+        final_observed_labels: tuple[FinalObservedLabel, ...] = ()
+        if self.config.labels.enabled:
+            workflow_alerts = workflow_dataset.alerts
+            label_observations, final_observed_labels = apply_label_observation(
+                self.config,
+                camo_records,
+                camo_payments,
+                customers=self.entities.customers,
+                alerts=workflow_alerts,
+                simulation_run_id=self.simulation_run_id,
+            )
+            selected_ids = {
+                item.fraud_record_id for item in label_observations if item.investigation_selected
+            }
+            reopen_at_by_record = {
+                observation.fraud_record_id: observation.reopenings[-1].reopened_at
+                for observation in label_observations
+                if observation.reopenings
+            }
+            workflow_dataset = replace(
+                workflow_dataset,
+                alerts=tuple(
+                    item for item in workflow_dataset.alerts if item.fraud_record_id in selected_ids
+                ),
+                cases=tuple(
+                    item.model_copy(
+                        update={"case_reopened_at": reopen_at_by_record.get(item.fraud_record_id)}
+                    )
+                    for item in workflow_dataset.cases
+                    if item.fraud_record_id in selected_ids
+                ),
+                confirmations=tuple(
+                    item
+                    for item in workflow_dataset.confirmations
+                    if item.fraud_record_id in selected_ids
+                ),
+                disputes=tuple(
+                    item
+                    for item in workflow_dataset.disputes
+                    if item.fraud_record_id in selected_ids
+                ),
+                labels=tuple(
+                    item for item in workflow_dataset.labels if item.fraud_record_id in selected_ids
+                ),
+            )
         dataset = BehaviorDataset(
             profiles=profiles,
             payments=camo_payments,
@@ -439,6 +490,8 @@ class BehaviorGenerator:
             case_confirmations=workflow_dataset.confirmations,
             customer_disputes=workflow_dataset.disputes,
             fraud_labels=workflow_dataset.labels,
+            label_observations=label_observations,
+            final_observed_labels=final_observed_labels,
             graph_memberships=camo_memberships,
             graph_campaigns=camo_campaigns,
             graph_patterns=camo_patterns,

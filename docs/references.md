@@ -11,6 +11,8 @@ These references informed FraudTwin’s design. The repository does not bundle c
 
 - [Fraud Detection Handbook simulator](https://fraud-detection-handbook.github.io/fraud-detection-handbook/Chapter_3_GettingStarted/SimulatedDataset.html) *(handbook)* - informed deterministic customer profiles, temporal payment behavior, rule-based fraud scenarios, and the legitimate baseline used for hard negatives.
 - [Fraud Detection Handbook validation strategies](https://fraud-detection-handbook.github.io/fraud-detection-handbook/Chapter_5_ModelValidationAndSelection/ValidationStrategies.html) *(handbook)* - informed point-in-time features, delayed-label gaps, future-only evaluation windows, and rolling backtests.
+- Vasquez et al., [The Hidden Cost of Fraud](https://proceedings.mlr.press/v183/vasquez22a.html) *(paper)* - motivated positive-unlabeled handling for fraud that remains undetected.
+- He et al., [Identifying Labeling Mechanism in Positive-Unlabeled Learning under Unknown Class Prior](https://proceedings.mlr.press/v337/he26a.html) *(paper)* - informed selection-dependent labeling controls.
 - [PaySim](https://github.com/EdgarLopezPhD/PaySim) *(repository and simulator)* - provided comparison points for synthetic mobile-money behavior and aggregate calibration without importing its schemas or data.
 - [SynthFin Core](https://github.com/afborda/synthfin-core) *(repository)* - provided practical comparison points for behavioral enrichment, fraud scenarios, and fraud-pattern generation.
 
@@ -23,6 +25,7 @@ These references informed FraudTwin’s design. The repository does not bundle c
 ## Graph fraud and research papers
 
 - [Santander Gen-Fraud-Graph](https://github.com/SantanderAI/gen-fraud-graph) *(repository)* - informed reproducible financial graph generation, fraud-ring patterns, graph exports, and benchmark-oriented scale considerations.
+- [NumPy parallel random generation](https://numpy.org/doc/stable/reference/random/parallel.html) and [`SeedSequence`](https://numpy.org/doc/stable/reference/random/seed_sequence.html) *(technical references)* - informed hierarchical deterministic streams for independent scale workers.
 - [IBM AMLSim](https://github.com/IBM/AMLSim) *(repository)* - provided a comparison point for multi-agent synthetic banking graphs and known AML/fraud patterns.
 - Haghighi et al., [*Beyond pairwise relationships: a transformer-based hypergraph learning approach for fraud detection*](https://doi.org/10.1007/s10115-025-02476-5) *(paper)* - motivated higher-order graph relations and the separation of observable structure from latent fraud truth.
 - Prasetya et al., [*A multi-rounded adversarial scenario for graph-based promo fraud detection*](https://doi.org/10.1007/s13278-025-01566-0) *(paper)* - informed evolving, multi-round difficulty and adversarial graph stress controls.

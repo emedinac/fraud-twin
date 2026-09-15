@@ -1,0 +1,47 @@
+simulation:
+  seed: 42
+  start: 2026-01-01T00:00:00Z
+  duration_days: 365
+  speed: batch
+
+population:
+  customers: 10000000
+  institutions: 100
+  accounts: 15000000
+  cards: 12000000
+  merchants: 100000
+  devices: 12000000
+  pix_keys: 8000000
+
+payments:
+  daily_target: 2740000
+  rails:
+    CARD: 0.55
+    PIX: 0.30
+    ACCOUNT_TRANSFER: 0.15
+
+fraud:
+  enabled: true
+  target_rate: 0.002
+  scenario_count: 5
+  hard_negative_rate: 1.0
+
+fraud_workflow:
+  enabled: true
+
+quality:
+  profile: clean
+
+outputs:
+  parquet: true
+  postgres: false
+  kafka: false
+
+scale:
+  profile: billion
+  shard_count: 256
+  chunk_size: 10000
+  worker_count: 16
+  output_batch_size: 10000
+  checkpoint_frequency_chunks: 10
+  partition_mapping: stable_hash_v1

@@ -26,6 +26,12 @@ from fraudtwin.ml import (
     write_point_in_time_dataset,
 )
 from fraudtwin.reproducibility import sha256_json
+from fraudtwin.scale import (
+    ScaleCheckpoint,
+    load_checkpoint,
+    resolve_scale_plan,
+    write_scale_partitions,
+)
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
@@ -36,6 +42,7 @@ from fraudtwin.simulation.parquet import (
     write_counterfactual_sidecar,
     write_entity_parquet,
     write_graph_truth,
+    write_label_observation_sidecar,
 )
 
 
@@ -156,6 +163,8 @@ def _build_manifest(
     *,
     campaign_dynamics_metadata: dict[str, object] | None,
     counterfactual_metadata: dict[str, object] | None,
+    label_observation_metadata: dict[str, object] | None,
+    scale_metadata: dict[str, object] | None,
     calibration: ResolvedCalibration | None = None,
 ) -> RunManifest:
     entity_counts = {**entities.counts, "behavior_profiles": len(behavior.profiles)}
@@ -177,6 +186,7 @@ def _build_manifest(
                 "case_confirmations": "1",
                 "customer_disputes": "1",
                 "fraud_labels": "1",
+                **({"label_observations": "1"} if config.labels.enabled else {}),
                 **(
                     {"counterfactual_change_sets": "1"}
                     if counterfactual_metadata is not None
@@ -230,6 +240,8 @@ def _build_manifest(
                 if calibration is not None and calibration.enabled
                 else None
             ),
+            "label_observation": label_observation_metadata,
+            "scale": scale_metadata,
         }
     )
 
@@ -307,6 +319,108 @@ def _counterfactual_metadata(
     return metadata
 
 
+def _label_observation_metadata(
+    behavior: BehaviorDataset, run_dir: Path, *, write: bool, run_id: str
+) -> dict[str, object] | None:
+    if not behavior.label_observations:
+        return None
+    first = behavior.label_observations[0]
+    stream_ids = tuple(
+        dict.fromkeys(
+            stream_id for item in behavior.label_observations for stream_id in item.stream_ids
+        )
+    )
+    metadata: dict[str, object] = {
+        "enabled": True,
+        "configuration_hash": first.policy_hash,
+        "stream_ids": list(stream_ids),
+        "observations": len(behavior.label_observations),
+        "versions": sum(len(item.versions) for item in behavior.label_observations),
+    }
+    if write:
+        root, sidecar_manifest = write_label_observation_sidecar(
+            behavior.label_observations,
+            behavior.final_observed_labels,
+            run_dir,
+            source_run_id=run_id,
+            policy_hash=first.policy_hash,
+            stream_ids=stream_ids,
+        )
+        metadata.update(
+            {
+                "root": str(root.relative_to(run_dir)),
+                "manifest": str(sidecar_manifest.relative_to(run_dir)),
+            }
+        )
+    return metadata
+
+
+def _scale_records(behavior: BehaviorDataset) -> tuple[dict[str, object], ...]:
+    """Build stable logical records for the M18 partition writer."""
+
+    records: list[dict[str, object]] = []
+    for table_name, table_rows in behavior.tables().items():
+        for row in table_rows:
+            values = row.model_dump(mode="json")
+            source_id = next(
+                (str(value) for key, value in values.items() if key.endswith("_id") and value),
+                f"row-{len(records):08d}",
+            )
+            records.append(
+                {
+                    "logical_id": f"{table_name}:{source_id}",
+                    "logical_type": table_name,
+                    "source_id": source_id,
+                }
+            )
+    return tuple(records)
+
+
+def _scale_metadata(
+    config: SimulationRunConfig,
+    behavior: BehaviorDataset,
+    run_dir: Path,
+    *,
+    write: bool,
+    run_id: str,
+    checkpoint_dir: str | Path | None,
+) -> dict[str, object] | None:
+    plan = resolve_scale_plan(config, run_id=run_id)
+    if plan is None:
+        return None
+    records = _scale_records(behavior)
+    metadata: dict[str, object] = {
+        "profile": plan.profile,
+        "target_logical_events": plan.target_logical_events,
+        "logical_events_realized": len(records),
+        "shard_count": plan.shard_count,
+        "chunk_size": plan.chunk_size,
+        "worker_count": plan.worker_count,
+        "output_batch_size": plan.output_batch_size,
+        "checkpoint_frequency_chunks": plan.checkpoint_frequency_chunks,
+        "partition_mapping": plan.partition_mapping,
+        "seed_tree_version": plan.seed_tree_version,
+        "configuration_hash": plan.configuration_hash,
+    }
+    if write:
+        completions, reconciliation, checkpoint_path = write_scale_partitions(
+            run_dir,
+            plan,
+            records,
+            checkpoint_dir=checkpoint_dir,
+            resolved_configuration=config.model_dump(mode="json"),
+        )
+        metadata.update(
+            {
+                "partitions": [item.model_dump(mode="json") for item in completions],
+                "partition_fingerprints": {item.shard_id: item.fingerprint for item in completions},
+                "checkpoint": str(checkpoint_path),
+                "reconciliation": reconciliation.model_dump(mode="json"),
+            }
+        )
+    return metadata
+
+
 @overload
 def generate(
     config: str | Path | SimulationRunConfig | None = None,
@@ -315,6 +429,8 @@ def generate(
     output_dir: str | Path = "runs",
     profile: str | Path | CalibrationProfile | None = None,
     seed: int | None = None,
+    workers: int | None = None,
+    checkpoint_dir: str | Path | None = None,
 ) -> GeneratedData: ...
 
 
@@ -326,6 +442,8 @@ def generate(
     output_dir: str | Path = "runs",
     profile: str | Path | CalibrationProfile | None = None,
     seed: int | None = None,
+    workers: int | None = None,
+    checkpoint_dir: str | Path | None = None,
 ) -> GeneratedRun: ...
 
 
@@ -336,6 +454,8 @@ def generate(
     output_dir: str | Path = "runs",
     profile: str | Path | CalibrationProfile | None = None,
     seed: int | None = None,
+    workers: int | None = None,
+    checkpoint_dir: str | Path | None = None,
 ) -> GeneratedData | GeneratedRun:
     """Generate a deterministic FraudTwin run.
 
@@ -349,6 +469,14 @@ def generate(
     if seed is not None:
         values = resolved_config.model_dump(mode="python")
         values["simulation"]["seed"] = seed
+        resolved_config = SimulationRunConfig.model_validate(values)
+    if workers is not None:
+        if workers < 1:
+            raise ValueError("workers must be positive")
+        if not resolved_config.scale.enabled:
+            raise ValueError("workers requires an enabled scale profile")
+        values = resolved_config.model_dump(mode="python")
+        values["scale"]["worker_count"] = workers
         resolved_config = SimulationRunConfig.model_validate(values)
     supplied_profile = (
         load_calibration_profile(profile_path)
@@ -382,13 +510,29 @@ def generate(
     run_dir = output_root / base_manifest.run_id
     if write and calibration.enabled and run_dir.exists():
         raise FileExistsError(f"calibrated run artifacts already exist: {run_dir}")
-    if write:
+    fresh_output = not run_dir.exists()
+    if write and (fresh_output or not resolved_config.scale.enabled):
         _write_base_outputs(entities, behavior, run_dir)
 
-    campaign_dynamics_metadata = _campaign_metadata(
-        behavior, run_dir, write=write, run_id=base_manifest.run_id
+    scale_metadata = _scale_metadata(
+        resolved_config,
+        behavior,
+        run_dir,
+        write=write,
+        run_id=base_manifest.run_id,
+        checkpoint_dir=checkpoint_dir,
     )
-    counterfactual_metadata = _counterfactual_metadata(behavior, run_dir, write=write)
+
+    label_observation_metadata = _label_observation_metadata(
+        behavior, run_dir, write=write and fresh_output, run_id=base_manifest.run_id
+    )
+
+    campaign_dynamics_metadata = _campaign_metadata(
+        behavior, run_dir, write=write and fresh_output, run_id=base_manifest.run_id
+    )
+    counterfactual_metadata = _counterfactual_metadata(
+        behavior, run_dir, write=write and fresh_output
+    )
 
     manifest = _build_manifest(
         resolved_config,
@@ -397,6 +541,8 @@ def generate(
         behavior,
         campaign_dynamics_metadata=campaign_dynamics_metadata,
         counterfactual_metadata=counterfactual_metadata,
+        label_observation_metadata=label_observation_metadata,
+        scale_metadata=scale_metadata,
         calibration=calibration,
     )
 
@@ -439,7 +585,9 @@ def generate(
                 }
             )
 
-    if write and calibration.enabled:
+    if write and (
+        calibration.enabled or resolved_config.labels.enabled or scale_metadata is not None
+    ):
         output_metadata = _output_fingerprints(run_dir)
         manifest = manifest.model_copy(
             update={
@@ -449,14 +597,15 @@ def generate(
                 "file_checksums": output_metadata["file_checksums"],
             }
         )
-        manifest = manifest.model_copy(
-            update={
-                "calibration": {
-                    **(manifest.calibration or {}),
-                    "output_fingerprint": output_metadata["output_fingerprint"],
+        if calibration.enabled:
+            manifest = manifest.model_copy(
+                update={
+                    "calibration": {
+                        **(manifest.calibration or {}),
+                        "output_fingerprint": output_metadata["output_fingerprint"],
+                    }
                 }
-            }
-        )
+            )
 
     if not write:
         return GeneratedData(
@@ -476,4 +625,30 @@ def generate(
     )
 
 
-__all__ = ["GeneratedData", "GeneratedRun", "generate"]
+def resume_generation(checkpoint: str | Path) -> GeneratedRun:
+    """Resume a scale run from a validated checkpoint manifest.
+
+    Canonical partition artifacts are idempotently regenerated from the stored
+    resolved configuration.  Completed partition fingerprints are checked by
+    the caller/consumer through the resulting manifest and checkpoint.
+    """
+
+    checkpoint_path = Path(checkpoint)
+    state: ScaleCheckpoint = load_checkpoint(checkpoint_path)
+    config = SimulationRunConfig.model_validate(state.resolved_configuration)
+    if not config.scale.enabled:
+        raise ValueError("checkpoint configuration does not enable scale generation")
+    if config_hash(config) != state.configuration_hash:
+        raise ValueError("checkpoint configuration hash does not match resolved configuration")
+    result = generate(
+        config,
+        write=True,
+        output_dir=Path(state.run_dir).parent,
+        checkpoint_dir=checkpoint_path.parent,
+    )
+    if result.run_id != state.run_id:
+        raise ValueError("resumed run ID does not match checkpoint")
+    return result
+
+
+__all__ = ["GeneratedData", "GeneratedRun", "generate", "resume_generation"]

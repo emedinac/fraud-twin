@@ -16,6 +16,24 @@
 
 FraudTwin generates a small, coherent payment world: customers have accounts, cards, merchants, devices, habits, and transaction histories. The same seed and configuration produce the same world, which makes a difficult fraud case reproducible instead of anecdotal.
 
+## Documentation
+
+[FraudTwin docs](https://emedinac.github.io/fraud-twin/)
+
+| Need | Guide |
+| --- | --- |
+| Browse the hosted Python API reference | [API reference](https://emedinac.github.io/fraud-twin/api.html) |
+| Read the documentation sources | [Documentation hub](docs/README.md) |
+| Install and generate a first run | [Quickstart](docs/quickstart.md) |
+| Tune behavior, fraud, quality, and stress | [Configuration](docs/configuration.md) |
+| Build datasets, replay runs, and backtest | [Data and evaluation workflows](docs/workflows.md) |
+| Export graphs and use benchmark fixtures | [Graph and benchmark workflows](docs/graph-and-benchmarks.md) |
+| Contribute and run the quality gate | [Development guide](docs/development.md) |
+| Review release history | [CHANGELOG.md](CHANGELOG.md) |
+| Understand external references | [References](docs/references.md) |
+
+Tutorials will be added under `docs/` as the workflows settle. Each tutorial should start from a versioned configuration and show the resulting artifacts, not only the command that produced them.
+
 ## What it provides
 
 - Behavior-aware customers and legitimate CARD, PIX-like, and account-transfer payments.
@@ -28,6 +46,8 @@ FraudTwin generates a small, coherent payment world: customers have accounts, ca
 - Opt-in counterfactual fraud trajectories with minimum-change budgets and audit lineage.
 - Opt-in dynamic fraud campaigns with phase evolution, rail movement, topology mutations, and oracle sidecars.
 - Reference calibration profiles that tune aggregate amounts, timing, balances, activity, and merchant behavior without copying reference rows.
+- An opt-in label observation engine for selective, delayed, missing, preliminary, corrected, and reopened labels with point-in-time-safe history.
+- Opt-in large-scale generation profiles with stable sharding, bounded chunked Parquet output, parallel scheduling, checkpoint/resume, partition fingerprints, and cross-partition reconciliation.
 
 FraudTwin is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and timing before introducing a larger streaming or production stack.
 
@@ -58,20 +78,14 @@ poetry run fraudtwin generate configs/minimal.yaml \
 
 The minimal configuration creates 10 customers, 10 behavior profiles, and 100 target payments. Fraud is disabled in this baseline; enable it in a copied YAML file or start with a fixture under `configs/benchmarks/`.
 
-## Documentation
+For deterministic large-run generation, use a scale profile such as `configs/scale-1b.yaml`:
 
-| Need | Guide |
-| --- | --- |
-| Browse the documentation set | [Documentation hub](docs/README.md) |
-| Install and generate a first run | [Quickstart](docs/quickstart.md) |
-| Tune behavior, fraud, quality, and stress | [Configuration](docs/configuration.md) |
-| Build datasets, replay runs, and backtest | [Data and evaluation workflows](docs/workflows.md) |
-| Export graphs and use benchmark fixtures | [Graph and benchmark workflows](docs/graph-and-benchmarks.md) |
-| Contribute and run the quality gate | [Development guide](docs/development.md) |
-| Review release history | [CHANGELOG.md](CHANGELOG.md) |
-| Understand external references | [References](docs/references.md) |
+```bash
+poetry run fraudtwin generate configs/scale-1b.yaml --workers 16 --checkpoint-dir .fraudtwin/run-1b
+poetry run fraudtwin resume .fraudtwin/run-1b
+```
 
-Tutorials will be added under `docs/` as the workflows settle. Each tutorial should start from a versioned configuration and show the resulting artifacts, not only the command that produced them.
+Scale execution uses the same canonical simulator. Worker scheduling does not change logical IDs or partition fingerprints, and checkpoints support deterministic retry/resume. The billion profile is a documented benchmark target for suitable hardware, not a test-suite requirement.
 
 ## Generated output
 

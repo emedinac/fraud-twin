@@ -16,6 +16,19 @@ Source events and ledger entries are filtered by source availability. Labels are
 
 The dataset manifest records the source run, feature and label definitions, split boundaries, stable schema, row hash, and output fingerprint.
 
+When M17 is enabled, inspect `label_observations/<id>/observable/observed_labels.parquet` for the operational projection and the corresponding oracle history for audit. Dataset construction filters each version by `label_available_at`; it never exposes future corrections or latent truth.
+
+## Generate and resume large runs
+
+M18 scale profiles use the same simulator and output contracts as ordinary runs while writing deterministic shard/chunk Parquet artifacts and a checkpoint manifest. Worker count changes scheduling only. Resume validates the stored configuration and seed tree, reuses valid completed partitions, and regenerates incomplete work deterministically:
+
+```bash
+poetry run fraudtwin generate configs/scale-1b.yaml --workers 16 --checkpoint-dir .fraudtwin/run-1b
+poetry run fraudtwin resume .fraudtwin/run-1b
+```
+
+The `billion` profile is a hardware-dependent benchmark target and is not part of unit, smoke, or CI validation.
+
 ## Replay a historical window
 
 Replay is read-only. It selects records from an existing run over a half-open interval and preserves their source identities and timestamps:

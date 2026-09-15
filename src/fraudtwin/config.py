@@ -17,6 +17,15 @@ UnresolvedLabelPolicy = Literal["exclude", "include"]
 MinimumLabelMaturityPolicy = Literal["exclude", "include_unresolved"]
 TrainWindowMode = Literal["fixed", "expanding"]
 RegimeLabelPolicy = Literal["original", "unobserved"]
+ScaleProfile = Literal["small", "medium", "large", "xlarge", "billion"]
+PartitionMapping = Literal["stable_hash_v1"]
+SCALE_PROFILE_TARGETS: dict[ScaleProfile, int] = {
+    "small": 100_000,
+    "medium": 1_000_000,
+    "large": 10_000_000,
+    "xlarge": 100_000_000,
+    "billion": 1_000_000_000,
+}
 FeatureWindowName = Literal[
     "transaction_count_1m",
     "transaction_count_5m",
@@ -348,6 +357,154 @@ class FraudWorkflowConfig(_StrictModel):
     confirmation_delay_seconds: Annotated[int, Field(ge=0)] = 86_400
     customer_dispute_delay_seconds: Annotated[int, Field(ge=0)] = 172_800
     label_delay_seconds: Annotated[int, Field(ge=0)] = 3_600
+
+
+class LabelDelayConfig(_StrictModel):
+    """Distribution used for observation delays.
+
+    A bare ``lognormal`` value is accepted by ``LabelObservationConfig`` and
+    resolves to these deterministic defaults.
+    """
+
+    distribution: Literal["fixed", "lognormal"] = "lognormal"
+    median_seconds: float = Field(default=86_400.0, gt=0)
+    sigma: float = Field(default=0.5, ge=0)
+    minimum_seconds: float = Field(default=0.0, ge=0)
+    maximum_seconds: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> "LabelDelayConfig":
+        for value in (self.median_seconds, self.sigma, self.minimum_seconds, self.maximum_seconds):
+            if value is not None and not math.isfinite(value):
+                raise ValueError("label delay parameters must be finite")
+        if self.maximum_seconds is not None and self.maximum_seconds < self.minimum_seconds:
+            raise ValueError("maximum_seconds must be greater than or equal to minimum_seconds")
+        if self.distribution == "fixed" and self.sigma != 0:
+            raise ValueError("fixed label delays require sigma=0")
+        return self
+
+
+class LabelObservationCondition(_StrictModel):
+    """Optional exact-match/range override for an observation probability."""
+
+    amount_min: float | None = Field(default=None, ge=0)
+    amount_max: float | None = Field(default=None, ge=0)
+    payment_rail: str | None = None
+    fraud_type: str | None = None
+    customer_segment: str | None = None
+    alert_severity: str | None = None
+    campaign_id: str | None = None
+    investigation_rate: float | None = Field(default=None, ge=0, le=1)
+    delay: LabelDelayConfig | None = None
+
+    @model_validator(mode="after")
+    def validate_condition(self) -> "LabelObservationCondition":
+        if (
+            self.amount_min is None
+            and self.amount_max is None
+            and all(
+                value is None
+                for value in (
+                    self.payment_rail,
+                    self.fraud_type,
+                    self.customer_segment,
+                    self.alert_severity,
+                    self.campaign_id,
+                )
+            )
+        ):
+            raise ValueError("observation conditions must constrain at least one field")
+        if (
+            self.amount_min is not None
+            and self.amount_max is not None
+            and self.amount_max < self.amount_min
+        ):
+            raise ValueError("condition amount_max must be greater than or equal to amount_min")
+        if self.investigation_rate is None and self.delay is None:
+            raise ValueError("observation conditions require a rate or delay override")
+        return self
+
+
+class LabelObservationConfig(_StrictModel):
+    """Explicit deterministic observation policy for Milestone 17."""
+
+    enabled: bool = False
+    investigation_rate: float = Field(default=0.70, ge=0, le=1)
+    missing_fraud_rate: float = Field(default=0.05, ge=0, le=1)
+    preliminary_error_rate: float = Field(default=0.02, ge=0, le=1)
+    correction_rate: float = Field(default=0.01, ge=0, le=1)
+    reopening_rate: float = Field(default=0.0, ge=0, le=1)
+    confirmation_delay: LabelDelayConfig = Field(default_factory=LabelDelayConfig)
+    correction_delay: LabelDelayConfig = Field(
+        default_factory=lambda: LabelDelayConfig(
+            distribution="fixed", median_seconds=86_400.0, sigma=0.0
+        )
+    )
+    reopening_delay: LabelDelayConfig = Field(
+        default_factory=lambda: LabelDelayConfig(
+            distribution="fixed", median_seconds=86_400.0, sigma=0.0
+        )
+    )
+    conditions: tuple[LabelObservationCondition, ...] = ()
+
+    @field_validator("confirmation_delay", "correction_delay", "reopening_delay", mode="before")
+    @classmethod
+    def accept_compact_delay(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return {"distribution": value, "sigma": 0.0 if value == "fixed" else 0.5}
+        return value
+
+    @model_validator(mode="after")
+    def validate_observation_policy(self) -> "LabelObservationConfig":
+        values = (
+            self.investigation_rate,
+            self.missing_fraud_rate,
+            self.preliminary_error_rate,
+            self.correction_rate,
+            self.reopening_rate,
+        )
+        if any(not math.isfinite(value) for value in values):
+            raise ValueError("observation probabilities must be finite")
+        if self.correction_rate > 0 and self.investigation_rate == 0:
+            raise ValueError("correction_rate requires a positive investigation_rate")
+        if self.reopening_rate > 0 and self.correction_rate == 0:
+            raise ValueError("reopening_rate requires a positive correction_rate")
+        return self
+
+
+class ScaleConfig(_StrictModel):
+    """Opt-in deterministic large-run execution controls for Milestone 18."""
+
+    profile: ScaleProfile | None = None
+    shard_count: Annotated[int, Field(ge=1)] = 1
+    chunk_size: Annotated[int, Field(ge=1)] = 10_000
+    worker_count: Annotated[int, Field(ge=1)] = 1
+    output_batch_size: Annotated[int, Field(ge=1)] = 10_000
+    checkpoint_frequency_chunks: Annotated[int, Field(ge=1)] = 1
+    partition_mapping: PartitionMapping = "stable_hash_v1"
+
+    @property
+    def enabled(self) -> bool:
+        return self.profile is not None
+
+    @property
+    def target_logical_events(self) -> int | None:
+        return SCALE_PROFILE_TARGETS.get(self.profile) if self.profile is not None else None
+
+    @model_validator(mode="after")
+    def validate_scale_controls(self) -> "ScaleConfig":
+        if self.profile is None and (
+            self.shard_count != 1
+            or self.chunk_size != 10_000
+            or self.worker_count != 1
+            or self.output_batch_size != 10_000
+            or self.checkpoint_frequency_chunks != 1
+            or self.partition_mapping != "stable_hash_v1"
+        ):
+            raise ValueError("scale controls require an enabled scale profile")
+        if self.output_batch_size > self.chunk_size:
+            raise ValueError("output_batch_size must not exceed chunk_size")
+        return self
 
 
 class OutageConfig(_StrictModel):
@@ -1646,6 +1803,8 @@ class SimulationRunConfig(_StrictModel):
     pix_lifecycle: PixLifecycleConfig = Field(default_factory=PixLifecycleConfig)
     fraud: FraudConfig
     fraud_workflow: FraudWorkflowConfig = Field(default_factory=FraudWorkflowConfig)
+    labels: LabelObservationConfig = Field(default_factory=LabelObservationConfig)
+    scale: ScaleConfig = Field(default_factory=ScaleConfig)
     quality: QualityConfig
     outputs: OutputsConfig
     dataset: PointInTimeDatasetConfig = Field(default_factory=PointInTimeDatasetConfig)
@@ -1669,6 +1828,15 @@ class SimulationRunConfig(_StrictModel):
     @model_validator(mode="after")
     def card_lifecycle_must_fit_simulation_window(self) -> "SimulationRunConfig":
         window_seconds = self.simulation.duration_days * 24 * 60 * 60
+        if self.labels.enabled:
+            if (
+                self.fraud_workflow.alert_probability != 1.0
+                or self.fraud_workflow.case_open_probability != 1.0
+            ):
+                raise ValueError(
+                    "labels.enabled makes labels.investigation_rate the sole "
+                    "workflow selection control"
+                )
         if (
             self.card_lifecycle.maximum_delay_seconds + CARD_EVENT_ENVELOPE_DELAY_SECONDS
             >= window_seconds
@@ -1998,6 +2166,9 @@ def _canonical_config(
         payload.pop("campaign_dynamics", None)
     if not config.calibration.enabled:
         payload.pop("calibration", None)
+    # M17 is opt-in; disabled observation must preserve legacy identities.
+    if not config.labels.enabled:
+        payload.pop("labels", None)
     else:
         # A profile path is an access detail.  The calibrated run identity is
         # anchored by the resolved profile ID, so equivalent profiles remain
@@ -2005,6 +2176,9 @@ def _canonical_config(
         calibration_payload = payload.get("calibration")
         if isinstance(calibration_payload, dict):
             calibration_payload.pop("profile", None)
+    # M18 is opt-in; disabled scale controls must preserve legacy identities.
+    if not config.scale.enabled:
+        payload.pop("scale", None)
     # Keep run identities backward-compatible when newly optional methodology
     # controls remain at their neutral defaults.
     neutral_defaults: dict[str, dict[str, object]] = {

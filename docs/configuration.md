@@ -16,6 +16,8 @@ Start from [`configs/minimal.yaml`](../configs/minimal.yaml) and change only the
 | `pix_lifecycle` | Pix-like validation, authorization, settlement, rejection, timeout, and return timing |
 | `fraud` | Scenario selection, prevalence, weights, and hard negatives |
 | `fraud_workflow` | Alerts, cases, confirmations, disputes, and label delays |
+| `labels` | Opt-in deterministic label observation, missingness, corrections, and reopenings |
+| `scale` | Opt-in large-run profiles, stable shards, chunks, workers, and checkpoints |
 | `quality` | Deterministic typed faults, delivery defects, outages, schema changes, and spikes |
 | `dataset` | Point-in-time feature and label construction |
 | `backtest` | Rolling train, validation, test, and stress windows |
@@ -26,6 +28,46 @@ Start from [`configs/minimal.yaml`](../configs/minimal.yaml) and change only the
 | `outputs` | Parquet and optional integration outputs |
 
 Unknown fields and invalid ranges are rejected during validation. That strict boundary is intentional: a run should fail before it produces ambiguous data.
+
+## Label observation (M17)
+
+Label observation is disabled by default and therefore does not change legacy run bytes or identities. Enable it to model selection-dependent discovery and versioned labels:
+
+```yaml
+labels:
+  enabled: true
+  investigation_rate: 0.70
+  missing_fraud_rate: 0.05
+  preliminary_error_rate: 0.02
+  correction_rate: 0.01
+  confirmation_delay: lognormal
+```
+
+Enabled runs write append-only `label_observations/<id>/observable/observed_labels.parquet` and the oracle-only `label_history.parquet`. PIT rows resolve the greatest label version whose `label_available_at` is no later than `prediction_time`; immature or missing labels follow `dataset.unresolved_labels`. `fraud_workflow` continues to provide alert and case timing, while `labels.investigation_rate` is the sole enabled-run selection control.
+
+## Large-scale generation (M18)
+
+Scale generation reuses the canonical simulator and is disabled by default. Profiles target 100k, 1M, 10M, 100M, and 1B logical events. Stable shard IDs and hierarchical seed streams make IDs, timestamps, scenario semantics, financial state, schemas, and partition fingerprints independent of worker scheduling. Chunked Parquet output is bounded by `chunk_size` and `output_batch_size`; completed chunks are recorded in an atomic checkpoint manifest.
+
+```yaml
+scale:
+  profile: small
+  shard_count: 4
+  chunk_size: 1000
+  worker_count: 2
+  output_batch_size: 1000
+  checkpoint_frequency_chunks: 1
+  partition_mapping: stable_hash_v1
+```
+
+Run and resume a scale profile with:
+
+```bash
+fraudtwin generate configs/scale-1b.yaml --workers 16 --checkpoint-dir .fraudtwin/run-1b
+fraudtwin resume .fraudtwin/run-1b
+```
+
+The billion profile is a published benchmark target for suitable documented hardware; it does not require Kafka, Spark, or cloud infrastructure merely to demonstrate generator scalability. A completed run records partition checksums, canonical fingerprints, and cross-partition reconciliation results.
 
 ## Reference calibration
 

@@ -1,4 +1,4 @@
-__version__ = "0.19.0"
+__version__ = "0.23.0"
 
 from fraudtwin.calibration import (  # noqa: E402
     CalibrationMetric,
@@ -56,7 +56,12 @@ from fraudtwin.difficulty import (  # noqa: E402
     apply_difficulty,
     resolve_difficulty,
 )
-from fraudtwin.generation import GeneratedData, GeneratedRun, generate  # noqa: E402
+from fraudtwin.generation import (  # noqa: E402
+    GeneratedData,
+    GeneratedRun,
+    generate,
+    resume_generation,
+)
 from fraudtwin.graph import (  # noqa: E402
     GraphCampaign,
     GraphDataset,
@@ -70,6 +75,30 @@ from fraudtwin.graph import (  # noqa: E402
     validate_graph,
     validate_graph_scenarios,
     write_graph,
+)
+from fraudtwin.label_observation import (  # noqa: E402
+    apply_label_observation,
+    reconstruct_label_history,
+    resolve_label_observation,
+    validate_label_observation,
+    visible_label_at,
+)
+from fraudtwin.scale import (  # noqa: E402
+    ChunkDescriptor,
+    PartitionCompletion,
+    ReconciliationResult,
+    ScaleCheckpoint,
+    ScalePlan,
+    ShardDescriptor,
+    checkpoint_fingerprint,
+    create_scale_stream_rng,
+    iter_chunks,
+    load_checkpoint,
+    partition_id,
+    partition_index,
+    reconcile_logical_ids,
+    resolve_scale_plan,
+    write_checkpoint,
 )
 
 __all__ = [
@@ -99,6 +128,27 @@ __all__ = [
     "GeneratedData",
     "GeneratedRun",
     "generate",
+    "resume_generation",
+    "ScalePlan",
+    "ShardDescriptor",
+    "ChunkDescriptor",
+    "PartitionCompletion",
+    "ReconciliationResult",
+    "ScaleCheckpoint",
+    "resolve_scale_plan",
+    "partition_index",
+    "partition_id",
+    "iter_chunks",
+    "reconcile_logical_ids",
+    "write_checkpoint",
+    "load_checkpoint",
+    "checkpoint_fingerprint",
+    "create_scale_stream_rng",
+    "apply_label_observation",
+    "reconstruct_label_history",
+    "resolve_label_observation",
+    "validate_label_observation",
+    "visible_label_at",
     "DynamicCampaignDataset",
     "evolve_campaigns",
     "register_intensity_model",
