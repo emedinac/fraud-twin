@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.23.0 — Large-Scale Deterministic Generation
+
+- Added opt-in deterministic scale profiles with stable sharding, hierarchical seed streams, bounded chunked Parquet output, parallel scheduling, checkpoint/resume, partition fingerprints, and cross-partition reconciliation.
+- Added the `fraudtwin resume` workflow and scale execution metadata while preserving canonical M1–M17 generation semantics.
+
 ## 0.22.0 — Label Observation Engine
 
 - Added deterministic, opt-in label observation with selective investigation, missing fraud, preliminary errors, corrections, reopenings, immutable history, and PIT-safe version resolution.

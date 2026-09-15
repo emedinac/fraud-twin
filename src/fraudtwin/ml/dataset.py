@@ -30,6 +30,7 @@ from fraudtwin.domain import (
     CampaignTopologyMutation,
     CampaignTransition,
     Card,
+    CaseReopening,
     Customer,
     CustomerDispute,
     DelayedFraudLabel,
@@ -47,11 +48,13 @@ from fraudtwin.domain import (
     GraphHyperedgeMembership,
     GraphPattern,
     Institution,
+    LabelCorrection,
     LabelObservation,
     LabelVersion,
     LedgerEntry,
     Merchant,
     NetworkEndpoint,
+    ObservationProvenance,
     Payment,
     PaymentEvent,
     PixKey,
@@ -349,7 +352,42 @@ def _read_label_observations(run_dir: Path, manifest: RunManifest) -> tuple[Labe
     if not isinstance(raw_stream_ids, list):
         raise ValueError("label observation stream_ids must be a list")
     stream_ids = tuple(str(item) for item in raw_stream_ids)
-    return tuple(
+    corrections_path = root / "oracle" / "label_corrections.parquet"
+    corrections = _read_optional_models(corrections_path, LabelCorrection)
+    corrections_by_observation: dict[str, list[LabelCorrection]] = {}
+    for correction in corrections:
+        corrections_by_observation.setdefault(correction.observation_id, []).append(correction)
+    reopenings_path = root / "oracle" / "case_reopenings.parquet"
+    reopenings = _read_optional_models(reopenings_path, CaseReopening)
+    reopenings_by_observation: dict[str, list[CaseReopening]] = {}
+    for reopening in reopenings:
+        reopenings_by_observation.setdefault(reopening.observation_id, []).append(reopening)
+    provenance_path = root / "oracle" / "observation_provenance.parquet"
+    provenance_by_observation: dict[str, ObservationProvenance] = {}
+    if provenance_path.is_file():
+        try:
+            provenance_rows = pl.read_parquet(provenance_path).to_dicts()
+            for row in provenance_rows:
+                observation_id = str(row.pop("observation_id"))
+                if observation_id in provenance_by_observation:
+                    raise ValueError(f"duplicate observation provenance: {observation_id}")
+                provenance_by_observation[observation_id] = ObservationProvenance.model_validate(
+                    row
+                )
+        except (FileNotFoundError, OSError, KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"invalid generated source {provenance_path}: {exc}") from exc
+    observation_ids = {f"OBS-{fraud_record_id}" for fraud_record_id in grouped}
+    unknown_artifact_ids = (
+        set(corrections_by_observation)
+        | set(reopenings_by_observation)
+        | set(provenance_by_observation)
+    ) - observation_ids
+    if unknown_artifact_ids:
+        raise ValueError(
+            "label observation artifact references unknown observations: "
+            + ", ".join(sorted(unknown_artifact_ids))
+        )
+    observations = tuple(
         LabelObservation(
             observation_id=f"OBS-{fraud_record_id}",
             fraud_record_id=fraud_record_id,
@@ -359,11 +397,20 @@ def _read_label_observations(run_dir: Path, manifest: RunManifest) -> tuple[Labe
             versions=tuple(sorted(items, key=lambda item: item.label_version)),
             final_label_version=max(item.label_version for item in items),
             policy_hash=policy_hash,
-            stream_ids=stream_ids,
+            stream_ids=(
+                provenance_by_observation[f"OBS-{fraud_record_id}"].stream_ids
+                if f"OBS-{fraud_record_id}" in provenance_by_observation
+                else stream_ids
+            ),
             simulation_run_id=items[0].simulation_run_id,
+            corrections=tuple(corrections_by_observation.get(f"OBS-{fraud_record_id}", ())),
+            reopenings=tuple(reopenings_by_observation.get(f"OBS-{fraud_record_id}", ())),
+            provenance=provenance_by_observation.get(f"OBS-{fraud_record_id}"),
         )
         for fraud_record_id, items in sorted(grouped.items())
     )
+    validate_label_observation(observations)
+    return observations
 
 
 def _read_final_observed_labels(

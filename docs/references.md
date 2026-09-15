@@ -25,6 +25,7 @@ These references informed FraudTwin’s design. The repository does not bundle c
 ## Graph fraud and research papers
 
 - [Santander Gen-Fraud-Graph](https://github.com/SantanderAI/gen-fraud-graph) *(repository)* - informed reproducible financial graph generation, fraud-ring patterns, graph exports, and benchmark-oriented scale considerations.
+- [NumPy parallel random generation](https://numpy.org/doc/stable/reference/random/parallel.html) and [`SeedSequence`](https://numpy.org/doc/stable/reference/random/seed_sequence.html) *(technical references)* - informed hierarchical deterministic streams for independent scale workers.
 - [IBM AMLSim](https://github.com/IBM/AMLSim) *(repository)* - provided a comparison point for multi-agent synthetic banking graphs and known AML/fraud patterns.
 - Haghighi et al., [*Beyond pairwise relationships: a transformer-based hypergraph learning approach for fraud detection*](https://doi.org/10.1007/s10115-025-02476-5) *(paper)* - motivated higher-order graph relations and the separation of observable structure from latent fraud truth.
 - Prasetya et al., [*A multi-rounded adversarial scenario for graph-based promo fraud detection*](https://doi.org/10.1007/s13278-025-01566-0) *(paper)* - informed evolving, multi-round difficulty and adversarial graph stress controls.

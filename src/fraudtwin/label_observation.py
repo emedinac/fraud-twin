@@ -31,10 +31,13 @@ from fraudtwin.seed import create_stream_rng
 
 STREAM_NAMES = (
     "investigation-selection",
+    "missing",
     "confirmation-delay",
     "preliminary-error",
     "correction",
+    "correction-delay",
     "reopening",
+    "reopening-delay",
 )
 
 
@@ -144,7 +147,7 @@ def apply_label_observation(
             if condition and condition.investigation_rate is not None
             else policy.investigation_rate
         )
-        selected = _rng(root_seed, STREAM_NAMES[0], record.fraud_record_id).random() <= rate
+        selected = _rng(root_seed, STREAM_NAMES[0], record.fraud_record_id).random() < rate
         versions: list[LabelVersion] = [
             LabelVersion(
                 label_version_id=f"OBS-{record.fraud_record_id}-V0",
@@ -169,8 +172,8 @@ def apply_label_observation(
         if selected:
             missing = (
                 record.fraud_truth
-                and _rng(root_seed, "missing", record.fraud_record_id).random()
-                <= policy.missing_fraud_rate
+                and _rng(root_seed, STREAM_NAMES[1], record.fraud_record_id).random()
+                < policy.missing_fraud_rate
             )
             if not missing:
                 delay_settings = (
@@ -179,15 +182,15 @@ def apply_label_observation(
                     else policy.confirmation_delay
                 )
                 available_at = record.occurred_at + _delay(
-                    _rng(root_seed, STREAM_NAMES[1], record.fraud_record_id),
+                    _rng(root_seed, STREAM_NAMES[2], record.fraud_record_id),
                     delay_settings,
                 )
                 observed: Literal["FRAUD", "LEGITIMATE"] = (
                     "FRAUD" if record.fraud_truth else "LEGITIMATE"
                 )
                 errored = (
-                    _rng(root_seed, STREAM_NAMES[2], record.fraud_record_id).random()
-                    <= policy.preliminary_error_rate
+                    _rng(root_seed, STREAM_NAMES[3], record.fraud_record_id).random()
+                    < policy.preliminary_error_rate
                 )
                 if errored:
                     observed = "LEGITIMATE" if observed == "FRAUD" else "FRAUD"
@@ -204,20 +207,20 @@ def apply_label_observation(
                     )
                 )
                 if (
-                    _rng(root_seed, STREAM_NAMES[3], record.fraud_record_id).random()
-                    <= policy.correction_rate
+                    _rng(root_seed, STREAM_NAMES[4], record.fraud_record_id).random()
+                    < policy.correction_rate
                 ):
                     corrected_at = available_at + _delay(
-                        _rng(root_seed, "correction-delay", record.fraud_record_id),
+                        _rng(root_seed, STREAM_NAMES[5], record.fraud_record_id),
                         policy.correction_delay,
                     )
                     reopened = (
-                        _rng(root_seed, STREAM_NAMES[4], record.fraud_record_id).random()
-                        <= policy.reopening_rate
+                        _rng(root_seed, STREAM_NAMES[6], record.fraud_record_id).random()
+                        < policy.reopening_rate
                     )
                     if reopened:
                         reopened_at = corrected_at + _delay(
-                            _rng(root_seed, "reopening-delay", record.fraud_record_id),
+                            _rng(root_seed, STREAM_NAMES[7], record.fraud_record_id),
                             policy.reopening_delay,
                         )
                         versions.append(
@@ -243,7 +246,7 @@ def apply_label_observation(
                             )
                         )
                         corrected_at = reopened_at
-                    final_version = len(versions)
+                    final_version = versions[-1].label_version + 1
                     versions.append(
                         versions[-1].model_copy(
                             update={
@@ -339,6 +342,7 @@ def validate_label_observation(observations: Iterable[LabelObservation]) -> None
     """Validate references, ordering, and immutable truth invariants."""
 
     seen: set[str] = set()
+    seen_version_ids: set[str] = set()
     for observation in observations:
         if observation.observation_id in seen:
             raise ValueError(f"duplicate observation ID: {observation.observation_id}")
@@ -346,9 +350,25 @@ def validate_label_observation(observations: Iterable[LabelObservation]) -> None
         if not observation.versions or observation.versions[0].label_version != 0:
             raise ValueError("observation history must begin at version zero")
         previous_at: datetime | None = None
+        versions_by_number: dict[int, LabelVersion] = {}
         for expected, version in enumerate(observation.versions):
             if version.label_version != expected:
                 raise ValueError(f"non-monotonic label versions for {observation.observation_id}")
+            if version.label_version_id in seen_version_ids:
+                raise ValueError(f"duplicate label version ID: {version.label_version_id}")
+            expected_version_id = f"{observation.observation_id}-V{version.label_version}"
+            if version.label_version_id != expected_version_id:
+                raise ValueError(
+                    f"label version {version.label_version_id} references another observation"
+                )
+            seen_version_ids.add(version.label_version_id)
+            versions_by_number[version.label_version] = version
+            if version.fraud_record_id != observation.fraud_record_id:
+                raise ValueError("label version references another fraud record")
+            if version.payment_id != observation.payment_id:
+                raise ValueError("label version references another payment")
+            if version.simulation_run_id != observation.simulation_run_id:
+                raise ValueError("label version references another simulation run")
             if version.truth_label != observation.truth_label:
                 raise ValueError("latent truth changed in label history")
             if version.label_available_at is not None:
@@ -357,14 +377,46 @@ def validate_label_observation(observations: Iterable[LabelObservation]) -> None
                 previous_at = version.label_available_at
         if observation.final_label_version != observation.versions[-1].label_version:
             raise ValueError("final label version does not match history")
+        if observation.provenance is not None:
+            if observation.provenance.policy_hash != observation.policy_hash:
+                raise ValueError("observation provenance has another policy hash")
+            if observation.provenance.stream_ids != observation.stream_ids:
+                raise ValueError("observation provenance has different stream IDs")
+            if observation.provenance.source_run_id != observation.simulation_run_id:
+                raise ValueError("observation provenance references another simulation run")
+        correction_ids: set[str] = set()
         for correction in observation.corrections:
+            if correction.correction_id in correction_ids:
+                raise ValueError(f"duplicate correction ID: {correction.correction_id}")
+            correction_ids.add(correction.correction_id)
             if correction.observation_id != observation.observation_id:
                 raise ValueError("correction references another observation")
+            if not (
+                0
+                <= correction.from_version
+                < correction.to_version
+                <= observation.final_label_version
+            ):
+                raise ValueError("correction references an invalid label version range")
             if correction.to_version != observation.final_label_version:
                 raise ValueError("correction does not target the final label version")
+            if correction.truth_label != observation.truth_label:
+                raise ValueError("correction changes latent truth")
+            target = versions_by_number[correction.to_version]
+            if target.observed_label != correction.observed_label:
+                raise ValueError("correction label does not match its target version")
+        reopening_ids: set[str] = set()
         for reopening in observation.reopenings:
+            if reopening.reopening_id in reopening_ids:
+                raise ValueError(f"duplicate reopening ID: {reopening.reopening_id}")
+            reopening_ids.add(reopening.reopening_id)
             if reopening.observation_id != observation.observation_id:
                 raise ValueError("reopening references another observation")
+            if not 1 <= reopening.label_version <= observation.final_label_version:
+                raise ValueError("reopening references an invalid label version")
+            version = versions_by_number[reopening.label_version]
+            if version.label_state != "REOPENED":
+                raise ValueError("reopening does not reference a reopened label version")
 
 
 __all__ = [

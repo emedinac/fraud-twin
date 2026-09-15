@@ -17,6 +17,7 @@ def _drop_inactive_metadata(data: dict[str, object]) -> dict[str, object]:
         "counterfactual",
         "campaign_dynamics",
         "calibration",
+        "scale",
         "label_observation",
     ):
         if data.get(field) is None:
@@ -60,6 +61,7 @@ class RunManifest(BaseModel):
     counterfactual: dict[str, object] | None = None
     campaign_dynamics: dict[str, object] | None = None
     calibration: dict[str, object] | None = None
+    scale: dict[str, object] | None = None
     label_observation: dict[str, object] | None = None
 
     @model_serializer(mode="wrap")
@@ -212,6 +214,8 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         resolved.pop("calibration", None)
     if not config.labels.enabled:
         resolved.pop("labels", None)
+    if not config.scale.enabled:
+        resolved.pop("scale", None)
     return RunManifest(
         run_id=f"RUN-{run_hash}",
         generator_version=__version__,

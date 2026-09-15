@@ -7,11 +7,14 @@ import pytest
 from pydantic import ValidationError
 
 from fraudtwin.config import SimulationRunConfig, load_config
+from fraudtwin.generation import generate
 from fraudtwin.label_observation import (
     apply_label_observation,
     reconstruct_label_history,
+    validate_label_observation,
     visible_label_at,
 )
+from fraudtwin.ml import load_generated_run
 from fraudtwin.ml.dataset import PointInTimeDatasetBuilder
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 
@@ -86,3 +89,41 @@ def test_m17_standalone_policy_requires_seed() -> None:
             behavior.fraud_records,
             behavior.payments,
         )
+
+
+def test_m17_validation_rejects_inconsistent_and_duplicate_version_ids() -> None:
+    config = _enabled_config()
+    entities = EntityGenerator(config).generate()
+    behavior = BehaviorGenerator(config, entities).generate()
+    observation = behavior.label_observations[0]
+
+    mismatched = observation.versions[0].model_copy(update={"payment_id": "PAY-other"})
+    with pytest.raises(ValueError, match="another payment"):
+        validate_label_observation((observation.model_copy(update={"versions": (mismatched,)}),))
+
+    duplicate = observation.versions[1].model_copy(
+        update={"label_version_id": observation.versions[0].label_version_id}
+    )
+    with pytest.raises(ValueError, match="duplicate label version ID"):
+        validate_label_observation(
+            (
+                observation.model_copy(
+                    update={
+                        "versions": (observation.versions[0], duplicate, *observation.versions[2:])
+                    }
+                ),
+            )
+        )
+
+
+def test_m17_sidecar_round_trips_typed_history_artifacts(tmp_path: Path) -> None:
+    config = _enabled_config()
+    source = generate(config)
+    generated = generate(config, write=True, output_dir=tmp_path)
+    _, loaded, _ = load_generated_run(generated.run_dir)
+
+    assert loaded.label_observations == source.behavior.label_observations
+    sidecar = next((tmp_path / generated.run_id / "label_observations").iterdir())
+    assert (sidecar / "oracle" / "label_corrections.parquet").is_file()
+    assert (sidecar / "oracle" / "case_reopenings.parquet").is_file()
+    assert (sidecar / "oracle" / "observation_provenance.parquet").is_file()

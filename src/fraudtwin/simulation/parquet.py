@@ -466,6 +466,33 @@ FINAL_OBSERVED_LABEL_SCHEMA: dict[str, Any] = {
     "simulation_run_id": pl.Utf8,
 }
 
+LABEL_CORRECTION_SCHEMA: dict[str, Any] = {
+    "correction_id": pl.Utf8,
+    "observation_id": pl.Utf8,
+    "from_version": pl.Int64,
+    "to_version": pl.Int64,
+    "corrected_at": _UTC_TIMESTAMP,
+    "observed_label": pl.Utf8,
+    "truth_label": pl.Boolean,
+    "causation_id": pl.Utf8,
+}
+
+CASE_REOPENING_SCHEMA: dict[str, Any] = {
+    "reopening_id": pl.Utf8,
+    "observation_id": pl.Utf8,
+    "label_version": pl.Int64,
+    "reopened_at": _UTC_TIMESTAMP,
+    "reason": pl.Utf8,
+    "causation_id": pl.Utf8,
+}
+
+OBSERVATION_PROVENANCE_SCHEMA: dict[str, Any] = {
+    "observation_id": pl.Utf8,
+    "policy_hash": pl.Utf8,
+    "stream_ids": pl.List(pl.Utf8),
+    "source_run_id": pl.Utf8,
+}
+
 BEHAVIOR_SCHEMAS: dict[str, dict[str, Any]] = {
     "behavior_profiles": BEHAVIOR_PROFILE_SCHEMA,
     "payments": PAYMENT_SCHEMA,
@@ -863,6 +890,26 @@ def write_label_observation_sidecar(
     history = tuple(version for item in observations for version in item.versions)
     _write_table(history, LABEL_VERSION_SCHEMA, oracle / "label_history.parquet")
     _write_table(finals, FINAL_OBSERVED_LABEL_SCHEMA, observable / "observed_labels.parquet")
+    corrections = tuple(correction for item in observations for correction in item.corrections)
+    if corrections:
+        _write_table(corrections, LABEL_CORRECTION_SCHEMA, oracle / "label_corrections.parquet")
+    reopenings = tuple(reopening for item in observations for reopening in item.reopenings)
+    if reopenings:
+        _write_table(reopenings, CASE_REOPENING_SCHEMA, oracle / "case_reopenings.parquet")
+    provenance_rows = [
+        {
+            "observation_id": item.observation_id,
+            **item.provenance.model_dump(mode="python"),
+        }
+        for item in observations
+        if item.provenance is not None
+    ]
+    if provenance_rows:
+        pl.DataFrame(
+            provenance_rows,
+            schema=OBSERVATION_PROVENANCE_SCHEMA,
+            orient="row",
+        ).write_parquet(oracle / "observation_provenance.parquet")
     checksums = {
         str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted(root.rglob("*"))
@@ -873,11 +920,20 @@ def write_label_observation_sidecar(
         "source_run_id": source_run_id,
         "configuration_hash": policy_hash,
         "seed_stream_ids": list(stream_ids),
-        "schema_versions": {"label_history": "1", "observed_labels": "1"},
+        "schema_versions": {
+            "label_history": "1",
+            "observed_labels": "1",
+            "label_corrections": "1",
+            "case_reopenings": "1",
+            "observation_provenance": "1",
+        },
         "schema_fingerprint": sha256_json(
             {
                 "label_history": list(LABEL_VERSION_SCHEMA),
                 "observed_labels": list(FINAL_OBSERVED_LABEL_SCHEMA),
+                "label_corrections": list(LABEL_CORRECTION_SCHEMA),
+                "case_reopenings": list(CASE_REOPENING_SCHEMA),
+                "observation_provenance": list(OBSERVATION_PROVENANCE_SCHEMA),
             }
         ),
         "output_fingerprint": sha256_json(checksums),

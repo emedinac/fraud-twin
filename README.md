@@ -47,6 +47,7 @@ Tutorials will be added under `docs/` as the workflows settle. Each tutorial sho
 - Opt-in dynamic fraud campaigns with phase evolution, rail movement, topology mutations, and oracle sidecars.
 - Reference calibration profiles that tune aggregate amounts, timing, balances, activity, and merchant behavior without copying reference rows.
 - An opt-in label observation engine for selective, delayed, missing, preliminary, corrected, and reopened labels with point-in-time-safe history.
+- Opt-in large-scale generation profiles with stable sharding, bounded chunked Parquet output, parallel scheduling, checkpoint/resume, partition fingerprints, and cross-partition reconciliation.
 
 FraudTwin is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and timing before introducing a larger streaming or production stack.
 
@@ -76,6 +77,15 @@ poetry run fraudtwin generate configs/minimal.yaml \
 ```
 
 The minimal configuration creates 10 customers, 10 behavior profiles, and 100 target payments. Fraud is disabled in this baseline; enable it in a copied YAML file or start with a fixture under `configs/benchmarks/`.
+
+For deterministic large-run generation, use a scale profile such as `configs/scale-1b.yaml`:
+
+```bash
+poetry run fraudtwin generate configs/scale-1b.yaml --workers 16 --checkpoint-dir .fraudtwin/run-1b
+poetry run fraudtwin resume .fraudtwin/run-1b
+```
+
+Scale execution uses the same canonical simulator. Worker scheduling does not change logical IDs or partition fingerprints, and checkpoints support deterministic retry/resume. The billion profile is a documented benchmark target for suitable hardware, not a test-suite requirement.
 
 ## Generated output
 

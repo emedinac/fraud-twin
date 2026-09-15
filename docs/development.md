@@ -59,6 +59,8 @@ poetry run fraudtwin validate-ledger \
   --output-dir /tmp/fraudtwin-dev
 ```
 
+Scale tests must use at most 1,000 logical events per fixture. Validate scale behavior with small deterministic runs and simulated interruption/resume; do not execute the billion profile in the test suite.
+
 ## Working on a feature
 
 1. Read the relevant module and its nearest tests before editing implementation code.

@@ -23,7 +23,7 @@ FIXTURE = Path("configs/benchmarks/m15-campaign-dynamics-v1.yaml")
 
 
 def test_m15_is_strict_and_neutral_identity_is_unchanged() -> None:
-    assert __version__ == "0.22.0"
+    assert __version__ == "0.23.0"
     base = load_config(Path("configs/minimal.yaml"))
     neutral = base.model_copy(update={"campaign_dynamics": CampaignDynamicsConfig()})
     assert config_hash(base) == config_hash(neutral)
@@ -130,9 +130,9 @@ def test_m15_dynamic_graph_truth_has_membership_and_hyperedge_closure() -> None:
     assert behavior.campaign_dynamics is not None
     assert any(item.campaign_id for item in behavior.graph_memberships)
     assert any(item.hyperedge_id for item in behavior.graph_hyperedge_memberships)
-    assert {item.hyperedge_id for item in behavior.graph_hyperedge_memberships}.issubset({
-        item.hyperedge_id for item in behavior.graph_hyperedges
-    })
+    assert {item.hyperedge_id for item in behavior.graph_hyperedge_memberships}.issubset(
+        {item.hyperedge_id for item in behavior.graph_hyperedges}
+    )
 
 
 def test_m15_sidecar_records_are_loaded_and_merged(tmp_path: Path) -> None:
@@ -164,9 +164,9 @@ def test_m15_sidecar_records_are_loaded_and_merged(tmp_path: Path) -> None:
     assert expected_payments.issubset({item.payment_id for item in loaded.payments})
     assert any(item.payment_id.startswith("M15-") for item in loaded.payment_events)
     assert loaded.campaign_dynamics is not None
-    assert {item.campaign_id for item in dynamic.graph.campaigns}.issubset({
-        item.campaign_id for item in loaded.graph_campaigns
-    })
+    assert {item.campaign_id for item in dynamic.graph.campaigns}.issubset(
+        {item.campaign_id for item in loaded.graph_campaigns}
+    )
 
 
 def test_m15_custom_transition_registration_is_public() -> None:

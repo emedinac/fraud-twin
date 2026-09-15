@@ -17,6 +17,15 @@ UnresolvedLabelPolicy = Literal["exclude", "include"]
 MinimumLabelMaturityPolicy = Literal["exclude", "include_unresolved"]
 TrainWindowMode = Literal["fixed", "expanding"]
 RegimeLabelPolicy = Literal["original", "unobserved"]
+ScaleProfile = Literal["small", "medium", "large", "xlarge", "billion"]
+PartitionMapping = Literal["stable_hash_v1"]
+SCALE_PROFILE_TARGETS: dict[ScaleProfile, int] = {
+    "small": 100_000,
+    "medium": 1_000_000,
+    "large": 10_000_000,
+    "xlarge": 100_000_000,
+    "billion": 1_000_000_000,
+}
 FeatureWindowName = Literal[
     "transaction_count_1m",
     "transaction_count_5m",
@@ -460,6 +469,41 @@ class LabelObservationConfig(_StrictModel):
             raise ValueError("correction_rate requires a positive investigation_rate")
         if self.reopening_rate > 0 and self.correction_rate == 0:
             raise ValueError("reopening_rate requires a positive correction_rate")
+        return self
+
+
+class ScaleConfig(_StrictModel):
+    """Opt-in deterministic large-run execution controls for Milestone 18."""
+
+    profile: ScaleProfile | None = None
+    shard_count: Annotated[int, Field(ge=1)] = 1
+    chunk_size: Annotated[int, Field(ge=1)] = 10_000
+    worker_count: Annotated[int, Field(ge=1)] = 1
+    output_batch_size: Annotated[int, Field(ge=1)] = 10_000
+    checkpoint_frequency_chunks: Annotated[int, Field(ge=1)] = 1
+    partition_mapping: PartitionMapping = "stable_hash_v1"
+
+    @property
+    def enabled(self) -> bool:
+        return self.profile is not None
+
+    @property
+    def target_logical_events(self) -> int | None:
+        return SCALE_PROFILE_TARGETS.get(self.profile) if self.profile is not None else None
+
+    @model_validator(mode="after")
+    def validate_scale_controls(self) -> "ScaleConfig":
+        if self.profile is None and (
+            self.shard_count != 1
+            or self.chunk_size != 10_000
+            or self.worker_count != 1
+            or self.output_batch_size != 10_000
+            or self.checkpoint_frequency_chunks != 1
+            or self.partition_mapping != "stable_hash_v1"
+        ):
+            raise ValueError("scale controls require an enabled scale profile")
+        if self.output_batch_size > self.chunk_size:
+            raise ValueError("output_batch_size must not exceed chunk_size")
         return self
 
 
@@ -1760,6 +1804,7 @@ class SimulationRunConfig(_StrictModel):
     fraud: FraudConfig
     fraud_workflow: FraudWorkflowConfig = Field(default_factory=FraudWorkflowConfig)
     labels: LabelObservationConfig = Field(default_factory=LabelObservationConfig)
+    scale: ScaleConfig = Field(default_factory=ScaleConfig)
     quality: QualityConfig
     outputs: OutputsConfig
     dataset: PointInTimeDatasetConfig = Field(default_factory=PointInTimeDatasetConfig)
@@ -2131,6 +2176,9 @@ def _canonical_config(
         calibration_payload = payload.get("calibration")
         if isinstance(calibration_payload, dict):
             calibration_payload.pop("profile", None)
+    # M18 is opt-in; disabled scale controls must preserve legacy identities.
+    if not config.scale.enabled:
+        payload.pop("scale", None)
     # Keep run identities backward-compatible when newly optional methodology
     # controls remain at their neutral defaults.
     neutral_defaults: dict[str, dict[str, object]] = {
