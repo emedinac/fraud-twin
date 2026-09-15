@@ -1,4 +1,7 @@
 import json
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal, cast
@@ -48,6 +51,7 @@ from fraudtwin.ml import (
     write_evaluation,
     write_point_in_time_dataset,
 )
+from fraudtwin.observability import MetricsSession
 from fraudtwin.postgres import database_status, migrate_database
 from fraudtwin.quality_benchmark import report_run, run_quality_benchmark
 from fraudtwin.replay import ReplayOrder, replay_run, write_replay
@@ -473,6 +477,22 @@ def _load_or_exit(
         raise typer.Exit(code=1) from exc
 
 
+@contextmanager
+def _metrics_session(
+    host: str, port: int | None, hold_seconds: float
+) -> Iterator[MetricsSession | None]:
+    """Start optional metrics and always release its short-lived server."""
+
+    metrics = MetricsSession(host, port, hold_seconds) if port is not None else None
+    if metrics is not None:
+        metrics.start()
+    try:
+        yield metrics
+    finally:
+        if metrics is not None:
+            metrics.finish()
+
+
 def _parse_optional_timestamp(value: str | None) -> datetime | None:
     """Parse an optional CLI timestamp, preserving ``None`` for omitted filters."""
 
@@ -502,19 +522,44 @@ def generate(
     seed: Annotated[int | None, typer.Option("--seed")] = None,
     workers: Annotated[int | None, typer.Option("--workers")] = None,
     checkpoint_dir: Annotated[Path | None, typer.Option("--checkpoint-dir")] = None,
+    metrics_host: Annotated[
+        str, typer.Option("--metrics-host", help="Address for the optional Prometheus endpoint.")
+    ] = "127.0.0.1",
+    metrics_port: Annotated[
+        int | None,
+        typer.Option("--metrics-port", min=1, max=65535, help="Enable Prometheus metrics."),
+    ] = None,
+    metrics_hold_seconds: Annotated[
+        float,
+        typer.Option(
+            "--metrics-hold-seconds",
+            min=0,
+            help="Seconds to keep /metrics available after the command completes.",
+        ),
+    ] = 15.0,
 ) -> None:
     """Validate a configuration and generate a reproducible batch dataset."""
 
     config = _load_or_exit(path, calibration_profile_override=profile)
-    result = generate_library(
-        config,
-        write=True,
-        output_dir=output_dir,
-        profile=profile,
-        seed=seed,
-        workers=workers,
-        checkpoint_dir=checkpoint_dir,
-    )
+    started = time.monotonic()
+    with _metrics_session(metrics_host, metrics_port, metrics_hold_seconds) as metrics:
+        try:
+            result = generate_library(
+                config,
+                write=True,
+                output_dir=output_dir,
+                profile=profile,
+                seed=seed,
+                workers=workers,
+                checkpoint_dir=checkpoint_dir,
+            )
+        except Exception:
+            if metrics is not None:
+                metrics.record_generator_error()
+            raise
+        else:
+            if metrics is not None:
+                metrics.observe_manifest(result.manifest, time.monotonic() - started)
     manifest = result.manifest
     entity_counts = manifest.entity_counts
     event_counts = manifest.event_counts
@@ -685,32 +730,55 @@ def validate_ledger_command(
         Path,
         typer.Option("--output-dir", help="Directory containing generated runs."),
     ] = Path("runs"),
+    metrics_host: Annotated[
+        str, typer.Option("--metrics-host", help="Address for the optional Prometheus endpoint.")
+    ] = "127.0.0.1",
+    metrics_port: Annotated[
+        int | None,
+        typer.Option("--metrics-port", min=1, max=65535, help="Enable Prometheus metrics."),
+    ] = None,
+    metrics_hold_seconds: Annotated[
+        float,
+        typer.Option(
+            "--metrics-hold-seconds",
+            min=0,
+            help="Seconds to keep /metrics available after validation.",
+        ),
+    ] = 15.0,
 ) -> None:
     """Validate transfer ledger entries for a generated run."""
 
     run_dir = output_dir / run_id
-    try:
-        accounts = tuple(
-            Account.model_validate(row)
-            for row in pl.read_parquet(run_dir / "entities" / "accounts.parquet").to_dicts()
-        )
-        payments = tuple(
-            Payment.model_validate(row)
-            for row in pl.read_parquet(run_dir / "payments" / "payments.parquet").to_dicts()
-        )
-        events = tuple(
-            PaymentEvent.model_validate(row)
-            for row in pl.read_parquet(run_dir / "payments" / "payment_events.parquet").to_dicts()
-        )
-        entries = tuple(
-            LedgerEntry.model_validate(row)
-            for row in pl.read_parquet(run_dir / "ledger" / "ledger_entries.parquet").to_dicts()
-        )
-        validate_ledger(accounts, payments, events, entries)
-    except (FileNotFoundError, OSError, ValueError) as exc:
-        typer.echo(f"Ledger validation failed: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
-    typer.echo(f"Ledger is valid for run {run_id}.")
+    with _metrics_session(metrics_host, metrics_port, metrics_hold_seconds) as metrics:
+        try:
+            accounts = tuple(
+                Account.model_validate(row)
+                for row in pl.read_parquet(run_dir / "entities" / "accounts.parquet").to_dicts()
+            )
+            payments = tuple(
+                Payment.model_validate(row)
+                for row in pl.read_parquet(run_dir / "payments" / "payments.parquet").to_dicts()
+            )
+            events = tuple(
+                PaymentEvent.model_validate(row)
+                for row in pl.read_parquet(
+                    run_dir / "payments" / "payment_events.parquet"
+                ).to_dicts()
+            )
+            entries = tuple(
+                LedgerEntry.model_validate(row)
+                for row in pl.read_parquet(run_dir / "ledger" / "ledger_entries.parquet").to_dicts()
+            )
+            validate_ledger(accounts, payments, events, entries)
+        except (FileNotFoundError, OSError, ValueError) as exc:
+            if metrics is not None:
+                metrics.record_ledger_validation(run_id, failed=True)
+            typer.echo(f"Ledger validation failed: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        else:
+            if metrics is not None:
+                metrics.record_ledger_validation(run_id, failed=False)
+            typer.echo(f"Ledger is valid for run {run_id}.")
 
 
 @graph_app.command("export")

@@ -174,6 +174,7 @@ Calibration profiles contain only deterministic statistical summaries and proven
 | PostgreSQL operational mirror | Available (optional `postgres` extra) |
 | Native Kafka streaming (optional `kafka` extra) | Available |
 | Iceberg lakehouse (optional `lakehouse` extra) | Available |
+| CLI Prometheus metrics and Grafana dashboard (optional `observability` extra) | Available |
 | Flink, feature stores, and advanced models | Planned |
 
 ## Development

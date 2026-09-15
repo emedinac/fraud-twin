@@ -1,5 +1,16 @@
 # Release notes
 
+## 0.32.0 — Milestone 27 Minimal Observability
+
+- Added optional Prometheus metrics for generated runs and ledger validation,
+  with run-level generation, fraud, error, throughput, and data-quality
+  signals.
+- Added a local Prometheus/Grafana Compose profile with provisioned dashboards,
+  loopback-only ports, explicit 15-day Prometheus retention, and required
+  non-default Grafana credentials.
+- Preserved deterministic generator identities, manifests, contracts, Kafka,
+  and Iceberg outputs; metrics are disabled unless explicitly requested.
+
 ## 0.31.0 — Milestone 26 Lakehouse
 
 - Added optional MinIO/Iceberg lakehouse publication with immutable Bronze,

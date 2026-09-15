@@ -12,6 +12,10 @@ on:
       - "poetry.lock"
       - ".github/workflows/ci.yml"
       - "docker-compose.yml"
+      - "observability/**"
+      - "docs/workflows.md"
+      - "docs/development.md"
+      - "README.md"
       - "docs/**"
 
 permissions:
@@ -48,19 +52,53 @@ jobs:
       - name: Install Poetry
         run: pipx install poetry
       - name: Install dependencies
-        run: poetry install -E postgres -E kafka
+        run: poetry install -E postgres -E kafka -E observability
       - name: Ruff lint
         run: poetry run ruff check .
       - name: Avro contract registry
         run: poetry run fraudtwin schema validate
       - name: Poetry validation
         run: poetry check --strict
+      - name: Observability Compose configuration
+        run: |
+          GRAFANA_ADMIN_PASSWORD=ci-only-password docker compose --profile observability config --quiet
       - name: Ruff format
         run: poetry run ruff format --check .
       - name: Mypy
         run: poetry run mypy src
       - name: Tests
         run: poetry run pytest
+      - name: Prometheus/Grafana integration
+        env:
+          GRAFANA_ADMIN_PASSWORD: ci-only-password
+        run: |
+          set -euo pipefail
+          run_dir="$(mktemp -d)"
+          trap 'docker compose --profile observability down >/dev/null 2>&1 || true; rm -rf "$run_dir"' EXIT
+          docker compose --profile observability up -d prometheus grafana
+          poetry run fraudtwin generate configs/minimal.yaml \
+            --output-dir "$run_dir" \
+            --metrics-host 0.0.0.0 --metrics-port 9464 --metrics-hold-seconds 12 \
+            >"$run_dir/generate.log" &
+          generator_pid=$!
+          target_up=""
+          query_result=""
+          for _ in $(seq 1 60); do
+            target_up="$(curl -fsS http://127.0.0.1:9090/api/v1/targets 2>/dev/null || true)"
+            query_result="$(curl -fsS --get --data-urlencode 'query=events_generated_total' \
+              http://127.0.0.1:9090/api/v1/query 2>/dev/null || true)"
+            if grep -q '"health":"up"' <<<"$target_up" && \
+               grep -q '"status":"success"' <<<"$query_result"; then
+              break
+            fi
+            sleep 0.25
+          done
+          grep -q '"health":"up"' <<<"$target_up"
+          grep -q '"status":"success"' <<<"$query_result"
+          wait "$generator_pid"
+          curl -fsS -u "admin:${GRAFANA_ADMIN_PASSWORD}" \
+            http://127.0.0.1:3000/api/dashboards/uid/fraudtwin-m27 | \
+            grep -q 'FraudTwin run observability'
       - name: Build
         run: poetry build
       - name: Installed-wheel contract registry

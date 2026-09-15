@@ -218,6 +218,34 @@ expiration and orphan-file removal are intentionally operator-controlled.
 requires an explicit snapshot ID and retained run snapshots are never expired
 implicitly.  Compaction and orphan cleanup are delegated to the Spark profile.
 
+## Observe a generated run
+
+Milestone 27 provides a small optional Prometheus/Grafana surface for local
+batch runs. Install the client and choose a non-default Grafana password:
+
+```bash
+poetry install -E observability
+export GRAFANA_ADMIN_PASSWORD='choose-a-local-password'
+docker compose --profile observability up -d
+```
+
+Run the generator with its temporary scrape endpoint. The endpoint is held
+after completion so Prometheus can collect the final batch values:
+
+```bash
+fraudtwin generate configs/minimal.yaml --output-dir runs \
+  --metrics-host 0.0.0.0 --metrics-port 9464 --metrics-hold-seconds 15
+```
+
+Open Grafana at `http://localhost:3000` and select a `run_id` in the
+**FraudTwin run observability** dashboard. Prometheus retains local samples for
+15 days. The target is expected to be down between CLI invocations because M27
+does not add a permanent generator daemon, Pushgateway, or remote metrics
+storage. The dashboard shows generation rate and fraud volume together with
+generator/ledger failures, duplicate rate, invalid-record rate, and late-event
+counts. `fraudtwin validate-ledger` accepts the same metrics options and records
+the selected run's reconciliation result.
+
 ## A practical evaluation sequence
 
 1. Generate a clean source run and validate its ledger.

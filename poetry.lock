@@ -4695,6 +4695,24 @@ wcwidth = ">=0.3.5"
 tests = ["pytest (>=9)", "pytest-cov", "pytest-lazy-fixtures"]
 
 [[package]]
+name = "prometheus-client"
+version = "0.26.0"
+description = "Python client for the Prometheus monitoring system."
+optional = true
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "extra == \"observability\""
+files = [
+    {file = "prometheus_client-0.26.0-py3-none-any.whl", hash = "sha256:fa93d06737aa02bacd05794768508bb97d2fbee28cb3bca04eaae92f0ca953d6"},
+    {file = "prometheus_client-0.26.0.tar.gz", hash = "sha256:04a91bcf94e2cf74a44a1a874d651a2e853ed354b6e822f3b7487751465d5c2b"},
+]
+
+[package.extras]
+aiohttp = ["aiohttp"]
+django = ["django"]
+twisted = ["twisted"]
+
+[[package]]
 name = "prompt-toolkit"
 version = "3.0.53"
 description = "Library for building powerful interactive command lines in Python"
@@ -7602,9 +7620,10 @@ kafka = ["confluent-kafka"]
 lakehouse = ["pyiceberg", "pyspark"]
 ml = ["catboost", "lightgbm", "scikit-learn", "xgboost"]
 mlflow = ["mlflow"]
+observability = ["prometheus-client"]
 postgres = ["psycopg"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "ab0cedde610483844e40e7d8389bcb9119f5d4404e6181baf8386a631089187d"
+content-hash = "a067bffd5ff398a6109095dc5ae9b6d02e2075690aea809328516e8157413591"
