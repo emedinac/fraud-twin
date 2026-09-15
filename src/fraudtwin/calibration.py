@@ -745,9 +745,11 @@ def resolve_calibration(
         # Kafka delivery controls are sink concerns and must not perturb the
         # calibrated source-run identity.
         config_payload.pop("kafka", None)
+        config_payload.pop("lakehouse", None)
         outputs_payload = config_payload.get("outputs")
         if isinstance(outputs_payload, dict):
             outputs_payload["kafka"] = False
+            outputs_payload.pop("iceberg", None)
         calibration_payload = config_payload.get("calibration")
         if isinstance(calibration_payload, dict):
             # A source path is an access detail, not a simulation parameter;

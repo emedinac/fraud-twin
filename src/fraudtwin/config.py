@@ -744,6 +744,7 @@ class OutputsConfig(_StrictModel):
     parquet: bool = False
     postgres: bool = False
     kafka: bool = False
+    iceberg: bool = False
 
 
 class KafkaConfig(_StrictModel):
@@ -761,6 +762,27 @@ class KafkaConfig(_StrictModel):
             raise ValueError(
                 "Kafka topic_prefix may contain only letters, numbers, '.', '_' or '-'"
             )
+        return value
+
+
+class LakehouseConfig(_StrictModel):
+    """Optional Iceberg lakehouse publication controls (Milestone 26).
+
+    Connection details are deliberately not configuration fields: the catalog,
+    object-store endpoint, and credentials are supplied through the environment
+    by the lakehouse adapter.
+    """
+
+    catalog_name: str = Field(default="fraudtwin")
+    namespace_prefix: str = Field(default="fraudtwin")
+    include_oracle: bool = False
+    checkpoint_location: str = Field(default="/tmp/fraudtwin-iceberg-checkpoints")
+
+    @field_validator("catalog_name", "namespace_prefix")
+    @classmethod
+    def names_must_be_safe(cls, value: str) -> str:
+        if not value or not all(char.isalnum() or char in "_-" for char in value):
+            raise ValueError("lakehouse names may contain only letters, numbers, '_' or '-'")
         return value
 
 
@@ -1836,6 +1858,7 @@ class SimulationRunConfig(_StrictModel):
     quality: QualityConfig
     outputs: OutputsConfig
     kafka: KafkaConfig = Field(default_factory=KafkaConfig)
+    lakehouse: LakehouseConfig = Field(default_factory=LakehouseConfig)
     dataset: PointInTimeDatasetConfig = Field(default_factory=PointInTimeDatasetConfig)
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
     graph: GraphConfig = Field(default_factory=GraphConfig)
@@ -2209,7 +2232,11 @@ def _canonical_config(
         # Kafka is a delivery concern; enabling/configuring it must not alter
         # generated identities or the deterministic source stream.
         outputs_payload["kafka"] = False
+        # Iceberg publication is also a delivery concern; table/catalog
+        # settings must never perturb source-run identities.
+        outputs_payload.pop("iceberg", None)
     payload.pop("kafka", None)
+    payload.pop("lakehouse", None)
     # Keep run identities backward-compatible when newly optional methodology
     # controls remain at their neutral defaults.
     neutral_defaults: dict[str, dict[str, object]] = {

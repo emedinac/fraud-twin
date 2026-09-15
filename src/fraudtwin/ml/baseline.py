@@ -600,8 +600,16 @@ def _enrich_segments(
             row["fraud_occurred_at"] = record.occurred_at if record else None
             if event is not None and _utc(event.source_available_at) > _utc(row["prediction_time"]):
                 row["country"] = row["merchant_category"] = row["customer_segment"] = "unavailable"
-    except (FileNotFoundError, OSError, ValueError):
-        pass
+    except (FileNotFoundError, OSError):
+        # Segment enrichment is optional when the source run is unavailable.
+        return enriched
+    except ValueError as exc:
+        # M15 sidecars can legitimately reuse event IDs with a different
+        # envelope; the legacy loader reports that as a conflict.  Other
+        # malformed source data should still fail loudly.
+        if "conflicting duplicate" not in str(exc):
+            raise
+        return enriched
     return enriched
 
 

@@ -25,7 +25,8 @@ Start from [`configs/minimal.yaml`](../configs/minimal.yaml) and change only the
 | `benchmark` / `stress` | Difficulty and camouflage controls |
 | `counterfactual` | Opt-in minimum-change fraud trajectories and lineage sidecars |
 | `calibration` | Opt-in reference-derived aggregate parameters and fidelity controls |
-| `outputs` | Parquet and optional integration outputs |
+| `outputs` | Parquet and optional PostgreSQL, Kafka, and Iceberg outputs |
+| `lakehouse` | Iceberg namespace and isolated-oracle publication controls; service credentials remain environment-only |
 
 Unknown fields and invalid ranges are rejected during validation. That strict boundary is intentional: a run should fail before it produces ambiguous data.
 

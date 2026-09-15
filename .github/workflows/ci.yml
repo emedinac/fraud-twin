@@ -12,6 +12,7 @@ on:
       - "poetry.lock"
       - ".github/workflows/ci.yml"
       - "docker-compose.yml"
+      - "docs/**"
 
 permissions:
   contents: read

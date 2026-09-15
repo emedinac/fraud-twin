@@ -515,12 +515,19 @@ def generate(
             raise ValueError("PostgreSQL output currently requires quality.profile: clean")
         ensure_database_ready()
     kafka_publisher = None
+    lakehouse_environment = None
     if write and resolved_config.outputs.kafka:
         if resolved_config.quality.profile != "clean":
             raise ValueError("Kafka output currently requires quality.profile: clean")
         # Validate and reconcile contracts before writing files or producing data.
         kafka_publisher = publisher_from_environment(config=resolved_config.kafka)
         kafka_publisher.prepare()
+    if write and resolved_config.outputs.iceberg:
+        from fraudtwin.lakehouse import LakehouseEnvironment
+
+        if resolved_config.quality.profile != "clean":
+            raise ValueError("Iceberg output currently requires quality.profile: clean")
+        lakehouse_environment = LakehouseEnvironment.from_environment(resolved_config.lakehouse)
     if write and calibration.enabled and run_dir.exists():
         raise FileExistsError(f"calibrated run artifacts already exist: {run_dir}")
     fresh_output = not run_dir.exists()
@@ -649,6 +656,23 @@ def generate(
                     }
                 }
             )
+
+    # Lakehouse publication is an optional sink.  Materialize from the already
+    # generated in-memory objects so the source manifest can include its
+    # immutable snapshot metadata before it is first published.
+    if write and resolved_config.outputs.iceberg:
+        from fraudtwin.lakehouse import materialize_dataset
+
+        lakehouse_result = materialize_dataset(
+            run_dir,
+            entities,
+            behavior,
+            manifest,
+            config=resolved_config.lakehouse,
+            environment=lakehouse_environment,
+            write_iceberg=True,
+        )
+        manifest = manifest.model_copy(update={"lakehouse": lakehouse_result.as_dict()})
 
     if not write:
         return GeneratedData(

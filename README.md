@@ -173,6 +173,7 @@ Calibration profiles contain only deterministic statistical summaries and proven
 | Difficulty and camouflage benchmarks | Available |
 | PostgreSQL operational mirror | Available (optional `postgres` extra) |
 | Native Kafka streaming (optional `kafka` extra) | Available |
+| Iceberg lakehouse (optional `lakehouse` extra) | Available |
 | Flink, feature stores, and advanced models | Planned |
 
 ## Development

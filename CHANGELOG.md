@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.31.0 — Milestone 26 Lakehouse
+
+- Added optional MinIO/Iceberg lakehouse publication with immutable Bronze,
+  deterministic Silver, reproducible Gold, and an isolated opt-in oracle
+  namespace.
+- Added complete-run Parquet backfill, bounded M25 Kafka ingestion, snapshot
+  lineage manifests, local lakehouse Compose services, and lakehouse CLI
+  workflows without changing generator identities.
+
 ## 0.30.0 — Milestone 25 Native Kafka Streaming
 
 - Added optional native Kafka publication for all six M24 observable Avro subjects with remote Schema Registry reconciliation, idempotent delivery, deterministic ordering, pacing, and run-manifest fingerprints.

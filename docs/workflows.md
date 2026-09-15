@@ -174,6 +174,50 @@ reader defaults for new fields; an incompatible revision requires an explicit
 breaking major subject with `supersedes` metadata. Kafka producers and remote
 registry registration are deferred to Milestone 25.
 
+## Publish a lakehouse run
+
+Milestone 26 keeps the normal Parquet run as the deterministic source and
+adds an optional Iceberg publication.  Start the local MinIO, REST Catalog,
+and Spark profile with:
+
+```bash
+docker compose --profile lakehouse up -d
+export FRAUDTWIN_ICEBERG_CATALOG_URI='http://localhost:8181'
+export FRAUDTWIN_ICEBERG_WAREHOUSE='s3://warehouse/'
+export FRAUDTWIN_ICEBERG_S3_ENDPOINT='http://localhost:9000'
+export FRAUDTWIN_ICEBERG_S3_ACCESS_KEY='minioadmin'
+export FRAUDTWIN_ICEBERG_S3_SECRET_KEY='minioadmin'
+fraudtwin lakehouse init
+fraudtwin lakehouse ingest-run RUN-... --runs-dir runs
+```
+
+`ingest-run` creates an immutable materialization manifest under the source
+run's `lakehouse/` directory.  Use `--local-only` to build and verify that
+manifest without optional Iceberg dependencies or services.  The normal
+observable namespaces never contain latent fraud truth; `--include-oracle`
+publishes the separate oracle namespace explicitly.
+
+M25 topics can be consumed incrementally with `fraudtwin lakehouse consume`.
+The consumer preserves raw framed payloads and transport metadata in Bronze,
+then applies deterministic Silver deduplication.  A complete batch bootstrap
+is still required for entity, ledger, graph, and PIT Gold tables because those
+records are not M25 Kafka subjects.
+
+The consumer reads `FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS` and optionally
+`FRAUDTWIN_KAFKA_TOPIC_PREFIX` / `FRAUDTWIN_LAKEHOUSE_CONSUMER_GROUP`.
+Namespaces are prefixed (`fraudtwin_bronze`, `fraudtwin_silver`,
+`fraudtwin_gold`, and `fraudtwin_oracle` by default); the logical tables and
+partition specs are recorded in every materialization manifest.  Additive
+columns are applied through Iceberg schema metadata.  Breaking changes require
+a new versioned contract/table, leaving prior snapshots readable.
+
+Use `fraudtwin lakehouse verify runs/RUN-.../lakehouse/LH-....json` to inspect
+source checksums, logical fingerprints, and committed snapshot IDs.  Snapshot
+expiration and orphan-file removal are intentionally operator-controlled.
+`fraudtwin lakehouse maintenance ...` is dry-run by default; expiration
+requires an explicit snapshot ID and retained run snapshots are never expired
+implicitly.  Compaction and orphan cleanup are delegated to the Spark profile.
+
 ## A practical evaluation sequence
 
 1. Generate a clean source run and validate its ledger.

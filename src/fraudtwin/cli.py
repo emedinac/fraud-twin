@@ -24,6 +24,15 @@ from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, valida
 from fraudtwin.generation import generate as generate_library
 from fraudtwin.generation import resume_generation
 from fraudtwin.graph import GraphDataset, build_graph, validate_graph, write_graph
+from fraudtwin.lakehouse import (
+    IcebergLakehouse,
+    LakehouseConfigurationError,
+    LakehouseDependencyError,
+    LakehouseEnvironment,
+    consume_kafka_once,
+    materialize_run,
+    verify_materialization,
+)
 from fraudtwin.ml import (
     BenchmarkPack,
     PointInTimeDatasetBuilder,
@@ -65,6 +74,8 @@ db_app = typer.Typer(help="Manage the optional PostgreSQL operational schema.")
 app.add_typer(db_app, name="db")
 schema_app = typer.Typer(help="Validate bundled Avro event contracts.")
 app.add_typer(schema_app, name="schema")
+lakehouse_app = typer.Typer(help="Manage the optional Iceberg lakehouse.")
+app.add_typer(lakehouse_app, name="lakehouse")
 
 
 @schema_app.command("validate")
@@ -111,6 +122,132 @@ def postgres_status() -> None:
         raise typer.Exit(code=1) from exc
     for version in versions:
         typer.echo(version)
+
+
+@lakehouse_app.command("init")
+def lakehouse_init() -> None:
+    """Create the Bronze/Silver/Gold/oracle Iceberg namespaces."""
+
+    try:
+        lakehouse = IcebergLakehouse(LakehouseEnvironment.from_environment())
+        for namespace in lakehouse.initialize():
+            typer.echo(namespace)
+    except (LakehouseConfigurationError, LakehouseDependencyError, OSError, RuntimeError) as exc:
+        typer.echo(f"Lakehouse initialization failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
+@lakehouse_app.command("ingest-run")
+def lakehouse_ingest_run(
+    run_id: Annotated[str, typer.Argument(help="Existing generated run identifier.")],
+    runs_dir: Annotated[
+        Path, typer.Option("--runs-dir", help="Directory containing generated runs.")
+    ] = Path("runs"),
+    include_oracle: Annotated[
+        bool, typer.Option("--include-oracle", help="Publish the isolated oracle namespace.")
+    ] = False,
+    local_only: Annotated[
+        bool,
+        typer.Option("--local-only", help="Build and verify manifests without Iceberg services."),
+    ] = False,
+) -> None:
+    """Backfill one complete generated run into the lakehouse."""
+
+    try:
+        environment = None if local_only else LakehouseEnvironment.from_environment()
+        result = materialize_run(
+            runs_dir / run_id,
+            environment=environment,
+            write_iceberg=not local_only,
+            include_oracle=include_oracle,
+        )
+    except (
+        LakehouseConfigurationError,
+        LakehouseDependencyError,
+        OSError,
+        RuntimeError,
+        ValueError,
+    ) as exc:
+        typer.echo(f"Lakehouse ingestion failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Materialization: {result.materialization_id}")
+    typer.echo(f"Manifest: {result.manifest_path}")
+    typer.echo(f"Fingerprint: {result.logical_fingerprint}")
+
+
+@lakehouse_app.command("consume")
+def lakehouse_consume(
+    max_messages: Annotated[int, typer.Option("--max-messages", min=1)] = 100,
+    timeout_seconds: Annotated[float, typer.Option("--timeout-seconds", min=0.1)] = 5.0,
+) -> None:
+    """Consume a bounded batch of M25 Kafka records into Bronze/Silver."""
+
+    try:
+        environment = LakehouseEnvironment.from_environment()
+        lakehouse = IcebergLakehouse(environment)
+        lakehouse.initialize()
+        count = consume_kafka_once(
+            environment=environment,
+            lakehouse=lakehouse,
+            max_messages=max_messages,
+            timeout_seconds=timeout_seconds,
+        )
+    except (
+        LakehouseConfigurationError,
+        LakehouseDependencyError,
+        OSError,
+        RuntimeError,
+        ValueError,
+    ) as exc:
+        typer.echo(f"Lakehouse Kafka consumption failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Consumed records: {count}")
+
+
+@lakehouse_app.command("verify")
+def lakehouse_verify(
+    manifest: Annotated[Path, typer.Argument(help="Lakehouse materialization manifest JSON.")],
+) -> None:
+    """Verify the required fields of a lakehouse materialization manifest."""
+
+    try:
+        payload = verify_materialization(manifest)
+    except (LakehouseConfigurationError, OSError, ValueError) as exc:
+        typer.echo(f"Lakehouse verification failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+@lakehouse_app.command("maintenance")
+def lakehouse_maintenance(
+    table: Annotated[str, typer.Argument(help="Logical table, e.g. bronze.records.")],
+    operation: Annotated[
+        str,
+        typer.Argument(help="expire_snapshots, compact, or remove_orphan_files."),
+    ],
+    snapshot_id: Annotated[
+        int | None,
+        typer.Option("--snapshot-id", help="Required for snapshot expiration."),
+    ] = None,
+    execute: Annotated[
+        bool,
+        typer.Option("--execute", help="Apply the operation; default is a dry-run."),
+    ] = False,
+) -> None:
+    """Plan or explicitly execute a protected Iceberg maintenance action."""
+
+    try:
+        environment = LakehouseEnvironment.from_environment()
+        result = IcebergLakehouse(environment).maintenance(
+            table,
+            operation,
+            snapshot_id=snapshot_id,
+            execute=execute,
+        )
+    except (LakehouseConfigurationError, LakehouseDependencyError, OSError, RuntimeError) as exc:
+        typer.echo(f"Lakehouse maintenance failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(result, indent=2, sort_keys=True))
 
 
 @app.command("quality-benchmark")
