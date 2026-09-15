@@ -742,6 +742,12 @@ def resolve_calibration(
             raise ValueError("calibration seasonality has no mass in configured active_hours")
     config_payload: Any = getattr(config, "model_dump", lambda **_: {})(mode="json")
     if isinstance(config_payload, dict):
+        # Kafka delivery controls are sink concerns and must not perturb the
+        # calibrated source-run identity.
+        config_payload.pop("kafka", None)
+        outputs_payload = config_payload.get("outputs")
+        if isinstance(outputs_payload, dict):
+            outputs_payload["kafka"] = False
         calibration_payload = config_payload.get("calibration")
         if isinstance(calibration_payload, dict):
             # A source path is an access detail, not a simulation parameter;

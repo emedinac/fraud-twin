@@ -20,6 +20,7 @@ def _drop_inactive_metadata(data: dict[str, object]) -> dict[str, object]:
         "scale",
         "label_observation",
         "postgres",
+        "kafka",
     ):
         if data.get(field) is None:
             data.pop(field, None)
@@ -65,6 +66,7 @@ class RunManifest(BaseModel):
     scale: dict[str, object] | None = None
     label_observation: dict[str, object] | None = None
     postgres: dict[str, object] | None = None
+    kafka: dict[str, object] | None = None
 
     @model_serializer(mode="wrap")
     def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
@@ -218,6 +220,8 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         resolved.pop("labels", None)
     if not config.scale.enabled:
         resolved.pop("scale", None)
+    if not config.outputs.kafka:
+        resolved.pop("kafka", None)
     return RunManifest(
         run_id=f"RUN-{run_hash}",
         generator_version=__version__,

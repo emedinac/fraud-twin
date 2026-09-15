@@ -106,8 +106,33 @@ observable records. PostgreSQL writes currently require `quality.profile:
 clean`, are committed transactionally, and are immutable per `run_id` (a
 matching repeat is an idempotent no-op). Credentials are never written to the
 resolved configuration or manifest. `fraud_truth` is not exposed in the
-operational database. Debezium CDC and Kafka publication are separate later
-milestones.
+operational database. Debezium CDC remains a separate later milestone; native
+Kafka publication is described below.
+
+## Publish a native Kafka stream
+
+Milestone 25 publishes the clean observable M24 contracts directly to Kafka. The
+bundled Avro registry remains authoritative; a remote Schema Registry is checked
+for matching canonical fingerprints and `FULL_TRANSITIVE` compatibility before
+any messages are sent.
+
+Start the local broker and registry with `docker compose --profile streaming up`.
+Install the optional client and provide connection settings through the
+environment:
+
+```bash
+poetry install -E kafka
+export FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+export FRAUDTWIN_SCHEMA_REGISTRY_URL=http://localhost:8081
+fraudtwin generate configs/minimal.yaml --output-dir runs
+```
+
+Set `outputs.kafka: true` and keep `quality.profile: clean`. The six topics use
+`payment_id` as their partition key; ordering is guaranteed only within a topic
+and key. Producers use idempotence and acknowledged delivery, but retries across
+process restarts remain at-least-once, so consumers deduplicate using the stable
+record ID header. `simulation.speed` controls publication pacing (`batch`,
+real-time, or accelerated); it never changes generated domain content.
 
 ## Validate Avro operational contracts
 

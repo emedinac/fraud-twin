@@ -250,15 +250,21 @@ class PaymentGenerator:
                 and self.merchants
             ):
                 available.append(rail)
-            elif rail in ("PIX", "ACCOUNT_TRANSFER") and any(
-                account.status == "ACTIVE"
-                for account in self.accounts_by_customer.get(profile.customer_id, ())
+            elif (
+                rail in ("PIX", "ACCOUNT_TRANSFER")
+                and any(
+                    account.status == "ACTIVE"
+                    for account in self.accounts_by_customer.get(profile.customer_id, ())
+                )
+                and (
+                    rail == "ACCOUNT_TRANSFER"
+                    or any(
+                        account.account_id in self.pix_keys_by_account
+                        for account in self.accounts_by_customer[profile.customer_id]
+                    )
+                )
             ):
-                if rail == "ACCOUNT_TRANSFER" or any(
-                    account.account_id in self.pix_keys_by_account
-                    for account in self.accounts_by_customer[profile.customer_id]
-                ):
-                    available.append(rail)
+                available.append(rail)
         return tuple(available)
 
     def _choose_rail(self, profile: BehaviorProfile, rng: Random) -> PaymentRail:

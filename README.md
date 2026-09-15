@@ -54,6 +54,7 @@ examples.
 - Reproducible baseline ML oracles (Logistic Regression, LightGBM, XGBoost, CatBoost), point-in-time external prediction evaluation, fraud metrics, and optional MLflow tracking.
 - Generator-quality benchmark reports for native runs and capability-declared external generators, with immutable M22 profiles and `N/A`-aware scoring.
 - Source-controlled Avro contracts for clean observable operational events, with canonical fingerprints and `FULL_TRANSITIVE` compatibility validation.
+- Optional native Kafka streaming for the six Avro subjects, with remote Schema Registry verification and deterministic delivery pacing.
 
 FraudTwin is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and timing before introducing a larger streaming or production stack.
 
@@ -171,7 +172,8 @@ Calibration profiles contain only deterministic statistical summaries and proven
 | Graph campaigns and Neo4j/PyG exports | Available |
 | Difficulty and camouflage benchmarks | Available |
 | PostgreSQL operational mirror | Available (optional `postgres` extra) |
-| Kafka, Flink, feature stores, and advanced models | Planned |
+| Native Kafka streaming (optional `kafka` extra) | Available |
+| Flink, feature stores, and advanced models | Planned |
 
 ## Development
 

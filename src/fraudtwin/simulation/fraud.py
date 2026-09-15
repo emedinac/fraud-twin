@@ -886,11 +886,14 @@ class FraudScenarioGenerator:
                 f"milestone-12:device:{self._active_plan.scenario}:"
                 f"{self._difficulty_choice_counter}",
             )
-        if self._difficulty.enabled and self.devices:
-            # Higher behavioral similarity deliberately permits trusted devices
-            # while retaining a deterministic device stream.
-            if rng.random() < self._active_plan.behavior_similarity:
-                return self.devices[rng.randrange(len(self.devices))]
+        # Higher behavioral similarity deliberately permits trusted devices
+        # while retaining a deterministic device stream.
+        if (
+            self._difficulty.enabled
+            and self.devices
+            and rng.random() < self._active_plan.behavior_similarity
+        ):
+            return self.devices[rng.randrange(len(self.devices))]
         device_pool = self.untrusted_devices or self.devices
         return device_pool[rng.randrange(len(device_pool))] if device_pool else None
 

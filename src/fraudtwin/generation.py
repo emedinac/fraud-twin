@@ -19,6 +19,7 @@ from fraudtwin.calibration import (
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.difficulty import difficulty_metadata
 from fraudtwin.graph import build_graph
+from fraudtwin.kafka import publisher_from_environment
 from fraudtwin.manifest import RunManifest, create_manifest, write_manifest
 from fraudtwin.ml import (
     PointInTimeDataset,
@@ -513,6 +514,13 @@ def generate(
         if resolved_config.quality.profile != "clean":
             raise ValueError("PostgreSQL output currently requires quality.profile: clean")
         ensure_database_ready()
+    kafka_publisher = None
+    if write and resolved_config.outputs.kafka:
+        if resolved_config.quality.profile != "clean":
+            raise ValueError("Kafka output currently requires quality.profile: clean")
+        # Validate and reconcile contracts before writing files or producing data.
+        kafka_publisher = publisher_from_environment(config=resolved_config.kafka)
+        kafka_publisher.prepare()
     if write and calibration.enabled and run_dir.exists():
         raise FileExistsError(f"calibrated run artifacts already exist: {run_dir}")
     fresh_output = not run_dir.exists()
@@ -561,6 +569,25 @@ def generate(
             "idempotent": persistence.idempotent,
         }
         manifest = manifest.model_copy(update={"postgres": postgres_metadata})
+
+    if write and kafka_publisher is not None:
+        publication = kafka_publisher.publish(
+            behavior,
+            manifest.run_id,
+            mode=resolved_config.simulation.speed,
+        )
+        manifest = manifest.model_copy(
+            update={
+                "kafka": {
+                    "topics": publication.topics,
+                    "record_counts": publication.record_counts,
+                    "mode": publication.mode,
+                    "max_events_per_second": publication.max_events_per_second,
+                    "accelerated_time_multiplier": publication.accelerated_time_multiplier,
+                    "publication_fingerprint": publication.publication_fingerprint,
+                }
+            }
+        )
 
     dataset: PointInTimeDataset | None = None
     dataset_path: Path | None = None

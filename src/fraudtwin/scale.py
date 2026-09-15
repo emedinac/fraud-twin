@@ -247,9 +247,11 @@ def load_checkpoint(path: str | Path) -> ScaleCheckpoint:
         source = source / "checkpoint.json"
     try:
         checkpoint = ScaleCheckpoint.model_validate_json(source.read_text(encoding="utf-8"))
-        if checkpoint.integrity_hash is not None:
-            if checkpoint.integrity_hash != checkpoint_fingerprint(checkpoint):
-                raise ValueError("checkpoint integrity hash mismatch")
+        if (
+            checkpoint.integrity_hash is not None
+            and checkpoint.integrity_hash != checkpoint_fingerprint(checkpoint)
+        ):
+            raise ValueError("checkpoint integrity hash mismatch")
         return checkpoint
     except (OSError, ValueError) as exc:
         raise ValueError(f"invalid scale checkpoint: {source}") from exc

@@ -11,6 +11,7 @@ on:
       - "pyproject.toml"
       - "poetry.lock"
       - ".github/workflows/ci.yml"
+      - "docker-compose.yml"
 
 permissions:
   contents: read
@@ -46,7 +47,7 @@ jobs:
       - name: Install Poetry
         run: pipx install poetry
       - name: Install dependencies
-        run: poetry install -E postgres
+        run: poetry install -E postgres -E kafka
       - name: Ruff lint
         run: poetry run ruff check .
       - name: Avro contract registry

@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.30.0 — Milestone 25 Native Kafka Streaming
+
+- Added optional native Kafka publication for all six M24 observable Avro subjects with remote Schema Registry reconciliation, idempotent delivery, deterministic ordering, pacing, and run-manifest fingerprints.
+- Added clean-contract enforcement, stable topic/key/header conventions, streaming Compose services, and focused producer, registry, ordering, pacing, and identity-regression tests.
+
 ## 0.29.0 — Milestone 24 Avro Contracts + Schema Registry
 
 - Added six bundled observable operational Avro contracts with deterministic parsing-canonical fingerprints and a source-controlled `FULL_TRANSITIVE` registry.

@@ -785,9 +785,10 @@ def run_benchmark(request: BenchmarkRequest) -> BenchmarkResult:
     }:
         raise ValueError("calibration profile is only valid for calibrated, mixed, or all suites")
     selected = STANDARD_SUITES if request.suite == "all" else (request.suite,)
-    if any(item in {"calibrated", "mixed"} for item in selected):
-        if request.calibration_profile is None or not request.calibration_profile.is_file():
-            raise ValueError("calibrated and mixed suites require --calibration-profile")
+    if any(item in {"calibrated", "mixed"} for item in selected) and (
+        request.calibration_profile is None or not request.calibration_profile.is_file()
+    ):
+        raise ValueError("calibrated and mixed suites require --calibration-profile")
     profile_fingerprint = None
     profile_version = None
     if request.calibration_profile is not None:
