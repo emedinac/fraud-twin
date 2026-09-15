@@ -4,31 +4,22 @@
 
 - Made canonical payment rows the scale target, added the bounded `dev` smoke profile, derived row-count reporting, target validation, versioned checkpoints,chunk markers for interrupted resume, and partition-aware readers.
 - Added deterministic payment ordinal helpers, incremental fingerprints, cross-account payee reconciliation markers, benchmark evidence manifests, and optional PyArrow/DuckDB scale tooling.
-- Added table-qualified entity chunks, physical chunk checksum validation on
-  resume, a completed-run resume fast path, lazy partition-table readers, and optional M22 ingestion of M18 scale evidence manifests.
+- Added table-qualified entity chunks, physical chunk checksum validation on resume, a completed-run resume fast path, lazy partition-table readers, and optional M22 ingestion of M18 scale evidence manifests.
 - Added the public lazy `iter_scale_records` producer API for integrations that stream canonical payment/event/ledger rows directly to partition writers.
 - Added durable spool reuse, disk-backed duplicate-ID and account-balance reconciliation, plus streaming Kafka/PostgreSQL/Iceberg/replay adapters.
 - Added explicit `generate_scale`/`iter_scale_run` APIs, scale feature-matrix and storage settings, local/fsspec storage adapters, and an M18 TODO/strategy document.
 
 ## 0.32.0 — Milestone 27 Minimal Observability
 
-- Added optional Prometheus metrics for generated runs and ledger validation,
-  with run-level generation, fraud, error, throughput, and data-quality
-  signals.
+- Added optional Prometheus metrics for generated runs and ledger validation, with run-level generation, fraud, error, throughput, and data-quality signals.
 - Added a local Prometheus/Grafana Compose profile with provisioned dashboards,
-  loopback-only ports, explicit 15-day Prometheus retention, and required
-  non-default Grafana credentials.
-- Preserved deterministic generator identities, manifests, contracts, Kafka,
-  and Iceberg outputs; metrics are disabled unless explicitly requested.
+  loopback-only ports, explicit 15-day Prometheus retention, and required non-default Grafana credentials.
+- Preserved deterministic generator identities, manifests, contracts, Kafka, and Iceberg outputs; metrics are disabled unless explicitly requested.
 
 ## 0.31.0 — Milestone 26 Lakehouse
 
-- Added optional MinIO/Iceberg lakehouse publication with immutable Bronze,
-  deterministic Silver, reproducible Gold, and an isolated opt-in oracle
-  namespace.
-- Added complete-run Parquet backfill, bounded M25 Kafka ingestion, snapshot
-  lineage manifests, local lakehouse Compose services, and lakehouse CLI
-  workflows without changing generator identities.
+- Added optional MinIO/Iceberg lakehouse publication with immutable Bronze, deterministic Silver, reproducible Gold, and an isolated opt-in oracle namespace.
+- Added complete-run Parquet backfill, bounded M25 Kafka ingestion, snapshot lineage manifests, local lakehouse Compose services, and lakehouse CLI workflows without changing generator identities.
 
 ## 0.30.0 — Milestone 25 Native Kafka Streaming
 
