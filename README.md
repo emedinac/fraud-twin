@@ -124,7 +124,8 @@ Optional sinks expose corresponding bounded interfaces: use
 `IcebergLakehouse.append_stream` for chunk iterators. Partitioned replay can
 be consumed with `iter_partition_replay_events`.
 
-See the [M18 scale TODO](docs/m18-scale-todo.md) for unsupported capabilities and the implementation strategy.
+See the [v2.0.0 release-readiness roadmap](docs/release-readiness.md) for M18
+scale gates and deferred platform integrations.
 
 For baseline model evaluation, install the optional ML dependencies and train on a previously built PIT dataset:
 
