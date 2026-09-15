@@ -18,9 +18,11 @@ FraudTwin generates a small, coherent payment world: customers have accounts, ca
 
 ## Documentation
 
+Build realistic payment worlds, trace every fraud signal, and create reproducible ML datasets with confidence.
+
 <p align="center">
   <a href="https://emedinac.github.io/fraud-twin/">
-    <strong>📚 Read the FraudTwin documentation →</strong>
+    <strong>📚 Explore the FraudTwin documentation →</strong>
   </a>
 </p>
 
@@ -30,7 +32,8 @@ FraudTwin generates a small, coherent payment world: customers have accounts, ca
   <a href="docs/README.md">Documentation sources</a>
 </p>
 
-Tutorials will be added under `docs/` as the workflows settle. Each tutorial should start from a versioned configuration and show the resulting artifacts, not only the command that produced them.
+Start with a guided tutorial, then move from configuration to fraud scenarios, graph exports, and point-in-time ML workflows—all backed by deterministic
+examples.
 
 ## What it provides
 
