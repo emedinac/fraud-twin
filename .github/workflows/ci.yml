@@ -17,6 +17,22 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fraudtwin
+          POSTGRES_PASSWORD: fraudtwin
+          POSTGRES_DB: fraudtwin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fraudtwin -d fraudtwin"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      FRAUDTWIN_POSTGRES_DSN: postgresql://fraudtwin:fraudtwin@localhost:5432/fraudtwin
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,7 +41,7 @@ jobs:
       - name: Install Poetry
         run: pipx install poetry
       - name: Install dependencies
-        run: poetry install
+        run: poetry install -E postgres
       - name: Ruff lint
         run: poetry run ruff check .
       - name: Poetry validation

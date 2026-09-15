@@ -37,6 +37,7 @@ Issues = "https://github.com/emedinac/fraud-twin/issues"
 fraudtwin = "fraudtwin.cli:main"
 
 [project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.2,<4.0"]
 graph = ["torch>=2.2,<3.0", "torch-geometric>=2.5,<3.0"]
 ml = [
     "scikit-learn>=1.5,<2.0",
@@ -52,7 +53,11 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 packages = [{ include = "fraudtwin", from = "src" }]
-include = ["src/fraudtwin/public_packs/*.yaml", "src/fraudtwin/quality_profiles/*.yaml"]
+include = [
+    "src/fraudtwin/public_packs/*.yaml",
+    "src/fraudtwin/quality_profiles/*.yaml",
+    "src/fraudtwin/migrations/*.sql",
+]
 
 [tool.poetry.group.dev.dependencies]
     hypothesis = "^6.100"

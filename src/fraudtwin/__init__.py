@@ -89,6 +89,13 @@ from fraudtwin.label_observation import (  # noqa: E402
     validate_label_observation,
     visible_label_at,
 )
+from fraudtwin.postgres import (  # noqa: E402
+    PostgresPersistenceResult,
+    database_status,
+    ensure_database_ready,
+    migrate_database,
+    persist_run,
+)
 from fraudtwin.quality_benchmark import (  # noqa: E402
     QualityAdapterMetadata,
     QualityAdapterRequest,
@@ -159,6 +166,11 @@ __all__ = [
     "load_quality_profile",
     "report_run",
     "run_quality_benchmark",
+    "PostgresPersistenceResult",
+    "database_status",
+    "ensure_database_ready",
+    "migrate_database",
+    "persist_run",
     "GeneratedData",
     "GeneratedRun",
     "generate",

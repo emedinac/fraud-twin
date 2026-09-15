@@ -87,6 +87,28 @@ poetry run fraudtwin ml evaluate runs/<run-id>/ml/dataset.parquet predictions.js
 
 The evaluator reports ranking, threshold, calibration, monetary, detection-delay, and segment metrics. It resolves labels and features at each prediction timestamp and records an immutable evaluation manifest. MLflow is used when a tracking URI is configured; otherwise local artifacts are sufficient.
 
+## Persist an operational run in PostgreSQL
+
+PostgreSQL is an optional mirror; it never changes generated records or their
+deterministic run ID. Install the extra, provide the connection string through
+the environment, and apply the packaged migrations before enabling the sink:
+
+```bash
+poetry install -E postgres
+export FRAUDTWIN_POSTGRES_DSN='postgresql://user:password@localhost:5432/fraudtwin'
+fraudtwin db migrate
+fraudtwin generate configs/minimal.yaml --output-dir runs
+```
+
+Set `outputs.postgres: true` in the configuration. Keep `outputs.parquet: true`
+when you want the normal file artifacts as well; both sinks receive the same
+observable records. PostgreSQL writes currently require `quality.profile:
+clean`, are committed transactionally, and are immutable per `run_id` (a
+matching repeat is an idempotent no-op). Credentials are never written to the
+resolved configuration or manifest. `fraud_truth` is not exposed in the
+operational database. Debezium CDC and Kafka publication are separate later
+milestones.
+
 ## A practical evaluation sequence
 
 1. Generate a clean source run and validate its ledger.

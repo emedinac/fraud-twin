@@ -38,6 +38,7 @@ from fraudtwin.ml import (
     write_evaluation,
     write_point_in_time_dataset,
 )
+from fraudtwin.postgres import database_status, migrate_database
 from fraudtwin.quality_benchmark import report_run, run_quality_benchmark
 from fraudtwin.replay import ReplayOrder, replay_run, write_replay
 from fraudtwin.simulation.graph_fraud import GraphFraudDataset
@@ -59,6 +60,33 @@ app.add_typer(counterfactual_app, name="counterfactual")
 app.add_typer(campaign_app, name="campaign")
 benchmark_app = typer.Typer(help="Run generic M20 suites or immutable M21 public packs.")
 app.add_typer(benchmark_app, name="benchmark")
+db_app = typer.Typer(help="Manage the optional PostgreSQL operational schema.")
+app.add_typer(db_app, name="db")
+
+
+@db_app.command("migrate")
+def postgres_migrate() -> None:
+    """Apply packaged PostgreSQL migrations using FRAUDTWIN_POSTGRES_DSN."""
+
+    try:
+        version = migrate_database()
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"PostgreSQL migration failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"PostgreSQL schema is at version: {version}")
+
+
+@db_app.command("status")
+def postgres_status() -> None:
+    """Show applied PostgreSQL migrations without changing the database."""
+
+    try:
+        versions = database_status()
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"PostgreSQL status failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    for version in versions:
+        typer.echo(version)
 
 
 @app.command("quality-benchmark")

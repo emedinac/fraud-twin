@@ -2179,6 +2179,12 @@ def _canonical_config(
     # M18 is opt-in; disabled scale controls must preserve legacy identities.
     if not config.scale.enabled:
         payload.pop("scale", None)
+    # Output sinks are delivery concerns, not generator inputs.  In
+    # particular, enabling the M23 PostgreSQL mirror must not change the
+    # generated records, stream seeds, run ID, or frozen M21 pack hashes.
+    outputs_payload = payload.get("outputs")
+    if isinstance(outputs_payload, dict):
+        outputs_payload["postgres"] = False
     # Keep run identities backward-compatible when newly optional methodology
     # controls remain at their neutral defaults.
     neutral_defaults: dict[str, dict[str, object]] = {

@@ -1,6 +1,13 @@
 # Release notes
 
-## Unreleased — Milestone 22 Generator Quality Benchmark
+
+## Milestone 23 PostgreSQL Operational Mode
+
+- Added an optional transactional PostgreSQL operational mirror with versioned SQL migrations and `fraudtwin db migrate/status` commands.
+- Preserved deterministic file outputs and generator identities when PostgreSQL is enabled; added run-scoped relational constraints, provenance, idempotent writes, and observable fraud-case persistence.
+- Added the optional `postgres` dependency extra, PostgreSQL workflow documentation, and M23 compatibility/invariant tests.
+
+## Milestone 22 Generator Quality Benchmark
 
 - Added immutable `standard-v1` quality profiles covering all eight M21 public packs, with opt-in medium, large, xlarge, and billion variants.
 - Added `fraudtwin quality-benchmark` and `fraudtwin report` commands with separate correctness, fidelity, difficulty, scalability, engineering, and reproducibility sections.

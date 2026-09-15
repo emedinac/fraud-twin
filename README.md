@@ -168,7 +168,8 @@ Calibration profiles contain only deterministic statistical summaries and proven
 | Point-in-time datasets, replay, and rolling backtests | Available |
 | Graph campaigns and Neo4j/PyG exports | Available |
 | Difficulty and camouflage benchmarks | Available |
-| Kafka, PostgreSQL, Flink, feature stores, and advanced models | Planned |
+| PostgreSQL operational mirror | Available (optional `postgres` extra) |
+| Kafka, Flink, feature stores, and advanced models | Planned |
 
 ## Development
 

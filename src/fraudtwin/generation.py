@@ -25,6 +25,7 @@ from fraudtwin.ml import (
     PointInTimeDatasetBuilder,
     write_point_in_time_dataset,
 )
+from fraudtwin.postgres import ensure_database_ready, persist_run
 from fraudtwin.reproducibility import sha256_json
 from fraudtwin.scale import (
     ScaleCheckpoint,
@@ -508,6 +509,10 @@ def generate(
 
     output_root = Path(output_dir)
     run_dir = output_root / base_manifest.run_id
+    if write and resolved_config.outputs.postgres:
+        if resolved_config.quality.profile != "clean":
+            raise ValueError("PostgreSQL output currently requires quality.profile: clean")
+        ensure_database_ready()
     if write and calibration.enabled and run_dir.exists():
         raise FileExistsError(f"calibrated run artifacts already exist: {run_dir}")
     fresh_output = not run_dir.exists()
@@ -545,6 +550,17 @@ def generate(
         scale_metadata=scale_metadata,
         calibration=calibration,
     )
+
+    postgres_metadata: dict[str, object] | None = None
+    if write and resolved_config.outputs.postgres:
+        persistence = persist_run(entities, behavior, manifest)
+        postgres_metadata = {
+            "schema_version": persistence.schema_version,
+            "row_counts": persistence.row_counts,
+            "logical_fingerprint": persistence.logical_fingerprint,
+            "idempotent": persistence.idempotent,
+        }
+        manifest = manifest.model_copy(update={"postgres": postgres_metadata})
 
     dataset: PointInTimeDataset | None = None
     dataset_path: Path | None = None
