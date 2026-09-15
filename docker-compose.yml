@@ -90,8 +90,8 @@ services:
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       AWS_REGION: us-east-1
-      AWS_S3_ENDPOINT: http://minio:9000
-      AWS_S3_PATH_STYLE_ACCESS: "true"
+      CATALOG_S3_ENDPOINT: http://minio:9000
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
 
   spark:
     image: tabulario/spark-iceberg:3.5.3_1.6.1
