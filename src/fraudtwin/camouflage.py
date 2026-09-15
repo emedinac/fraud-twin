@@ -456,6 +456,14 @@ def transform_generated_data(
 ]:
     """Apply M13 as a post-generation, invariant-preserving transformation."""
 
+    # Keep the import local: ``simulation.generator`` imports behavior, which
+    # imports this module.  The runtime check fixes the old TYPE_CHECKING-only
+    # dependency without introducing an import cycle during package startup.
+    from fraudtwin.simulation.generator import EntityDataset as RuntimeEntityDataset
+
+    if not isinstance(entities, RuntimeEntityDataset):
+        raise TypeError("entities must be an EntityDataset")
+
     resolved = resolve_camouflage(config)
     if not resolved.enabled or not any(
         value > 0

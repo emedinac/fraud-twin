@@ -43,6 +43,7 @@ Use the narrowest test while iterating, then run the full suite:
 | Data quality | `poetry run pytest tests/test_quality.py` |
 | Point-in-time datasets | `poetry run pytest tests/test_dataset.py` |
 | Replay and backtesting | `poetry run pytest tests/test_m10.py` |
+| Baseline ML and prediction adapter | `poetry run pytest tests/test_m19.py` |
 | Graph exports | `poetry run pytest tests/test_graph.py` |
 | Difficulty | `poetry run pytest tests/test_m12.py` |
 | Camouflage | `poetry run pytest tests/test_m13.py` |
@@ -71,4 +72,4 @@ Scale tests must use at most 1,000 logical events per fixture. Validate scale be
 
 ## Documentation conventions
 
-Write for a reader who has not seen the repository before. Lead with what a command enables, show the smallest working example, and explain any important constraint immediately after it. Keep milestone history in `CHANGELOG.md`; the README and `docs/` should teach people how to use the current system.
+Write for a reader who has not seen the repository before. Lead with what a command enables, show the smallest working example, and explain any important constraint immediately after it. Keep release history in `CHANGELOG.md`; the README and `docs/` should teach people how to use the current system.

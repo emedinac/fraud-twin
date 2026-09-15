@@ -569,7 +569,10 @@ def _clone_trajectory(
         target = str(changes["beneficiary"]["value"])
         account = next(item for item in entities.accounts if item.account_id == target)
         update.update(
-            {"payee_account_id": account.account_id, "payee_institution_id": account.institution_id}
+            {
+                "payee_account_id": account.account_id,
+                "payee_institution_id": account.institution_id,
+            }
         )
         if source.payer_account_id in {item.account_id for item in entities.accounts}:
             pix = next(

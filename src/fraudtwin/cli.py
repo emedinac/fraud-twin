@@ -6,6 +6,7 @@ from typing import Annotated, Literal, cast
 import polars as pl
 import typer
 
+from fraudtwin.benchmark import BenchmarkRequest, SuiteName, run_benchmark
 from fraudtwin.calibration import (
     fit_calibration_profile,
     load_reference_data,
@@ -19,10 +20,16 @@ from fraudtwin.graph import GraphDataset, build_graph, validate_graph, write_gra
 from fraudtwin.ml import (
     BenchmarkPack,
     PointInTimeDatasetBuilder,
+    evaluate_predictions,
+    load_baseline_config,
     load_benchmark_pack,
     load_generated_run,
+    load_predictions,
     run_backtest,
+    run_model_backtest,
+    train_baselines,
     write_backtest,
+    write_evaluation,
     write_point_in_time_dataset,
 )
 from fraudtwin.replay import ReplayOrder, replay_run, write_replay
@@ -43,6 +50,70 @@ counterfactual_app = typer.Typer(help="Generate deterministic M14 counterfactual
 campaign_app = typer.Typer(help="Evolve deterministic M15 campaign sidecars.")
 app.add_typer(counterfactual_app, name="counterfactual")
 app.add_typer(campaign_app, name="campaign")
+
+
+@app.command("benchmark")
+def benchmark_command(
+    suite: Annotated[
+        str,
+        typer.Option(
+            "--suite",
+            help=(
+                "Standard suite or all: baseline, temporal, boundary, camouflage, "
+                "graph, observability, calibrated, mixed."
+            ),
+        ),
+    ] = "mixed",
+    difficulty: Annotated[int, typer.Option("--difficulty", min=1, max=10)] = 7,
+    seed: Annotated[int, typer.Option("--seed", min=0)] = 42,
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for benchmark artifacts.")
+    ] = Path("runs/benchmarks"),
+    models: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--models",
+            help=(
+                "Built-in model ID; repeat for multiple models "
+                "(comma-separated is also accepted)."
+            ),
+        ),
+    ] = None,
+    runners: Annotated[
+        list[str] | None,
+        typer.Option("--runner", help="External runner module:factory; repeat this option."),
+    ] = None,
+    calibration_profile: Annotated[
+        Path | None, typer.Option("--calibration-profile", help="M16 calibration profile YAML.")
+    ] = None,
+) -> None:
+    """Generate and evaluate a reproducible fraud stress benchmark."""
+
+    selected_models = tuple(
+        item.strip()
+        for value in (models or ["deterministic_heuristic"])
+        for item in value.split(",")
+        if item.strip()
+    )
+    try:
+        result = run_benchmark(
+            BenchmarkRequest(
+                suite=cast(SuiteName, suite),
+                difficulty=difficulty,
+                seed=seed,
+                output_dir=output_dir,
+                models=selected_models,
+                runners=tuple(runners or ()),
+                calibration_profile=calibration_profile,
+            )
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Benchmark generation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Benchmark generated: {result.benchmark_id}")
+    typer.echo(f"Manifest: {result.manifest_path}")
+    typer.echo(f"Results: {result.results_path}")
+    typer.echo(f"Descriptors: {result.descriptors_path}")
 
 
 def _load_or_exit(
@@ -462,6 +533,92 @@ def build_dataset(
     typer.echo(f"Rows: {dataset.count}")
 
 
+def _read_ml_dataset(path: Path) -> list[dict[str, object]]:
+    """Read a previously materialized PIT dataset without regenerating its source run."""
+
+    try:
+        frame = pl.read_parquet(path)
+    except (FileNotFoundError, OSError) as exc:
+        raise ValueError(f"dataset does not exist or cannot be read: {path}") from exc
+    required = {"dataset_row_id", "prediction_time", "label", "split"}
+    if not required.issubset(frame.columns):
+        missing = sorted(required - set(frame.columns))
+        raise ValueError(f"dataset is missing required columns: {missing}")
+    return cast(list[dict[str, object]], frame.to_dicts())
+
+
+def _infer_source_run_dir(dataset: Path) -> Path | None:
+    """Infer a generated run directory for segment enrichment when possible."""
+
+    candidate = dataset.parent.parent if dataset.parent.name == "ml" else None
+    return candidate if candidate is not None and (candidate / "manifest.json").is_file() else None
+
+
+@ml_app.command("train")
+def train_baselines_command(
+    dataset: Annotated[Path, typer.Argument(help="Point-in-time dataset Parquet file.")],
+    config_path: Annotated[
+        Path, typer.Option("--config", help="Baseline evaluation YAML configuration.")
+    ] = Path("configs/ml-baselines.yaml"),
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for evaluation artifacts.")
+    ] = Path("runs/ml-evaluations"),
+) -> None:
+    """Train deterministic M19 baseline models on frozen PIT rows."""
+
+    try:
+        evaluation_config = load_baseline_config(config_path)
+        rows = _read_ml_dataset(dataset)
+        result = train_baselines(
+            rows, evaluation_config, source_run_dir=_infer_source_run_dir(dataset)
+        )
+        destination = output_dir / ("EV-" + result.manifest["output_fingerprint"][:16])
+        predictions_path, metrics_path, manifest_path = write_evaluation(result, destination)
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Baseline training failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Baseline evaluation generated: {destination.name}")
+    typer.echo(f"Predictions: {predictions_path}")
+    typer.echo(f"Metrics: {metrics_path}")
+    typer.echo(f"Manifest: {manifest_path}")
+
+
+@ml_app.command("evaluate")
+def evaluate_predictions_command(
+    dataset: Annotated[Path, typer.Argument(help="Point-in-time dataset Parquet file.")],
+    predictions: Annotated[
+        Path, typer.Argument(help="External predictions Parquet or JSONL file.")
+    ],
+    config_path: Annotated[
+        Path, typer.Option("--config", help="Baseline evaluation YAML configuration.")
+    ] = Path("configs/ml-baselines.yaml"),
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for evaluation artifacts.")
+    ] = Path("runs/ml-evaluations"),
+) -> None:
+    """Evaluate external model predictions against PIT-safe labels."""
+
+    try:
+        evaluation_config = load_baseline_config(config_path)
+        rows = _read_ml_dataset(dataset)
+        records = load_predictions(predictions)
+        result = evaluate_predictions(
+            rows,
+            records,
+            evaluation_config,
+            source_run_dir=_infer_source_run_dir(dataset),
+        )
+        destination = output_dir / ("EV-" + result.manifest["output_fingerprint"][:16])
+        predictions_path, metrics_path, manifest_path = write_evaluation(result, destination)
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"External prediction evaluation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"External evaluation generated: {destination.name}")
+    typer.echo(f"Predictions: {predictions_path}")
+    typer.echo(f"Metrics: {metrics_path}")
+    typer.echo(f"Manifest: {manifest_path}")
+
+
 @app.command("replay")
 def replay_command(
     run_id: Annotated[str, typer.Option("--run-id", help="Existing generated run identifier.")],
@@ -510,6 +667,16 @@ def backtest_command(
         Path,
         typer.Option("--output-dir", help="Directory containing generated runs."),
     ] = Path("runs"),
+    models: Annotated[
+        str,
+        typer.Option(
+            "--models",
+            help=(
+                "Comma-separated M19 models; default deterministic_heuristic "
+                "for M10 compatibility."
+            ),
+        ),
+    ] = "deterministic_heuristic",
 ) -> None:
     """Build deterministic rolling PIT backtest folds from an existing run."""
 
@@ -520,12 +687,18 @@ def backtest_command(
         )
         run_dir = output_dir / run_id
         entities, behavior, source_manifest = load_generated_run(run_dir)
-        result = run_backtest(
-            config,
-            entities,
-            behavior,
-            source_manifest,
-            benchmark_pack=pack,
+        selected_models = tuple(item.strip() for item in models.split(",") if item.strip())
+        result = (
+            run_backtest(config, entities, behavior, source_manifest, benchmark_pack=pack)
+            if selected_models == ("deterministic_heuristic",)
+            else run_model_backtest(
+                config,
+                entities,
+                behavior,
+                source_manifest,
+                models=selected_models,
+                benchmark_pack=pack,
+            )
         )
         rows_path, metrics_path, manifest_path = write_backtest(
             result, run_dir / "ml" / "backtests"

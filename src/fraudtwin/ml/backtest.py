@@ -38,6 +38,7 @@ BASELINE_FEATURES = (
 )
 
 BACKTEST_ROW_SCHEMA: dict[str, Any] = {
+    "model_id": pl.Utf8,
     "fold_id": pl.Utf8,
     "partition": pl.Utf8,
     "dataset_row_id": pl.Utf8,
@@ -51,6 +52,7 @@ BACKTEST_ROW_SCHEMA: dict[str, Any] = {
 }
 
 FOLD_METRIC_SCHEMA: dict[str, Any] = {
+    "model_id": pl.Utf8,
     "fold_id": pl.Utf8,
     "partition": pl.Utf8,
     "row_count": pl.Int64,
@@ -695,6 +697,7 @@ def run_backtest(
                 raise ValueError("backtest label availability is after prediction time")
             score = scorer.score(row)
             output_row = {
+                "model_id": "deterministic_heuristic",
                 "fold_id": fold.fold_id,
                 "partition": partition,
                 "dataset_row_id": row["dataset_row_id"],
@@ -715,7 +718,14 @@ def run_backtest(
             if partition == "stress" and fold.stress_from is None:
                 continue
             metrics = _metrics(fold_row_values[partition])
-            fold_metrics.append({"fold_id": fold.fold_id, "partition": partition, **metrics})
+            fold_metrics.append(
+                {
+                    "model_id": "deterministic_heuristic",
+                    "fold_id": fold.fold_id,
+                    "partition": partition,
+                    **metrics,
+                }
+            )
         metadata = fold.as_metadata()
         metadata["trainable_label_count"] = sum(
             row["label"] in {"FRAUD", "LEGITIMATE"} for row in fold_row_values["train"]
@@ -733,7 +743,11 @@ def run_backtest(
     if benchmark_pack is not None:
         parameters["benchmark_pack"] = benchmark_pack.identity
     output_fingerprint = sha256_json(
-        {"rows": fold_rows, "metrics": fold_metrics, "folds": fold_metadata}
+        {
+            "rows": fold_rows,
+            "metrics": fold_metrics,
+            "folds": fold_metadata,
+        }
     )
     backtest_id = "BT-" + sha256_json({"source": source_hash, "parameters": parameters})[:16]
     manifest = BacktestManifest(
@@ -784,6 +798,149 @@ def run_backtest(
     return BacktestResult(tuple(fold_rows), tuple(fold_metrics), manifest)
 
 
+def run_model_backtest(
+    config: SimulationRunConfig,
+    entities: EntityDataset,
+    behavior: BehaviorDataset,
+    source_manifest: RunManifest,
+    *,
+    models: tuple[str, ...],
+    benchmark_pack: BenchmarkPack | None = None,
+) -> BacktestResult:
+    """Run selected M19 model adapters over the existing M10 temporal folds."""
+
+    from fraudtwin.ml.baseline import (
+        MODEL_NAMES,
+        BaselineEvaluationConfig,
+        train_baselines,
+    )
+
+    if not models or any(model not in MODEL_NAMES for model in models):
+        raise ValueError(f"models must use M19 names: {MODEL_NAMES}")
+    legacy = run_backtest(
+        config, entities, behavior, source_manifest, benchmark_pack=benchmark_pack
+    )
+    analysis_dataset = config.dataset.model_copy(
+        update={
+            "start": _utc(source_manifest.start_time),
+            "end": _utc(source_manifest.end_time),
+            "unresolved_labels": "exclude",
+            "splits": config.dataset.splits.model_copy(
+                update={
+                    "train_end": None,
+                    "validation_end": None,
+                    "test_end": None,
+                    "label_delay_gap_seconds": 0,
+                }
+            ),
+        }
+    )
+    rows = PointInTimeDatasetBuilder(
+        config.model_copy(update={"dataset": analysis_dataset}),
+        entities,
+        behavior,
+        source_manifest,
+    ).build_rows()
+    rows_by_id = {str(row["dataset_row_id"]): row for row in rows}
+    fold_rows: list[dict[str, Any]] = []
+    fold_metrics: list[dict[str, object]] = []
+    for model_id in models:
+        for fold in legacy.manifest.folds:
+            fold_id = str(fold["fold_id"])
+            assigned_ids = [
+                row["dataset_row_id"] for row in legacy.fold_rows if row["fold_id"] == fold_id
+            ]
+            source_rows = [dict(rows_by_id[str(row_id)]) for row_id in assigned_ids]
+            partitions = {
+                str(row["dataset_row_id"]): str(row["partition"])
+                for row in legacy.fold_rows
+                if row["fold_id"] == fold_id
+            }
+            source_rows = [
+                dict(row, split=partitions[str(row["dataset_row_id"])]) for row in source_rows
+            ]
+            result = train_baselines(
+                source_rows,
+                BaselineEvaluationConfig(
+                    models=(model_id,),
+                    random_seed=source_manifest.seed,
+                ),
+            )
+            for prediction in result.predictions:
+                target_field = next(
+                    field
+                    for field in ("event_id", "payment_id", "customer_id", "account_id")
+                    if prediction.get(field) is not None
+                )
+                source_row = next(
+                    row
+                    for row in source_rows
+                    if str(row.get(target_field)) == str(prediction[target_field])
+                    and _utc(row["prediction_time"])
+                    == datetime.fromisoformat(
+                        str(prediction["prediction_timestamp"]).replace("Z", "+00:00")
+                    )
+                )
+                fold_rows.append(
+                    {
+                        "model_id": model_id,
+                        "fold_id": fold_id,
+                        "partition": partitions[str(source_row["dataset_row_id"])],
+                        "dataset_row_id": source_row["dataset_row_id"],
+                        "payment_id": source_row["payment_id"],
+                        "prediction_time": source_row["prediction_time"],
+                        "source_available_at": source_row["source_available_at"],
+                        "feature_available_at": source_row["feature_available_at"],
+                        "label_available_at": source_row["label_available_at"],
+                        "label": source_row["label"],
+                        "fraud_score": prediction["fraud_score"],
+                    }
+                )
+            for metric in result.metrics:
+                if "segment_dimension" not in metric:
+                    fold_metrics.append(
+                        {
+                            "model_id": model_id,
+                            "fold_id": fold_id,
+                            "partition": metric["partition"],
+                            "row_count": metric["row_count"],
+                            "labelled_row_count": metric["labelled_row_count"],
+                            "positive_count": metric["positive_count"],
+                            "roc_auc": metric["roc_auc"],
+                            "pr_auc": metric["pr_auc"],
+                            "precision": metric["precision"],
+                            "recall": metric["recall"],
+                            "f1": metric["f1"],
+                            "brier_score": metric["brier_score"],
+                        }
+                    )
+    aggregate = {
+        model: _aggregate(
+            [
+                item
+                for item in fold_metrics
+                if item["model_id"] == model and item["partition"] == "test"
+            ]
+        )
+        for model in models
+    }
+    manifest = legacy.manifest.model_copy(
+        update={
+            "parameters": {**legacy.manifest.parameters, "models": list(models)},
+            "per_fold_metrics": fold_metrics,
+            "aggregate_metrics": aggregate,
+            "output_fingerprint": sha256_json(
+                {
+                    "rows": fold_rows,
+                    "metrics": fold_metrics,
+                    "models": models,
+                }
+            ),
+        }
+    )
+    return BacktestResult(tuple(fold_rows), tuple(fold_metrics), manifest)
+
+
 def write_backtest(result: BacktestResult, output_dir: Path) -> tuple[Path, Path, Path]:
     """Persist fold rows, metrics, and the append-only backtest manifest."""
 
@@ -809,5 +966,6 @@ __all__ = [
     "FoldSpec",
     "load_benchmark_pack",
     "run_backtest",
+    "run_model_backtest",
     "write_backtest",
 ]

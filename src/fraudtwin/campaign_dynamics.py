@@ -307,7 +307,10 @@ def _campaign_actions(
             ),
             configuration_hash=sha256_json(config.model_dump(mode="json")),
             schema_fingerprint=sha256_json(
-                {"version": "m15-1", "models": ["CampaignStateSnapshot", "CampaignTransition"]}
+                {
+                    "version": "m15-1",
+                    "models": ["CampaignStateSnapshot", "CampaignTransition"],
+                }
             ),
         )
     ]

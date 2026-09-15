@@ -29,7 +29,7 @@ Start from [`configs/minimal.yaml`](../configs/minimal.yaml) and change only the
 
 Unknown fields and invalid ranges are rejected during validation. That strict boundary is intentional: a run should fail before it produces ambiguous data.
 
-## Label observation (M17)
+## Label observation
 
 Label observation is disabled by default and therefore does not change legacy run bytes or identities. Enable it to model selection-dependent discovery and versioned labels:
 
@@ -45,7 +45,7 @@ labels:
 
 Enabled runs write append-only `label_observations/<id>/observable/observed_labels.parquet` and the oracle-only `label_history.parquet`. PIT rows resolve the greatest label version whose `label_available_at` is no later than `prediction_time`; immature or missing labels follow `dataset.unresolved_labels`. `fraud_workflow` continues to provide alert and case timing, while `labels.investigation_rate` is the sole enabled-run selection control.
 
-## Large-scale generation (M18)
+## Large-scale generation
 
 Scale generation reuses the canonical simulator and is disabled by default. Profiles target 100k, 1M, 10M, 100M, and 1B logical events. Stable shard IDs and hierarchical seed streams make IDs, timestamps, scenario semantics, financial state, schemas, and partition fingerprints independent of worker scheduling. Chunked Parquet output is bounded by `chunk_size` and `output_batch_size`; completed chunks are recorded in an atomic checkpoint manifest.
 
@@ -111,8 +111,8 @@ The same payment can be ordinary for one customer and unusual for another. That 
 
 ## Counterfactual fraud generation
 
-M14 is disabled by default and has no effect on legacy hashes or output files.
-Enable it with explicit M6/M11 objective requests:
+Counterfactual generation is disabled by default and has no effect on legacy hashes or output files.
+Enable it with explicit objective requests:
 
 ```yaml
 counterfactual:
@@ -132,9 +132,9 @@ registered deterministic distance function.
 
 Sources are selected chronologically from the pre-fraud legitimate stream.
 Eligibility uses only records available at the source decision timestamp, and
-stable IDs make repeated runs identical. M14 searches for a feasible minimum
-change, applies the resolved M12 amount/timing constraints, and uses isolated
-M13 camouflage controls at the M14 boundary. Every request records its budget,
+stable IDs make repeated runs identical. The generator searches for a feasible minimum
+change, applies the configured amount/timing constraints, and uses isolated
+camouflage controls at the generation boundary. Every request records its budget,
 costs, changed fields, objective result, constraints, source mapping, and either
 a modified trajectory or a deterministic rejection.
 
@@ -238,7 +238,7 @@ Use either the versioned fixtures under `configs/benchmarks/` or a copied YAML f
 
 ## Dynamic campaign evolution
 
-M15 is disabled by default and does not change legacy IDs, hashes, schemas, or files. Enable it with an M11 graph run:
+Campaign dynamics are disabled by default and do not change legacy IDs, hashes, schemas, or files. Enable them with a graph run:
 
 ```yaml
 campaign_dynamics:
@@ -251,7 +251,7 @@ campaign_dynamics:
 
 The built-ins target `MULE_NETWORK`, `CYCLIC_RING`, and `DENSE_CAMPAIGN`. Bindings validate phase durations and transitions before generation and support `marked_hawkes_v1` (default) or `piecewise_rate_v1`. CARD actions are merchant purchases with the normal card lifecycle; PIX and account-transfer actions preserve account-to-account ledger rules. Rail, template, model, phase, and capacity incompatibilities are rejected deterministically.
 
-M15 runs after M11 and before M13. M14 still selects pristine legitimate sources before all fraud, graph, dynamic, and camouflage processing. Dynamic state, reasons, membership history, intensity decisions, topology mutations, and lineage are oracle-only append-only Parquet artifacts under `campaign_dynamics/<m15_id>/`; observable output uses established payment, event, and ledger schemas. Custom deterministic transition and intensity models can be registered through the public API. `fraudtwin campaign evolve` appends a sidecar to a clean static graph run without modifying its existing artifacts.
+Campaign dynamics run after graph construction and before camouflage. Counterfactual generation still selects pristine legitimate sources before fraud, graph, dynamic, and camouflage processing. Dynamic state, reasons, membership history, intensity decisions, topology mutations, and lineage are oracle-only append-only Parquet artifacts under `campaign_dynamics/<campaign_id>/`; observable output uses established payment, event, and ledger schemas. Custom deterministic transition and intensity models can be registered through the public API. `fraudtwin campaign evolve` appends a sidecar to a clean static graph run without modifying its existing artifacts.
 
 ## Reproducibility
 

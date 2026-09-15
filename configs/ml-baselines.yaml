@@ -1,0 +1,15 @@
+# Deterministic Milestone 19 baseline evaluation defaults.
+models:
+  - logistic_regression
+  - lightgbm
+  - xgboost
+  - catboost
+fixed_fpr: 0.01
+fixed_recall: 0.80
+ranking_k_fraction: 0.01
+label_policy: exclude_unresolved
+random_seed: 42
+deterministic_presets:
+  single_thread: true
+  resampling: none
+  tie_break: score_then_dataset_row_id
