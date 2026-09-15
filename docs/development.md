@@ -72,4 +72,4 @@ Scale tests must use at most 1,000 logical events per fixture. Validate scale be
 
 ## Documentation conventions
 
-Write for a reader who has not seen the repository before. Lead with what a command enables, show the smallest working example, and explain any important constraint immediately after it. Keep milestone history in `CHANGELOG.md`; the README and `docs/` should teach people how to use the current system.
+Write for a reader who has not seen the repository before. Lead with what a command enables, show the smallest working example, and explain any important constraint immediately after it. Keep release history in `CHANGELOG.md`; the README and `docs/` should teach people how to use the current system.

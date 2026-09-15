@@ -1,17 +1,24 @@
 # Release notes
 
-## 0.24.0 — Baseline ML + Evaluation Adapter
+## 0.25.0 — Milestone 20 Fraud Stress Benchmark
+
+- Added reproducible baseline, temporal, boundary, camouflage, graph, observability, calibrated, mixed, and all-suite benchmark orchestration.
+- Added PIT-safe model-result tables, generator descriptors, latent/observed truth catalogs, fixed split lineage, and framework-neutral external model runners.
+- Added the `fraudtwin benchmark` CLI with optional scikit-learn, LightGBM, XGBoost, CatBoost, and external framework adapters.
+- Fixed event-level M19 evaluation rejecting unique predictions when customer or account identifiers repeated at the same timestamp.
+
+## 0.24.0 — Milestone 19 Baseline ML + Evaluation Adapter
 
 - Added deterministic Logistic Regression, LightGBM, XGBoost, and CatBoost baseline training over frozen point-in-time datasets.
 - Added strict Parquet/JSONL external prediction evaluation, required fraud metrics and segments, model artifacts, and manifest lineage with optional MLflow tracking.
 - Preserved M1–M18 generation, label-observation, scale, and legacy heuristic backtest behavior.
 
-## 0.23.0 — Large-Scale Deterministic Generation
+## 0.23.0 — Milestone 18 Large-Scale Deterministic Generation
 
 - Added opt-in deterministic scale profiles with stable sharding, hierarchical seed streams, bounded chunked Parquet output, parallel scheduling, checkpoint/resume, partition fingerprints, and cross-partition reconciliation.
 - Added the `fraudtwin resume` workflow and scale execution metadata while preserving canonical M1–M17 generation semantics.
 
-## 0.22.0 — Label Observation Engine
+## 0.22.0 — Milestone 17  Label Observation Engine
 
 - Added deterministic, opt-in label observation with selective investigation, missing fraud, preliminary errors, corrections, reopenings, immutable history, and PIT-safe version resolution.
 - Added typed observation APIs, append-only observable/oracle artifacts, provenance manifests, and strict configuration validation while preserving disabled-run M1–M16 output identity.

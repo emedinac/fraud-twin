@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 project = "FraudTwin"
 copyright = "2026, FraudTwin contributors"
 author = "FraudTwin contributors"
-release = "0.24.0"
+release = "0.25.0"
 
 extensions = [
     "myst_parser",

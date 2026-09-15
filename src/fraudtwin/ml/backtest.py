@@ -835,8 +835,6 @@ def run_model_backtest(
             ),
         }
     )
-    from fraudtwin.ml.dataset import PointInTimeDatasetBuilder
-
     rows = PointInTimeDatasetBuilder(
         config.model_copy(update={"dataset": analysis_dataset}),
         entities,

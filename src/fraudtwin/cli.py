@@ -6,6 +6,7 @@ from typing import Annotated, Literal, cast
 import polars as pl
 import typer
 
+from fraudtwin.benchmark import BenchmarkRequest, SuiteName, run_benchmark
 from fraudtwin.calibration import (
     fit_calibration_profile,
     load_reference_data,
@@ -49,6 +50,70 @@ counterfactual_app = typer.Typer(help="Generate deterministic M14 counterfactual
 campaign_app = typer.Typer(help="Evolve deterministic M15 campaign sidecars.")
 app.add_typer(counterfactual_app, name="counterfactual")
 app.add_typer(campaign_app, name="campaign")
+
+
+@app.command("benchmark")
+def benchmark_command(
+    suite: Annotated[
+        str,
+        typer.Option(
+            "--suite",
+            help=(
+                "Standard suite or all: baseline, temporal, boundary, camouflage, "
+                "graph, observability, calibrated, mixed."
+            ),
+        ),
+    ] = "mixed",
+    difficulty: Annotated[int, typer.Option("--difficulty", min=1, max=10)] = 7,
+    seed: Annotated[int, typer.Option("--seed", min=0)] = 42,
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for benchmark artifacts.")
+    ] = Path("runs/benchmarks"),
+    models: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--models",
+            help=(
+                "Built-in model ID; repeat for multiple models "
+                "(comma-separated is also accepted)."
+            ),
+        ),
+    ] = None,
+    runners: Annotated[
+        list[str] | None,
+        typer.Option("--runner", help="External runner module:factory; repeat this option."),
+    ] = None,
+    calibration_profile: Annotated[
+        Path | None, typer.Option("--calibration-profile", help="M16 calibration profile YAML.")
+    ] = None,
+) -> None:
+    """Generate and evaluate a reproducible fraud stress benchmark."""
+
+    selected_models = tuple(
+        item.strip()
+        for value in (models or ["deterministic_heuristic"])
+        for item in value.split(",")
+        if item.strip()
+    )
+    try:
+        result = run_benchmark(
+            BenchmarkRequest(
+                suite=cast(SuiteName, suite),
+                difficulty=difficulty,
+                seed=seed,
+                output_dir=output_dir,
+                models=selected_models,
+                runners=tuple(runners or ()),
+                calibration_profile=calibration_profile,
+            )
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Benchmark generation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Benchmark generated: {result.benchmark_id}")
+    typer.echo(f"Manifest: {result.manifest_path}")
+    typer.echo(f"Results: {result.results_path}")
+    typer.echo(f"Descriptors: {result.descriptors_path}")
 
 
 def _load_or_exit(

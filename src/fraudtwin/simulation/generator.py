@@ -319,7 +319,9 @@ class EntityGenerator:
         rng = _entity_stream_rng(self.config.simulation.seed, "accounts")
         balance_rng = (
             create_stream_rng(self.config.simulation.seed, CALIBRATED_BALANCE_STREAM_ID)
-            if self.calibration is not None and self.calibration.enabled
+            if self.calibration is not None
+            and self.calibration.enabled
+            and "account_balance" in self.config.calibration.summary_names
             else rng
         )
         balance_summary = next(
@@ -327,7 +329,9 @@ class EntityGenerator:
                 item
                 for item in (
                     self.calibration.profile.summaries
-                    if self.calibration and self.calibration.profile
+                    if self.calibration
+                    and self.calibration.profile
+                    and "account_balance" in self.config.calibration.summary_names
                     else ()
                 )
                 if item.name == "account_balance"
@@ -412,7 +416,9 @@ class EntityGenerator:
                 item
                 for item in (
                     self.calibration.profile.summaries
-                    if self.calibration and self.calibration.profile
+                    if self.calibration
+                    and self.calibration.profile
+                    and "merchant_frequency" in self.config.calibration.summary_names
                     else ()
                 )
                 if item.name == "merchant_frequency"

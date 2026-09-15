@@ -16,11 +16,11 @@ Source events and ledger entries are filtered by source availability. Labels are
 
 The dataset manifest records the source run, feature and label definitions, split boundaries, stable schema, row hash, and output fingerprint.
 
-When M17 is enabled, inspect `label_observations/<id>/observable/observed_labels.parquet` for the operational projection and the corresponding oracle history for audit. Dataset construction filters each version by `label_available_at`; it never exposes future corrections or latent truth.
+When label observation is enabled, inspect `label_observations/<id>/observable/observed_labels.parquet` for the operational projection and the corresponding oracle history for audit. Dataset construction filters each version by `label_available_at`; it never exposes future corrections or latent truth.
 
 ## Generate and resume large runs
 
-M18 scale profiles use the same simulator and output contracts as ordinary runs while writing deterministic shard/chunk Parquet artifacts and a checkpoint manifest. Worker count changes scheduling only. Resume validates the stored configuration and seed tree, reuses valid completed partitions, and regenerates incomplete work deterministically:
+Large-scale profiles use the same simulator and output contracts as ordinary runs while writing deterministic shard/chunk Parquet artifacts and a checkpoint manifest. Worker count changes scheduling only. Resume validates the stored configuration and seed tree, reuses valid completed partitions, and regenerates incomplete work deterministically:
 
 ```bash
 poetry run fraudtwin generate configs/scale-1b.yaml --workers 16 --checkpoint-dir .fraudtwin/run-1b
@@ -58,7 +58,7 @@ Windows are chronological and non-overlapping. A benchmark pack freezes its own 
 
 ## Train baselines and evaluate external predictions
 
-M19 trains deterministic Logistic Regression, LightGBM, XGBoost, and CatBoost oracles on the same frozen PIT feature allowlist. Install the optional model stack before training:
+The baseline workflow trains Logistic Regression, LightGBM, XGBoost, and CatBoost models on the same frozen point-in-time feature allowlist. Install the optional model stack before training:
 
 ```bash
 poetry install -E ml

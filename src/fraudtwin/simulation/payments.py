@@ -318,7 +318,12 @@ class PaymentGenerator:
         if not valid_hours:
             valid_hours = tuple(self._valid_hours_by_day[current_day])
         hour_weights = tuple(profile.hour_weights[hour] for hour in valid_hours)
-        if self.calibration is not None and self.calibration.enabled and self.calibration.profile:
+        if (
+            self.calibration is not None
+            and self.calibration.enabled
+            and self.calibration.profile
+            and "seasonality" in self.config.calibration.summary_names
+        ):
             seasonality = next(
                 (item for item in self.calibration.profile.summaries if item.name == "seasonality"),
                 None,
@@ -345,7 +350,12 @@ class PaymentGenerator:
         return event_time
 
     def _sample_amount(self, profile: BehaviorProfile, rng: Random) -> float:
-        if self.calibration is not None and self.calibration.enabled and self.calibration.profile:
+        if (
+            self.calibration is not None
+            and self.calibration.enabled
+            and self.calibration.profile
+            and "amount_distribution" in self.config.calibration.summary_names
+        ):
             distribution = next(
                 (item for item in self.calibration.profile.distributions if item.name == "amount"),
                 None,

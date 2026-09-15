@@ -53,7 +53,7 @@ Requested and effective strengths, cohort snapshots, constraints, and measured o
 
 ## Advanced campaign dynamics
 
-M15 evolves matching M11 campaigns in stable campaign order. Phase snapshots and transitions use isolated per-campaign streams, and derived payments receive reserved `M15-` IDs with source lineage. Actor joins/leaves, mule and device rotation, cross-rail movement, split/merge mutations, and structural hyperedges remain closed over the oracle graph. Observable graph views use only source-available events; dynamic truth and transition reasons remain oracle-only.
+Campaign dynamics evolve matching graph campaigns in stable campaign order. Phase snapshots and transitions use isolated per-campaign streams, and derived payments receive reserved IDs with source lineage. Actor joins/leaves, mule and device rotation, cross-rail movement, split/merge mutations, and structural hyperedges remain closed over the oracle graph. Observable graph views use only source-available events; dynamic truth and transition reasons remain oracle-only.
 
 ## Choosing a fixture
 
@@ -66,8 +66,42 @@ M15 evolves matching M11 campaigns in stable campaign order. Phase snapshots and
 
 Reference calibration can be combined with graph fixtures when the reference
 contains transfer endpoints. Graph calibration contributes aggregate degree and
-motif summaries only; configured M11 topology and graph closure remain
+motif summaries only; configured graph topology and graph closure remain
 authoritative. Campaign summaries are available when the reference supplies a
-campaign identifier and M15 is enabled.
+campaign identifier and campaign dynamics are enabled.
 
 Treat these files as immutable examples. Copy one into a working configuration when you need to explore a variation; do not edit the versioned fixture in place.
+
+## Run the fraud stress benchmark
+
+The benchmark command packages the deterministic stress dimensions into standard suites
+and writes a PIT-safe dataset, latent/observed truth catalog, descriptors,
+fixed split lineage, and comparable model results:
+
+```bash
+poetry run fraudtwin benchmark --suite mixed --difficulty 7 --seed 42 \
+  --calibration-profile profiles/reference.yaml
+poetry run fraudtwin benchmark --suite all --difficulty 7 --seed 42
+```
+
+The built-in dependency-free heuristic always runs. Optional scikit-learn,
+LightGBM, XGBoost, and CatBoost models are selected with `--models` after
+installing the optional ML extra:
+
+```bash
+poetry install -E ml
+poetry run fraudtwin benchmark --suite graph \
+  --models deterministic_heuristic --models xgboost
+```
+
+External runners use a `module:factory` adapter and may use any framework,
+including PyTorch, TensorFlow/Keras, JAX/Flax, PyTorch Geometric, or another
+scikit-learn-compatible environment. The runner receives only observable PIT
+artifacts and must return the canonical prediction records; framework
+dependencies remain outside FraudTwin's core installation.
+
+Each benchmark manifest records the generator and suite versions, seed,
+scenario mix, resolved stress controls, calibration identity, label-observation
+policy, temporal ranges, ground-truth availability rules, model lineage, and
+output fingerprints. Public benchmark pack IDs can be added on top of these
+standardized suites.

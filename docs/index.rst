@@ -17,7 +17,7 @@ example generates a run in memory::
 
    from fraudtwin import generate
 
-   run = generate(seed=42)
+   run = generate()
    print(f"Hello from FraudTwin: {run.run_id}")
    print(run.entities.counts)
 

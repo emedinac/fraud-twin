@@ -460,6 +460,12 @@ def _heuristic_score(row: Mapping[str, Any]) -> float:
     )
 
 
+def heuristic_predictions(rows: Sequence[Mapping[str, Any]]) -> tuple[PredictionRecord, ...]:
+    """Score PIT rows with the dependency-free deterministic baseline."""
+
+    return tuple(_record_for_row(row, _heuristic_score(row)) for row in rows)
+
+
 def _lazy_model(name: str, seed: int) -> Any:
     try:
         if name == "logistic_regression":
@@ -659,20 +665,25 @@ def evaluate_predictions(
     rows = _enrich_segments(rows, source_run_dir)
     lineage = _lineage_metadata(rows, source_run_dir)
     by_key: dict[tuple[str, str, datetime], dict[str, Any]] = {}
+    ambiguous_keys: set[tuple[str, str, datetime]] = set()
     for row in rows:
         prediction_time = _utc(row["prediction_time"])
         for field in PREDICTION_FIELDS:
             value = row.get(field)
             if value is not None:
                 key = (field, str(value), prediction_time)
-                if key in by_key:
-                    raise ValueError(f"ambiguous PIT dataset target: {field}={value}")
-                by_key[key] = dict(row)
+                if key in by_key and by_key[key]["dataset_row_id"] != row["dataset_row_id"]:
+                    ambiguous_keys.add(key)
+                else:
+                    by_key[key] = dict(row)
     selected: list[dict[str, Any]] = []
     seen: set[str] = set()
     for prediction in predictions:
         field, value = prediction.target
-        matched_row = by_key.get((field, value, prediction.prediction_timestamp))
+        key = (field, value, prediction.prediction_timestamp)
+        if key in ambiguous_keys:
+            raise ValueError(f"ambiguous PIT dataset target: {field}={value}")
+        matched_row = by_key.get(key)
         if matched_row is None:
             raise ValueError(f"prediction does not resolve to one PIT row: {field}={value}")
         row = matched_row
@@ -917,6 +928,7 @@ __all__ = [
     "load_predictions",
     "write_predictions",
     "evaluate_predictions",
+    "heuristic_predictions",
     "train_baselines",
     "write_evaluation",
 ]
