@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import os
 import struct
 import time
@@ -236,9 +237,9 @@ def _register_subject_versions(client: Any, subject: ContractSubject) -> int:
 def _register(client: Any, subject: str, schema: Any) -> int:
     try:
         try:
-            from confluent_kafka.schema_registry import Schema  # type: ignore[import-not-found]
-
-            remote_schema: Any = Schema(schema.canonical_form, "AVRO")
+            schema_registry = importlib.import_module("confluent_kafka.schema_registry")
+            schema_class = vars(schema_registry)["Schema"]
+            remote_schema: Any = schema_class(schema.canonical_form)
         except ImportError:
             remote_schema = schema.canonical_form
         registered = client.register_schema(subject, remote_schema)
@@ -257,11 +258,11 @@ def _register(client: Any, subject: str, schema: Any) -> int:
 
 def _dependencies() -> tuple[Any, Any]:
     try:
-        from confluent_kafka import Producer  # type: ignore[import-not-found]
-        from confluent_kafka.schema_registry import SchemaRegistryClient
+        confluent_kafka = importlib.import_module("confluent_kafka")
+        schema_registry = importlib.import_module("confluent_kafka.schema_registry")
     except ImportError as exc:  # pragma: no cover - depends on optional extra
         raise RuntimeError("Kafka output requires the optional 'kafka' dependency") from exc
-    return Producer, SchemaRegistryClient
+    return vars(confluent_kafka)["Producer"], vars(schema_registry)["SchemaRegistryClient"]
 
 
 def publisher_from_environment(

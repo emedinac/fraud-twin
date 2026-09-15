@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import importlib
 import json
 import os
 from collections.abc import Iterable, Mapping
@@ -811,18 +812,19 @@ def consume_kafka_once(  # pragma: no cover - optional integration dependency
     """Consume a bounded Kafka batch into immutable Bronze and Silver tables."""
 
     try:
-        from confluent_kafka import Consumer  # type: ignore[import-not-found]
+        confluent_kafka = importlib.import_module("confluent_kafka")
     except ImportError as exc:  # pragma: no cover - optional integration dependency
         raise LakehouseDependencyError(
             "Kafka ingestion requires the optional 'kafka' dependency"
         ) from exc
+    consumer_class = vars(confluent_kafka)["Consumer"]
     brokers = os.environ.get("FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS")
     group = os.environ.get("FRAUDTWIN_LAKEHOUSE_CONSUMER_GROUP", "fraudtwin-lakehouse")
     if not brokers:
         raise LakehouseConfigurationError(
             "Kafka ingestion requires FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS"
         )
-    consumer = Consumer(
+    consumer = consumer_class(
         {
             "bootstrap.servers": brokers,
             "group.id": group,
