@@ -18,9 +18,10 @@ import time
 from collections.abc import Iterable, Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from random import Random
-from typing import Any
+from typing import Any, cast
 
 import polars as pl
 from pydantic import BaseModel, ConfigDict, Field
@@ -97,6 +98,7 @@ class ChunkCompletion(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     shard_id: str
+    logical_type: str = "records"
     chunk_index: int = Field(ge=0)
     start_ordinal: int = Field(ge=0)
     end_ordinal: int = Field(ge=0)
@@ -115,6 +117,9 @@ class ReconciliationResult(BaseModel):
     partition_row_count: int = Field(ge=0)
     duplicate_logical_ids: tuple[str, ...] = ()
     missing_logical_ids: tuple[str, ...] = ()
+    ledger_debit_total: float = 0.0
+    ledger_credit_total: float = 0.0
+    ledger_balanced: bool = True
     valid: bool
     checks: dict[str, bool] = Field(default_factory=dict)
 
@@ -124,7 +129,7 @@ class ScaleCheckpoint(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    checkpoint_version: str = "M18-checkpoint-2"
+    checkpoint_version: str = "M18-checkpoint-3"
     run_id: str
     run_dir: str
     configuration_hash: str
@@ -268,7 +273,7 @@ def iter_partition_rows(
 ) -> Iterator[dict[str, Any]]:
     """Read scale chunks one file at a time, keeping reader memory bounded."""
 
-    pattern = f"{shard_id}/chunk-*.parquet" if shard_id else "SHARD-*/chunk-*.parquet"
+    pattern = f"{shard_id}/**/chunk-*.parquet" if shard_id else "SHARD-*/**/chunk-*.parquet"
     scale_root = Path(run_dir) / "scale"
     # Prefer the current shard layout.  Fall back to the legacy partition
     # layout only when no current output exists, avoiding duplicate reads when
@@ -308,7 +313,7 @@ def iter_partition_query(
     )
     if selected_root is None:
         return
-    pattern = f"{shard_id}/chunk-*.parquet" if shard_id else "SHARD-*/chunk-*.parquet"
+    pattern = f"{shard_id}/**/chunk-*.parquet" if shard_id else "SHARD-*/**/chunk-*.parquet"
     source = (selected_root / pattern).as_posix()
     if "{source}" not in query:
         raise ValueError("query must contain the {source} relation placeholder")
@@ -399,6 +404,50 @@ def _package_versions() -> dict[str, str]:
     return versions
 
 
+def run_scale_benchmark(
+    config: SimulationRunConfig,
+    *,
+    output_dir: str | Path,
+    checkpoint_dir: str | Path | None = None,
+    evidence_dir: str | Path | None = None,
+) -> Path:
+    """Run one explicitly requested scale job and publish machine evidence.
+
+    This is intentionally a manual-job API.  It does not change the normal
+    generation path or make large profiles part of unit/CI tests.
+    """
+
+    if not config.scale.enabled:
+        raise ValueError("scale benchmark requires an enabled scale profile")
+    from fraudtwin.generation import generate
+
+    started = time.perf_counter()
+    result = generate(
+        config,
+        write=True,
+        output_dir=output_dir,
+        checkpoint_dir=checkpoint_dir,
+    )
+    elapsed = time.perf_counter() - started
+    scale = result.manifest.scale or {}
+    target = int(
+        cast(int, scale.get("target_payments", config.scale.resolved_target_payments or 0))
+    )
+    destination_root = Path(evidence_dir) if evidence_dir is not None else Path(output_dir)
+    return write_scale_benchmark_manifest(
+        destination_root / f"{result.run_id}-benchmark.json",
+        target_payments=target,
+        realized_counts=result.manifest.event_counts,
+        configuration_hash=result.manifest.scenario_config_hash,
+        seed=config.simulation.seed,
+        shard_count=config.scale.shard_count,
+        worker_count=config.scale.worker_count,
+        elapsed_seconds=elapsed,
+        resume={"checkpoint": scale.get("checkpoint"), "completed": True},
+        output_dir=result.run_dir,
+    )
+
+
 def reconcile_logical_ids(
     logical_ids: Iterable[str],
     partition_ids: Iterable[str],
@@ -480,7 +529,7 @@ def write_scale_partitions(
     spool_root.mkdir(parents=True, exist_ok=True)
     descriptors = shard_descriptors(plan)
     checkpoint_root = Path(checkpoint_dir) if checkpoint_dir is not None else run_root / "scale"
-    prior_chunks: dict[tuple[str, int], ChunkCompletion] = {}
+    prior_chunks: dict[tuple[str, str, int], ChunkCompletion] = {}
     prior_checkpoint = checkpoint_root / "checkpoint.json"
     if prior_checkpoint.is_file():
         try:
@@ -492,7 +541,8 @@ def write_scale_partitions(
                 and checkpoint.plan == plan
             ):
                 prior_chunks = {
-                    (item.shard_id, item.chunk_index): item for item in checkpoint.completed_chunks
+                    (item.shard_id, item.logical_type, item.chunk_index): item
+                    for item in checkpoint.completed_chunks
                 }
         except ValueError:
             # A corrupt or legacy checkpoint is never trusted for reuse; the
@@ -504,12 +554,14 @@ def write_scale_partitions(
     # has not been published yet.
     marker_root = checkpoint_root / "chunks"
     if marker_root.exists():
-        for marker in marker_root.glob("SHARD-*/chunk-*.json"):
+        for marker in marker_root.glob("SHARD-*/**/chunk-*.json"):
             try:
                 completion = ChunkCompletion.model_validate_json(marker.read_text(encoding="utf-8"))
                 chunk_path = run_root / completion.path
                 if chunk_path.is_file():
-                    prior_chunks[(completion.shard_id, completion.chunk_index)] = completion
+                    prior_chunks[
+                        (completion.shard_id, completion.logical_type, completion.chunk_index)
+                    ] = completion
             except (OSError, ValueError):
                 continue
 
@@ -520,6 +572,8 @@ def write_scale_partitions(
         for item in descriptors
     }
     total_rows = 0
+    ledger_debit_total = Decimal("0")
+    ledger_credit_total = Decimal("0")
     try:
         for record in records:
             row = dict(record)
@@ -528,6 +582,12 @@ def write_scale_partitions(
             # may omit it, in which case the logical ID remains the fallback.
             owner_key = str(row.get("partition_key", logical_id))
             row["partition_id"] = partition_id(owner_key, plan.shard_count)
+            if row.get("logical_type") == "ledger_entries":
+                amount = Decimal(str(row.get("amount", 0)))
+                if row.get("entry_type") == "DEBIT":
+                    ledger_debit_total += amount
+                elif row.get("entry_type") == "CREDIT":
+                    ledger_credit_total += amount
             handles[row["partition_id"]].write(
                 json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n"
             )
@@ -543,19 +603,24 @@ def write_scale_partitions(
         shard_root.mkdir(parents=True, exist_ok=True)
         source = spool_root / f"{descriptor.shard_id}.jsonl"
         row_count = 0
-        chunk_index = 0
         chunk_completions: list[ChunkCompletion] = []
-        partition_rows: list[dict[str, Any]] = []
+        buffers: dict[str, list[dict[str, Any]]] = {}
+        type_row_counts: dict[str, int] = {}
+        type_chunk_indices: dict[str, int] = {}
 
-        def flush() -> None:
-            nonlocal row_count, chunk_index, partition_rows
+        def flush(logical_type: str) -> None:
+            nonlocal row_count
+            partition_rows = buffers.get(logical_type, [])
             if not partition_rows:
                 return
-            start = row_count
+            start = type_row_counts.get(logical_type, 0)
             end = start + len(partition_rows)
-            path = shard_root / f"chunk-{chunk_index:06d}.parquet"
+            chunk_index = type_chunk_indices.get(logical_type, 0)
+            table_root = shard_root / logical_type
+            table_root.mkdir(parents=True, exist_ok=True)
+            path = table_root / f"chunk-{chunk_index:06d}.parquet"
             temporary = path.with_suffix(path.suffix + ".tmp")
-            prior = prior_chunks.get((descriptor.shard_id, chunk_index))
+            prior = prior_chunks.get((descriptor.shard_id, logical_type, chunk_index))
             if (
                 prior is not None
                 and path.is_file()
@@ -573,6 +638,7 @@ def write_scale_partitions(
                 chunk_completions.append(
                     ChunkCompletion(
                         shard_id=descriptor.shard_id,
+                        logical_type=logical_type,
                         chunk_index=chunk_index,
                         start_ordinal=start,
                         end_ordinal=end,
@@ -582,24 +648,37 @@ def write_scale_partitions(
                         path=str(path.relative_to(run_root)),
                     )
                 )
-                marker = marker_root / descriptor.shard_id / f"chunk-{chunk_index:06d}.json"
+                marker = (
+                    marker_root
+                    / descriptor.shard_id
+                    / logical_type
+                    / f"chunk-{chunk_index:06d}.json"
+                )
                 marker.parent.mkdir(parents=True, exist_ok=True)
                 marker_tmp = marker.with_suffix(marker.suffix + ".tmp")
                 marker_tmp.write_text(
                     chunk_completions[-1].model_dump_json() + "\n", encoding="utf-8"
                 )
                 os.replace(marker_tmp, marker)
-            row_count = end
-            chunk_index += 1
-            partition_rows = []
+            row_count += len(partition_rows)
+            type_row_counts[logical_type] = end
+            type_chunk_indices[logical_type] = chunk_index + 1
+            buffers[logical_type] = []
 
         if source.exists():
             with source.open(encoding="utf-8") as stream:
                 for line in stream:
-                    partition_rows.append(json.loads(line))
-                    if len(partition_rows) >= plan.chunk_size:
-                        flush()
-        flush()
+                    row = json.loads(line)
+                    logical_type = "".join(
+                        char if char.isalnum() or char in "_-" else "_"
+                        for char in str(row.get("logical_type") or "records")
+                    )
+                    buffer = buffers.setdefault(logical_type, [])
+                    buffer.append(row)
+                    if len(buffer) >= plan.chunk_size:
+                        flush(logical_type)
+        for logical_type in sorted(buffers):
+            flush(logical_type)
         partition_fingerprint = aggregate_fingerprint(
             item for chunk in chunk_completions for item in (chunk.model_dump(mode="json"),)
         )
@@ -629,8 +708,15 @@ def write_scale_partitions(
     reconciliation = ReconciliationResult(
         logical_row_count=total_rows,
         partition_row_count=emitted_rows,
-        valid=total_rows == emitted_rows,
-        checks={"row_counts": total_rows == emitted_rows, "chunk_ranges": True},
+        ledger_debit_total=float(ledger_debit_total),
+        ledger_credit_total=float(ledger_credit_total),
+        ledger_balanced=ledger_debit_total == ledger_credit_total,
+        valid=total_rows == emitted_rows and ledger_debit_total == ledger_credit_total,
+        checks={
+            "row_counts": total_rows == emitted_rows,
+            "chunk_ranges": True,
+            "ledger_double_entry": ledger_debit_total == ledger_credit_total,
+        },
     )
     checkpoint = ScaleCheckpoint(
         run_id=plan.run_id,
@@ -658,6 +744,18 @@ def _checkpoint_integrity_payload(checkpoint: ScaleCheckpoint) -> dict[str, Any]
     payload = checkpoint.model_dump(mode="json")
     payload.pop("integrity_hash", None)
     payload.pop("created_at", None)
+    # M18-checkpoint-2 predates table-qualified chunks and ledger aggregate
+    # fields.  Preserve its original integrity calculation while accepting
+    # those artifacts as readable inputs.
+    if checkpoint.checkpoint_version == "M18-checkpoint-2":
+        for item in payload.get("completed_chunks", []):
+            if item.get("logical_type") == "records":
+                item.pop("logical_type", None)
+        reconciliation = payload.get("reconciliation")
+        if isinstance(reconciliation, dict):
+            reconciliation.pop("ledger_debit_total", None)
+            reconciliation.pop("ledger_credit_total", None)
+            reconciliation.pop("ledger_balanced", None)
     return payload
 
 
@@ -683,6 +781,7 @@ __all__ = [
     "iter_partition_rows",
     "iter_partition_query",
     "write_scale_benchmark_manifest",
+    "run_scale_benchmark",
     "reconcile_logical_ids",
     "write_checkpoint",
     "load_checkpoint",

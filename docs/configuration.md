@@ -88,6 +88,9 @@ The compatibility API still materializes canonical entity/behavior objects;
 use `dev` on a laptop. Production 100M/1B executions should wire a streaming
 canonical-row producer to this chunk writer on SSD or S3/MinIO.
 
+M22 also provides `standard-v1-dev` for running the quality protocol against
+the 1,000-payment smoke workload without launching a large benchmark.
+
 ## Reference calibration
 
 Calibration is disabled by default and does not change legacy hashes or output

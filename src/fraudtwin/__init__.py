@@ -147,6 +147,7 @@ from fraudtwin.scale import (
     partition_index,
     reconcile_logical_ids,
     resolve_scale_plan,
+    run_scale_benchmark,
     write_checkpoint,
     write_scale_benchmark_manifest,
 )
@@ -218,6 +219,7 @@ __all__ = [
     "iter_partition_query",
     "iter_payment_ranges",
     "write_scale_benchmark_manifest",
+    "run_scale_benchmark",
     "create_scale_stream_rng",
     "apply_label_observation",
     "reconstruct_label_history",

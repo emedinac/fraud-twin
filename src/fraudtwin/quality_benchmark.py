@@ -49,7 +49,7 @@ QUALITY_PACK_REFS = tuple(
         start=1,
     )
 )
-SCALE_SIZES = ("small", "medium", "large", "xlarge", "billion")
+SCALE_SIZES = ("dev", "small", "medium", "large", "xlarge", "billion")
 
 
 class QualityBenchmarkProfile(BaseModel):
@@ -57,7 +57,7 @@ class QualityBenchmarkProfile(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    profile_id: str = Field(pattern=r"^standard-v1(?:-(?:medium|large|xlarge|billion))?$")
+    profile_id: str = Field(pattern=r"^standard-v1(?:-(?:dev|medium|large|xlarge|billion))?$")
     profile_version: str = QUALITY_PROFILE_VERSION
     public_packs: tuple[str, ...] = QUALITY_PACK_REFS
     scale_size: str = "small"

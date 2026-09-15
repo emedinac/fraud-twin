@@ -1,0 +1,13 @@
+profile_id: standard-v1-dev
+profile_version: "1"
+protocol_version: M22-quality-1
+scale_size: dev
+public_packs:
+  - FT-B01-STABLE@1.0.0
+  - FT-B02-TEMPORAL@1.0.0
+  - FT-B03-BOUNDARY@1.0.0
+  - FT-B04-CAMOUFLAGE@1.0.0
+  - FT-B05-GRAPH@1.0.0
+  - FT-B06-OBSERVABILITY@1.0.0
+  - FT-B07-CALIBRATED@1.0.0
+  - FT-B08-MIXED@1.0.0

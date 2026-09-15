@@ -55,6 +55,7 @@ from fraudtwin.observability import MetricsSession
 from fraudtwin.postgres import database_status, migrate_database
 from fraudtwin.quality_benchmark import report_run, run_quality_benchmark
 from fraudtwin.replay import ReplayOrder, replay_run, write_replay
+from fraudtwin.scale import run_scale_benchmark
 from fraudtwin.simulation.graph_fraud import GraphFraudDataset
 from fraudtwin.simulation.parquet import (
     write_campaign_dynamics_sidecar,
@@ -283,6 +284,35 @@ def quality_benchmark_command(
         raise typer.Exit(code=1) from exc
     typer.echo(f"Quality benchmark generated: {result.report_id}")
     typer.echo(f"Report: {result.report_path}")
+
+
+@app.command("scale-benchmark")
+def scale_benchmark_command(
+    path: Annotated[Path, typer.Argument(help="Scale-enabled YAML configuration file.")],
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for generated run artifacts.")
+    ] = Path("runs/scale-benchmarks"),
+    checkpoint_dir: Annotated[
+        Path | None, typer.Option("--checkpoint-dir", help="Directory for chunk checkpoints.")
+    ] = None,
+    evidence_dir: Annotated[
+        Path | None, typer.Option("--evidence-dir", help="Directory for benchmark evidence JSON.")
+    ] = None,
+) -> None:
+    """Run a manual M18 scale job and write machine benchmark evidence."""
+
+    config = _load_or_exit(path)
+    try:
+        evidence = run_scale_benchmark(
+            config,
+            output_dir=output_dir,
+            checkpoint_dir=checkpoint_dir,
+            evidence_dir=evidence_dir,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Scale benchmark failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Scale benchmark evidence: {evidence}")
 
 
 @app.command("report")
