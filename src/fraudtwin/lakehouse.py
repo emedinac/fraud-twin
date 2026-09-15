@@ -389,9 +389,9 @@ def logical_fingerprint(rows: Iterable[Mapping[str, Any]]) -> str:
 
 def _require_iceberg() -> tuple[Any, Any, Any]:  # pragma: no cover - optional dependency
     try:
-        import pyarrow as pa  # type: ignore[import-not-found]
-        from pyiceberg.catalog import load_catalog  # type: ignore[import-not-found]
-        from pyiceberg.exceptions import NoSuchTableError  # type: ignore[import-not-found]
+        pa = importlib.import_module("pyarrow")
+        load_catalog = importlib.import_module("pyiceberg.catalog").load_catalog
+        NoSuchTableError = importlib.import_module("pyiceberg.exceptions").NoSuchTableError
     except ImportError as exc:  # pragma: no cover - optional integration dependency
         raise LakehouseDependencyError(
             "Iceberg output requires the optional 'lakehouse' dependency"

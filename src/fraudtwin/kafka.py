@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import struct
 import time
@@ -239,7 +240,10 @@ def _register(client: Any, subject: str, schema: Any) -> int:
         try:
             schema_registry = importlib.import_module("confluent_kafka.schema_registry")
             schema_class = vars(schema_registry)["Schema"]
-            remote_schema: Any = schema_class(schema.canonical_form)
+            schema_payload = (
+                schema.to_json() if hasattr(schema, "to_json") else schema.canonical_form
+            )
+            remote_schema = schema_class(json.dumps(schema_payload, separators=(",", ":")))
         except ImportError:
             remote_schema = schema.canonical_form
         registered = client.register_schema(subject, remote_schema)
@@ -248,7 +252,7 @@ def _register(client: Any, subject: str, schema: Any) -> int:
             f"failed to register schema subject {subject!r}: {exc}"
         ) from exc
     try:
-        client.set_compatibility("FULL_TRANSITIVE", subject)
+        client.set_compatibility(subject, "FULL_TRANSITIVE")
     except Exception as exc:
         raise KafkaConfigurationError(
             f"remote subject {subject!r} could not be set to FULL_TRANSITIVE: {exc}"
