@@ -52,7 +52,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 packages = [{ include = "fraudtwin", from = "src" }]
-include = ["src/fraudtwin/public_packs/*.yaml"]
+include = ["src/fraudtwin/public_packs/*.yaml", "src/fraudtwin/quality_profiles/*.yaml"]
 
 [tool.poetry.group.dev.dependencies]
     hypothesis = "^6.100"

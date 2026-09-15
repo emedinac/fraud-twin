@@ -52,6 +52,7 @@ examples.
 - An opt-in label observation engine for selective, delayed, missing, preliminary, corrected, and reopened labels with point-in-time-safe history.
 - Opt-in large-scale generation profiles with stable sharding, bounded chunked Parquet output, parallel scheduling, checkpoint/resume, partition fingerprints, and cross-partition reconciliation.
 - Reproducible baseline ML oracles (Logistic Regression, LightGBM, XGBoost, CatBoost), point-in-time external prediction evaluation, fraud metrics, and optional MLflow tracking.
+- Generator-quality benchmark reports for native runs and capability-declared external generators, with immutable M22 profiles and `N/A`-aware scoring.
 
 FraudTwin is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and timing before introducing a larger streaming or production stack.
 
@@ -98,6 +99,15 @@ poetry install -E ml
 poetry run fraudtwin ml train runs/<run-id>/ml/dataset.parquet --output-dir runs/ml-evaluations
 poetry run fraudtwin ml evaluate runs/<run-id>/ml/dataset.parquet predictions.parquet
 ```
+
+Run the generator-quality protocol against all immutable M21 public packs:
+
+```bash
+poetry run fraudtwin quality-benchmark --profile standard-v1
+poetry run fraudtwin report RUN-<id>
+```
+
+The report keeps correctness, fidelity, fraud difficulty, scalability, engineering performance, and reproducibility independent. External generators may provide a normalized bundle or a `module:factory` adapter; unsupported dimensions are reported as `N/A`.
 
 For comparable results across machines and FraudTwin releases, run one of the
 bundled immutable public benchmark packs:

@@ -1,5 +1,11 @@
 # Release notes
 
+## Unreleased — Milestone 22 Generator Quality Benchmark
+
+- Added immutable `standard-v1` quality profiles covering all eight M21 public packs, with opt-in medium, large, xlarge, and billion variants.
+- Added `fraudtwin quality-benchmark` and `fraudtwin report` commands with separate correctness, fidelity, difficulty, scalability, engineering, and reproducibility sections.
+- Added normalized external generator adapter/bundle contracts with capability-aware `N/A` reporting.
+
 ## 0.26.0 — Milestone 21 Versioned Public Benchmark Packs
 
 - Added eight immutable, bundled FT-B01–FT-B08 public benchmark packs with semantic versions, compatibility checks, fixed PIT windows, calibration provenance, and logical fingerprints.

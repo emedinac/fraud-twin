@@ -38,6 +38,7 @@ from fraudtwin.ml import (
     write_evaluation,
     write_point_in_time_dataset,
 )
+from fraudtwin.quality_benchmark import report_run, run_quality_benchmark
 from fraudtwin.replay import ReplayOrder, replay_run, write_replay
 from fraudtwin.simulation.graph_fraud import GraphFraudDataset
 from fraudtwin.simulation.parquet import (
@@ -58,6 +59,60 @@ app.add_typer(counterfactual_app, name="counterfactual")
 app.add_typer(campaign_app, name="campaign")
 benchmark_app = typer.Typer(help="Run generic M20 suites or immutable M21 public packs.")
 app.add_typer(benchmark_app, name="benchmark")
+
+
+@app.command("quality-benchmark")
+def quality_benchmark_command(
+    profile: Annotated[
+        str, typer.Option("--profile", help="Bundled M22 profile or YAML path.")
+    ] = "standard-v1",
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for quality benchmark artifacts.")
+    ] = Path("runs/quality-benchmarks"),
+    adapter: Annotated[
+        str | None, typer.Option("--adapter", help="External generator module:factory.")
+    ] = None,
+    bundle: Annotated[
+        Path | None, typer.Option("--bundle", help="Normalized external artifact bundle JSON.")
+    ] = None,
+) -> None:
+    """Run the Milestone 22 generator-quality protocol."""
+
+    try:
+        result = run_quality_benchmark(
+            profile,
+            output_dir=output_dir,
+            adapter=adapter,
+            bundle=bundle,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Quality benchmark failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Quality benchmark generated: {result.report_id}")
+    typer.echo(f"Report: {result.report_path}")
+
+
+@app.command("report")
+def report_command(
+    run_id: Annotated[str, typer.Argument(help="Existing generated run identifier.")],
+    runs_dir: Annotated[
+        Path, typer.Option("--runs-dir", help="Directory containing generated runs.")
+    ] = Path("runs"),
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for quality reports.")
+    ] = Path("runs/quality-reports"),
+) -> None:
+    """Report correctness and provenance checks for an existing run."""
+
+    try:
+        report_path = report_run(run_id, runs_dir=runs_dir, output_dir=output_dir)
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Report failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Report: {report_path}")
+    report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+    if any(value == "FAIL" for value in report_payload.get("correctness", {}).values()):
+        raise typer.Exit(code=1)
 
 
 def _selected_models(models: list[str] | None) -> tuple[str, ...]:

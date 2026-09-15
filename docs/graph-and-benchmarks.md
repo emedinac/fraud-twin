@@ -124,3 +124,22 @@ creates a new pack version, while prior versions remain runnable.
 
 The M10 `fraudtwin.ml.BenchmarkPack` fixtures remain supported for backtests
 over an existing generated run and are separate from these M21 public packs.
+
+## Generator-quality benchmark
+
+Milestone 22 evaluates the generator itself rather than a fraud model. The
+standard profile runs every immutable M21 pack and reports correctness,
+statistical/temporal/graph fidelity, fraud difficulty, scalability,
+engineering performance, and reproducibility independently:
+
+```bash
+poetry run fraudtwin quality-benchmark --profile standard-v1
+poetry run fraudtwin report RUN-<id>
+```
+
+The default profile uses the small workload. The immutable
+`standard-v1-medium`, `standard-v1-large`, `standard-v1-xlarge`, and
+`standard-v1-billion` profiles are opt-in and require documented hardware.
+External generators can be supplied as a `module:factory` adapter or a
+normalized artifact bundle. A capability that is not supplied is reported as
+`N/A`, never as a zero score.
