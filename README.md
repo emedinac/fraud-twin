@@ -18,19 +18,17 @@ FraudTwin generates a small, coherent payment world: customers have accounts, ca
 
 ## Documentation
 
-[FraudTwin docs](https://emedinac.github.io/fraud-twin/)
+<p align="center">
+  <a href="https://emedinac.github.io/fraud-twin/">
+    <strong>📚 Read the FraudTwin documentation →</strong>
+  </a>
+</p>
 
-| Need | Guide |
-| --- | --- |
-| Browse the hosted Python API reference | [API reference](https://emedinac.github.io/fraud-twin/api.html) |
-| Read the documentation sources | [Documentation hub](docs/README.md) |
-| Install and generate a first run | [Quickstart](docs/quickstart.md) |
-| Tune behavior, fraud, quality, and stress | [Configuration](docs/configuration.md) |
-| Build datasets, replay runs, and backtest | [Data and evaluation workflows](docs/workflows.md) |
-| Export graphs and use benchmark fixtures | [Graph and benchmark workflows](docs/graph-and-benchmarks.md) |
-| Contribute and run the quality gate | [Development guide](docs/development.md) |
-| Review release history | [CHANGELOG.md](CHANGELOG.md) |
-| Understand external references | [References](docs/references.md) |
+<p align="center">
+  <a href="https://emedinac.github.io/fraud-twin/api.html">Python API reference</a>
+  ·
+  <a href="docs/README.md">Documentation sources</a>
+</p>
 
 Tutorials will be added under `docs/` as the workflows settle. Each tutorial should start from a versioned configuration and show the resulting artifacts, not only the command that produced them.
 
