@@ -1,0 +1,38 @@
+simulation:
+  seed: 42
+  start: 2026-01-01T00:00:00Z
+  duration_days: 1
+  speed: batch
+
+population:
+  customers: 10
+  institutions: 3
+  accounts: 15
+  cards: 12
+  merchants: 3
+  devices: 12
+  pix_keys: 8
+
+payments:
+  daily_target: 1000
+  rails: {CARD: 0.55, PIX: 0.30, ACCOUNT_TRANSFER: 0.15}
+
+fraud:
+  enabled: false
+  target_rate: 0.002
+  scenario_count: 5
+  hard_negative_rate: 1.0
+
+quality:
+  profile: clean
+
+outputs:
+  parquet: true
+
+scale:
+  profile: dev
+  target_payments: 1000
+  shard_count: 2
+  chunk_size: 100
+  worker_count: 2
+  output_batch_size: 100

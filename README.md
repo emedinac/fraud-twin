@@ -86,6 +86,19 @@ poetry run fraudtwin generate configs/minimal.yaml \
 
 The minimal configuration creates 10 customers, 10 behavior profiles, and 100 target payments. Fraud is disabled in this baseline; enable it in a copied YAML file or start with a fixture under `configs/benchmarks/`.
 
+For a laptop-scale smoke run, use the bounded `dev` profile (1,000 payments)
+and keep the normal feature path small. The 100k–1B profiles are manual
+benchmarks for suitable hardware:
+
+```yaml
+scale:
+  profile: dev
+  target_payments: 1000
+  shard_count: 2
+  chunk_size: 100
+  worker_count: 2
+```
+
 For deterministic large-run generation, use a scale profile such as `configs/scale-1b.yaml`:
 
 ```bash
@@ -93,7 +106,14 @@ poetry run fraudtwin generate configs/scale-1b.yaml --workers 16 --checkpoint-di
 poetry run fraudtwin resume .fraudtwin/run-1b
 ```
 
-Scale execution uses the same canonical simulator. Worker scheduling does not change logical IDs or partition fingerprints, and checkpoints support deterministic retry/resume. The billion profile is a documented benchmark target for suitable hardware, not a test-suite requirement.
+Scale execution uses the same canonical simulator and writes partitioned
+Parquet chunks. Worker scheduling does not change logical IDs or partition
+fingerprints, and checkpoints support deterministic retry/resume. The billion
+profile is a documented benchmark target for suitable hardware, not a
+test-suite requirement. Install `-E scale` when using DuckDB/PyArrow
+out-of-core tooling. The legacy Python API still materializes the canonical
+entity/behavior objects before persistence; use the `dev` profile locally and
+run 100M/1B profiles only through a streaming producer deployment.
 
 For baseline model evaluation, install the optional ML dependencies and train on a previously built PIT dataset:
 

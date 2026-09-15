@@ -1,5 +1,14 @@
 # Release notes
 
+## Unreleased — M18 bounded-scale contract
+
+- Made canonical payment rows the scale target, added the bounded `dev` smoke
+  profile, derived row-count reporting, target validation, versioned checkpoints,
+  chunk markers for interrupted resume, and partition-aware readers.
+- Added deterministic payment ordinal helpers, incremental fingerprints,
+  cross-account payee reconciliation markers, benchmark evidence manifests, and
+  optional PyArrow/DuckDB scale tooling.
+
 ## 0.32.0 — Milestone 27 Minimal Observability
 
 - Added optional Prometheus metrics for generated runs and ledger validation,

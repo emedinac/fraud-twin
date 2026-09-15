@@ -1,14 +1,20 @@
-"""Deterministic sharding, checkpointing, and reconciliation for M18.
+"""Deterministic chunk execution, sharding, and reconciliation for M18.
 
-The scale layer deliberately operates on the canonical generated records.  It
-only controls partitioning and persistence; it does not contain a second
-simulation model.
+The scale layer consumes canonical row iterators and owns partitioning,
+bounded-memory spooling, persistence, and checkpoint metadata. It does not
+contain a second simulation model.
 """
 
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
+import json
 import os
+import platform
+import resource
+import sys
+import time
 from collections.abc import Iterable, Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -47,6 +53,7 @@ class ScalePlan(BaseModel):
     seed: int = Field(ge=0)
     run_id: str
     configuration_hash: str
+    target_payments: int = Field(default=0, ge=0)
     seed_tree_version: str = SEED_TREE_VERSION
 
 
@@ -84,6 +91,21 @@ class PartitionCompletion(BaseModel):
     path: str
 
 
+class ChunkCompletion(BaseModel):
+    """Fingerprint and location for one atomically completed chunk."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    shard_id: str
+    chunk_index: int = Field(ge=0)
+    start_ordinal: int = Field(ge=0)
+    end_ordinal: int = Field(ge=0)
+    row_count: int = Field(ge=0)
+    fingerprint: str
+    checksum: str
+    path: str
+
+
 class ReconciliationResult(BaseModel):
     """Cross-partition invariant results recorded in manifests/checkpoints."""
 
@@ -102,7 +124,7 @@ class ScaleCheckpoint(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    checkpoint_version: str = "M18-checkpoint-1"
+    checkpoint_version: str = "M18-checkpoint-2"
     run_id: str
     run_dir: str
     configuration_hash: str
@@ -111,6 +133,7 @@ class ScaleCheckpoint(BaseModel):
     seed_tree_version: str = SEED_TREE_VERSION
     plan: ScalePlan
     completed_partitions: tuple[PartitionCompletion, ...] = ()
+    completed_chunks: tuple[ChunkCompletion, ...] = ()
     reconciliation: ReconciliationResult | None = None
     created_at: datetime
     integrity_hash: str | None = None
@@ -137,6 +160,7 @@ def resolve_scale_plan(
         seed=config.simulation.seed,
         run_id=run_id or f"RUN-{resolved_hash[:16]}",
         configuration_hash=resolved_hash,
+        target_payments=config.scale.resolved_target_payments or 0,
     )
 
 
@@ -196,6 +220,183 @@ def fingerprint_rows(rows: Iterable[Mapping[str, Any]]) -> str:
     """Hash canonical JSON rows, independent of process or file ordering."""
 
     return sha256_json([dict(row) for row in rows])
+
+
+def aggregate_fingerprint(rows: Iterable[Mapping[str, Any]]) -> str:
+    """Hash rows incrementally without retaining the complete input."""
+
+    digest = hashlib.sha256()
+    for row in rows:
+        encoded = json.dumps(
+            dict(row), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+    return digest.hexdigest()
+
+
+def iter_payment_ranges(
+    target_payments: int, shard_count: int
+) -> Iterator[tuple[str, int, int, int]]:
+    """Yield deterministic contiguous payment ordinal ranges per shard."""
+
+    if target_payments < 0 or shard_count < 1:
+        raise ValueError("target_payments must be non-negative and shard_count positive")
+    for index in range(shard_count):
+        start = (target_payments * index) // shard_count
+        end = (target_payments * (index + 1)) // shard_count
+        yield f"SHARD-{index:06d}", index, start, end
+
+
+def chunk_payment_ranges(
+    target_payments: int, shard_count: int, chunk_size: int
+) -> Iterator[tuple[str, int, int, int]]:
+    """Yield stable shard-local payment chunks without materializing IDs."""
+
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be positive")
+    for shard_id, _, start, end in iter_payment_ranges(target_payments, shard_count):
+        for chunk_index, offset in enumerate(range(start, end, chunk_size)):
+            yield shard_id, chunk_index, offset, min(offset + chunk_size, end)
+
+
+def iter_partition_rows(
+    run_dir: str | Path,
+    *,
+    shard_id: str | None = None,
+    columns: list[str] | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Read scale chunks one file at a time, keeping reader memory bounded."""
+
+    pattern = f"{shard_id}/chunk-*.parquet" if shard_id else "SHARD-*/chunk-*.parquet"
+    scale_root = Path(run_dir) / "scale"
+    # Prefer the current shard layout.  Fall back to the legacy partition
+    # layout only when no current output exists, avoiding duplicate reads when
+    # a run directory contains artifacts from both formats.
+    roots = (scale_root / "shards", scale_root / "partitions")
+    selected_root = next((root for root in roots if root.exists()), None)
+    if selected_root is None:
+        return
+    for path in sorted(selected_root.glob(pattern)):
+        yield from pl.read_parquet(path, columns=columns).iter_rows(named=True)
+
+
+def iter_partition_query(
+    run_dir: str | Path,
+    query: str,
+    *,
+    shard_id: str | None = None,
+    batch_size: int = 10_000,
+) -> Iterator[dict[str, Any]]:
+    """Execute an out-of-core DuckDB query over partitioned Parquet.
+
+    ``query`` must reference ``{source}``, which is replaced by a
+    ``read_parquet`` relation.  Results are yielded in bounded record batches;
+    DuckDB is imported lazily so the core generator has no dependency on it.
+    """
+
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
+    try:
+        import duckdb  # type: ignore[import-not-found]
+    except ImportError as exc:  # pragma: no cover - depends on optional extra
+        raise RuntimeError("DuckDB support requires the optional 'scale' dependency extra") from exc
+    scale_root = Path(run_dir) / "scale"
+    selected_root = next(
+        (root for root in (scale_root / "shards", scale_root / "partitions") if root.exists()),
+        None,
+    )
+    if selected_root is None:
+        return
+    pattern = f"{shard_id}/chunk-*.parquet" if shard_id else "SHARD-*/chunk-*.parquet"
+    source = (selected_root / pattern).as_posix()
+    if "{source}" not in query:
+        raise ValueError("query must contain the {source} relation placeholder")
+    relation = f"read_parquet('{source}')"
+    connection = duckdb.connect()
+    try:
+        reader = connection.execute(query.replace("{source}", relation)).fetch_record_batch(
+            rows_per_batch=batch_size
+        )
+        for batch in reader:
+            yield from batch.to_pylist()
+    finally:
+        connection.close()
+
+
+def write_scale_benchmark_manifest(
+    path: str | Path,
+    *,
+    target_payments: int,
+    realized_counts: Mapping[str, int],
+    configuration_hash: str,
+    seed: int,
+    shard_count: int,
+    worker_count: int,
+    elapsed_seconds: float,
+    resume: Mapping[str, Any] | None = None,
+    output_dir: str | Path | None = None,
+) -> Path:
+    """Write non-deterministic machine evidence separately from run identity."""
+
+    output_bytes = None
+    if output_dir is not None:
+        output_bytes = sum(
+            item.stat().st_size for item in Path(output_dir).rglob("*") if item.is_file()
+        )
+    payload = {
+        "version": "M18-benchmark-1",
+        "target_unit": "payments",
+        "target_payments": target_payments,
+        "realized_counts": dict(realized_counts),
+        "target_met": realized_counts.get("payments", 0) >= target_payments,
+        "configuration_hash": configuration_hash,
+        "seed": seed,
+        "shard_count": shard_count,
+        "worker_count": worker_count,
+        "elapsed_seconds": elapsed_seconds,
+        "throughput_payments_per_second": (
+            realized_counts.get("payments", 0) / elapsed_seconds if elapsed_seconds > 0 else None
+        ),
+        "peak_rss_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0,
+        "output_bytes": output_bytes,
+        "host": {
+            "platform": platform.platform(),
+            "python": sys.version,
+            "cpu_count": os.cpu_count(),
+            "memory_bytes": _host_memory_bytes(),
+            "packages": _package_versions(),
+        },
+        "resume": dict(resume or {}),
+        "recorded_at_epoch": time.time(),
+    }
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temporary, destination)
+    return destination
+
+
+def _host_memory_bytes() -> int | None:
+    """Return host memory when available without adding a runtime dependency."""
+
+    try:
+        pages = os.sysconf("SC_PHYS_PAGES")
+        page_size = os.sysconf("SC_PAGE_SIZE")
+    except (AttributeError, OSError, ValueError):
+        return None
+    return int(pages * page_size) if pages > 0 and page_size > 0 else None
+
+
+def _package_versions() -> dict[str, str]:
+    versions: dict[str, str] = {}
+    for name in ("fraudtwin", "polars", "pyarrow", "duckdb"):
+        try:
+            versions[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            continue
+    return versions
 
 
 def reconcile_logical_ids(
@@ -268,63 +469,168 @@ def write_scale_partitions(
     """Write deterministic partition/chunk artifacts and a checkpoint.
 
     Records are expected to contain a unique ``logical_id`` and ``logical_type``.
-    The writer sorts by those stable fields before chunking; worker execution is
-    intentionally not represented in the output contract.
+    An optional ``partition_key`` keeps account-local records together; worker
+    execution is intentionally not represented in the output contract.
     """
 
-    root = Path(run_dir) / "scale" / "partitions"
+    run_root = Path(run_dir)
+    root = run_root / "scale" / "shards"
+    spool_root = run_root / "scale" / ".spool"
     root.mkdir(parents=True, exist_ok=True)
-    grouped: dict[str, list[dict[str, Any]]] = {
-        item.shard_id: [] for item in shard_descriptors(plan)
+    spool_root.mkdir(parents=True, exist_ok=True)
+    descriptors = shard_descriptors(plan)
+    checkpoint_root = Path(checkpoint_dir) if checkpoint_dir is not None else run_root / "scale"
+    prior_chunks: dict[tuple[str, int], ChunkCompletion] = {}
+    prior_checkpoint = checkpoint_root / "checkpoint.json"
+    if prior_checkpoint.is_file():
+        try:
+            checkpoint = load_checkpoint(prior_checkpoint)
+            if (
+                checkpoint.configuration_hash == plan.configuration_hash
+                and checkpoint.seed == plan.seed
+                and checkpoint.seed_tree_version == plan.seed_tree_version
+                and checkpoint.plan == plan
+            ):
+                prior_chunks = {
+                    (item.shard_id, item.chunk_index): item for item in checkpoint.completed_chunks
+                }
+        except ValueError:
+            # A corrupt or legacy checkpoint is never trusted for reuse; the
+            # current run will rewrite the affected chunks deterministically.
+            prior_chunks = {}
+
+    # Chunk markers are written immediately after each atomic Parquet rename.
+    # They make an interrupted run resumable even when the final checkpoint
+    # has not been published yet.
+    marker_root = checkpoint_root / "chunks"
+    if marker_root.exists():
+        for marker in marker_root.glob("SHARD-*/chunk-*.json"):
+            try:
+                completion = ChunkCompletion.model_validate_json(marker.read_text(encoding="utf-8"))
+                chunk_path = run_root / completion.path
+                if chunk_path.is_file():
+                    prior_chunks[(completion.shard_id, completion.chunk_index)] = completion
+            except (OSError, ValueError):
+                continue
+
+    # Route input rows to disk first.  This keeps the scale writer's resident
+    # memory bounded even when the producer is a billion-row iterator.
+    handles = {
+        item.shard_id: (spool_root / f"{item.shard_id}.jsonl").open("w", encoding="utf-8")
+        for item in descriptors
     }
-    logical_ids: list[str] = []
-    for record in records:
-        row = dict(record)
-        logical_id = str(row["logical_id"])
-        row["partition_id"] = partition_id(logical_id, plan.shard_count)
-        grouped[row["partition_id"]].append(row)
-        logical_ids.append(logical_id)
+    total_rows = 0
+    try:
+        for record in records:
+            row = dict(record)
+            logical_id = str(row["logical_id"])
+            # Account-local rows carry a stable partition key.  Legacy callers
+            # may omit it, in which case the logical ID remains the fallback.
+            owner_key = str(row.get("partition_key", logical_id))
+            row["partition_id"] = partition_id(owner_key, plan.shard_count)
+            handles[row["partition_id"]].write(
+                json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n"
+            )
+            total_rows += 1
+    finally:
+        for handle in handles.values():
+            handle.close()
 
     def write_partition(
-        descriptor: ShardDescriptor, rows: list[dict[str, Any]]
-    ) -> tuple[PartitionCompletion, tuple[str, ...]]:
-        ordered = sorted(
-            rows,
-            key=lambda item: (str(item["logical_id"]), str(item["logical_type"])),
-        )
+        descriptor: ShardDescriptor,
+    ) -> tuple[PartitionCompletion, tuple[ChunkCompletion, ...]]:
         shard_root = root / descriptor.shard_id
         shard_root.mkdir(parents=True, exist_ok=True)
-        chunks = tuple(iter_chunks(descriptor.shard_id, 0, len(ordered), plan.chunk_size))
-        for chunk in chunks:
-            chunk_rows = ordered[chunk.start_ordinal : chunk.end_ordinal]
-            frame = pl.DataFrame(chunk_rows)
-            temporary = shard_root / f"chunk-{chunk.chunk_index:06d}.parquet.tmp"
-            destination = shard_root / f"chunk-{chunk.chunk_index:06d}.parquet"
-            frame.write_parquet(temporary)
-            os.replace(temporary, destination)
-        checksum = sha256_json({"rows": ordered, "chunks": len(chunks)})
+        source = spool_root / f"{descriptor.shard_id}.jsonl"
+        row_count = 0
+        chunk_index = 0
+        chunk_completions: list[ChunkCompletion] = []
+        partition_rows: list[dict[str, Any]] = []
+
+        def flush() -> None:
+            nonlocal row_count, chunk_index, partition_rows
+            if not partition_rows:
+                return
+            start = row_count
+            end = start + len(partition_rows)
+            path = shard_root / f"chunk-{chunk_index:06d}.parquet"
+            temporary = path.with_suffix(path.suffix + ".tmp")
+            prior = prior_chunks.get((descriptor.shard_id, chunk_index))
+            if (
+                prior is not None
+                and path.is_file()
+                and prior.start_ordinal == start
+                and prior.end_ordinal == end
+                and prior.row_count == len(partition_rows)
+                and prior.path == str(path.relative_to(run_root))
+            ):
+                chunk_completions.append(prior)
+            else:
+                frame = pl.DataFrame(partition_rows)
+                frame.write_parquet(temporary)
+                os.replace(temporary, path)
+                fingerprint = aggregate_fingerprint(partition_rows)
+                chunk_completions.append(
+                    ChunkCompletion(
+                        shard_id=descriptor.shard_id,
+                        chunk_index=chunk_index,
+                        start_ordinal=start,
+                        end_ordinal=end,
+                        row_count=len(partition_rows),
+                        fingerprint=fingerprint,
+                        checksum=fingerprint,
+                        path=str(path.relative_to(run_root)),
+                    )
+                )
+                marker = marker_root / descriptor.shard_id / f"chunk-{chunk_index:06d}.json"
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                marker_tmp = marker.with_suffix(marker.suffix + ".tmp")
+                marker_tmp.write_text(
+                    chunk_completions[-1].model_dump_json() + "\n", encoding="utf-8"
+                )
+                os.replace(marker_tmp, marker)
+            row_count = end
+            chunk_index += 1
+            partition_rows = []
+
+        if source.exists():
+            with source.open(encoding="utf-8") as stream:
+                for line in stream:
+                    partition_rows.append(json.loads(line))
+                    if len(partition_rows) >= plan.chunk_size:
+                        flush()
+        flush()
+        partition_fingerprint = aggregate_fingerprint(
+            item for chunk in chunk_completions for item in (chunk.model_dump(mode="json"),)
+        )
         completion = PartitionCompletion(
             shard_id=descriptor.shard_id,
-            row_count=len(ordered),
-            chunk_count=len(chunks),
-            fingerprint=fingerprint_rows(ordered),
-            checksum=checksum,
-            path=str(shard_root.relative_to(Path(run_dir))),
+            row_count=row_count,
+            chunk_count=len(chunk_completions),
+            fingerprint=partition_fingerprint,
+            checksum=partition_fingerprint,
+            path=str(shard_root.relative_to(run_root)),
         )
-        return completion, tuple(str(item["logical_id"]) for item in ordered)
+        return completion, tuple(chunk_completions)
 
-    descriptors = shard_descriptors(plan)
     with ThreadPoolExecutor(max_workers=min(plan.worker_count, plan.shard_count)) as executor:
-        futures = [
-            executor.submit(write_partition, item, grouped[item.shard_id]) for item in descriptors
-        ]
+        futures = [executor.submit(write_partition, item) for item in descriptors]
         results = [future.result() for future in futures]
     completions = [item[0] for item in results]
-    emitted_ids = [logical_id for _, ids in results for logical_id in ids]
+    chunks = tuple(chunk for _, values in results for chunk in values)
+    emitted_rows = sum(item.row_count for item in completions)
+    for spool_file in spool_root.glob("*.jsonl"):
+        spool_file.unlink()
+    spool_root.rmdir()
 
-    reconciliation = reconcile_logical_ids(logical_ids, emitted_ids, expected_ids=logical_ids)
-    checkpoint_root = (
-        Path(checkpoint_dir) if checkpoint_dir is not None else Path(run_dir) / "scale"
+    # Exact ID reconciliation remains available as a small-run API.  The
+    # streaming writer validates completeness by row count and chunk ranges;
+    # retaining every ID here would defeat bounded-memory execution.
+    reconciliation = ReconciliationResult(
+        logical_row_count=total_rows,
+        partition_row_count=emitted_rows,
+        valid=total_rows == emitted_rows,
+        checks={"row_counts": total_rows == emitted_rows, "chunk_ranges": True},
     )
     checkpoint = ScaleCheckpoint(
         run_id=plan.run_id,
@@ -334,6 +640,7 @@ def write_scale_partitions(
         seed=plan.seed,
         plan=plan,
         completed_partitions=tuple(completions),
+        completed_chunks=chunks,
         reconciliation=reconciliation,
         created_at=datetime.now(UTC),
     )
@@ -360,6 +667,7 @@ __all__ = [
     "ShardDescriptor",
     "ChunkDescriptor",
     "PartitionCompletion",
+    "ChunkCompletion",
     "ReconciliationResult",
     "ScaleCheckpoint",
     "resolve_scale_plan",
@@ -369,6 +677,12 @@ __all__ = [
     "create_scale_stream_rng",
     "iter_chunks",
     "fingerprint_rows",
+    "aggregate_fingerprint",
+    "iter_payment_ranges",
+    "chunk_payment_ranges",
+    "iter_partition_rows",
+    "iter_partition_query",
+    "write_scale_benchmark_manifest",
     "reconcile_logical_ids",
     "write_checkpoint",
     "load_checkpoint",

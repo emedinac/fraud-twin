@@ -17,9 +17,10 @@ UnresolvedLabelPolicy = Literal["exclude", "include"]
 MinimumLabelMaturityPolicy = Literal["exclude", "include_unresolved"]
 TrainWindowMode = Literal["fixed", "expanding"]
 RegimeLabelPolicy = Literal["original", "unobserved"]
-ScaleProfile = Literal["small", "medium", "large", "xlarge", "billion"]
+ScaleProfile = Literal["dev", "small", "medium", "large", "xlarge", "billion"]
 PartitionMapping = Literal["stable_hash_v1"]
 SCALE_PROFILE_TARGETS: dict[ScaleProfile, int] = {
+    "dev": 1_000,
     "small": 100_000,
     "medium": 1_000_000,
     "large": 10_000_000,
@@ -478,6 +479,9 @@ class ScaleConfig(_StrictModel):
     """Opt-in deterministic large-run execution controls for Milestone 18."""
 
     profile: ScaleProfile | None = None
+    # The primary M18 target is canonical payment rows.  ``None`` preserves
+    # the profile default while allowing bounded local smoke runs.
+    target_payments: Annotated[int | None, Field(default=None, ge=1)] = None
     shard_count: Annotated[int, Field(ge=1)] = 1
     chunk_size: Annotated[int, Field(ge=1)] = 10_000
     worker_count: Annotated[int, Field(ge=1)] = 1
@@ -493,10 +497,19 @@ class ScaleConfig(_StrictModel):
     def target_logical_events(self) -> int | None:
         return SCALE_PROFILE_TARGETS.get(self.profile) if self.profile is not None else None
 
+    @property
+    def resolved_target_payments(self) -> int | None:
+        """Return the configured payment target for this scale run."""
+
+        if self.profile is None:
+            return None
+        return self.target_payments or SCALE_PROFILE_TARGETS[self.profile]
+
     @model_validator(mode="after")
     def validate_scale_controls(self) -> "ScaleConfig":
         if self.profile is None and (
-            self.shard_count != 1
+            self.target_payments is not None
+            or self.shard_count != 1
             or self.chunk_size != 10_000
             or self.worker_count != 1
             or self.output_batch_size != 10_000
@@ -504,6 +517,12 @@ class ScaleConfig(_StrictModel):
             or self.partition_mapping != "stable_hash_v1"
         ):
             raise ValueError("scale controls require an enabled scale profile")
+        if (
+            self.profile is not None
+            and self.target_payments is not None
+            and self.target_payments > SCALE_PROFILE_TARGETS[self.profile]
+        ):
+            raise ValueError("target_payments cannot exceed the selected scale profile target")
         if self.output_batch_size > self.chunk_size:
             raise ValueError("output_batch_size must not exceed chunk_size")
         return self

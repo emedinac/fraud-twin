@@ -503,36 +503,51 @@ def _scale_metrics(
     profile: QualityBenchmarkProfile,
     pack_results: tuple[_NativePackResult, ...] = (),
 ) -> tuple[QualityMetric, ...]:
-    # M18 currently partitions the records produced by a normal run; it does
-    # not yet guarantee that a profile realizes its advertised event target.
-    # Surface that fact explicitly until the scale generator is upgraded.
-    event_count = 0
+    scale_runs: list[dict[str, Any]] = []
     for item in pack_results:
         suite = cast(dict[str, Any], next(iter(item.manifest.get("suites", {}).values()), {}))
         manifest = cast(dict[str, Any], suite.get("manifest", {}))
-        counts = cast(dict[str, Any], manifest.get("event_counts", {}))
-        event_count += int(counts.get("payment_events", 0))
+        scale = manifest.get("scale")
+        if isinstance(scale, dict):
+            scale_runs.append(scale)
+    if not scale_runs:
+        details: dict[str, Any] = {
+            "scale_size": profile.scale_size,
+            "status": "scale execution not included in this quality run",
+        }
+        return tuple(
+            _metric(name, score=None, details=details)
+            for name in ("generation_throughput", "peak_memory_mb", "resume_overhead")
+        )
+
+    event_count = 0
+    target_met = True
+    for scale in scale_runs:
+        event_count += int(scale.get("payments_realized", 0))
+        target_met = target_met and bool(scale.get("target_met", False))
     elapsed = sum(item.elapsed_seconds for item in pack_results)
     throughput = event_count / elapsed if elapsed > 0 else None
     peak_memory = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) / 1024.0
+    status = "MEASURED" if target_met else "N/A"
+    details = {
+        "scale_size": profile.scale_size,
+        "target_met": target_met,
+        "realized_payments": event_count,
+    }
     return (
         _metric(
             "generation_throughput",
-            score=None if throughput is None else 1.0,
-            details={
-                "scale_size": profile.scale_size,
-                "events_per_second": throughput,
-                "realized_payment_events": event_count,
-                "target_profile": profile.scale_size,
-                "status": "measured; target count validation remains pending",
-            },
+            score=1.0 if throughput is not None and target_met else None,
+            details={**details, "events_per_second": throughput},
+            status=status,
         ),
         _metric(
             "peak_memory_mb",
-            score=1.0,
-            details={"scale_size": profile.scale_size, "peak_rss_mb": peak_memory},
+            score=1.0 if target_met else None,
+            details={**details, "peak_rss_mb": peak_memory},
+            status=status,
         ),
-        _metric("resume_overhead", score=None, details={"scale_size": profile.scale_size}),
+        _metric("resume_overhead", score=None, details=details, status="N/A"),
     )
 
 

@@ -1,6 +1,7 @@
 """High-level Python API for generating deterministic FraudTwin runs."""
 
 import hashlib
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import timedelta
 from importlib.resources import files
@@ -357,25 +358,56 @@ def _label_observation_metadata(
     return metadata
 
 
-def _scale_records(behavior: BehaviorDataset) -> tuple[dict[str, object], ...]:
-    """Build stable logical records for the M18 partition writer."""
+def _scale_records(behavior: BehaviorDataset) -> Iterator[dict[str, object]]:
+    """Yield stable logical records for the M18 partition writer."""
 
-    records: list[dict[str, object]] = []
+    ordinal = 0
     for table_name, table_rows in behavior.tables().items():
         for row in table_rows:
             values = row.model_dump(mode="json")
             source_id = next(
                 (str(value) for key, value in values.items() if key.endswith("_id") and value),
-                f"row-{len(records):08d}",
+                f"row-{ordinal:08d}",
             )
-            records.append(
-                {
-                    "logical_id": f"{table_name}:{source_id}",
-                    "logical_type": table_name,
-                    "source_id": source_id,
+            owner_id = next(
+                (
+                    str(values[key])
+                    for key in ("payer_account_id", "account_id", "customer_id")
+                    if values.get(key)
+                ),
+                source_id,
+            )
+            # Keep the canonical row fields in the partition artifact.  The
+            # logical metadata is additive and lets the mixed scale reader
+            # route/filter rows without retaining a global ID index.
+            yield {
+                **values,
+                "logical_id": f"{table_name}:{source_id}",
+                "logical_type": table_name,
+                "source_id": source_id,
+                "partition_key": owner_id,
+            }
+            ordinal += 1
+            # Cross-account transfers are owned by the payer shard.  Emit a
+            # deterministic payee-side reconciliation marker so downstream
+            # consumers can close the cross-shard balance without a global
+            # account map.
+            payer = values.get("payer_account_id")
+            payee = values.get("payee_account_id")
+            if payer and payee and payer != payee and values.get("payment_id"):
+                payment_id = str(values["payment_id"])
+                yield {
+                    "logical_id": f"transfer_reconciliation:{payment_id}",
+                    "logical_type": "transfer_reconciliation",
+                    "source_id": payment_id,
+                    "payment_id": payment_id,
+                    "payer_account_id": str(payer),
+                    "payee_account_id": str(payee),
+                    "amount": values.get("amount"),
+                    "partition_key": str(payee),
+                    "reconciliation": "PAYEE_SIDE",
                 }
-            )
-    return tuple(records)
+                ordinal += 1
 
 
 def _scale_metadata(
@@ -390,11 +422,20 @@ def _scale_metadata(
     plan = resolve_scale_plan(config, run_id=run_id)
     if plan is None:
         return None
-    records = _scale_records(behavior)
+    realized_logical_rows = sum(len(rows) for rows in behavior.tables().values())
+    if write and len(behavior.payments) < plan.target_payments:
+        raise ValueError(
+            "scale target not met: expected at least "
+            f"{plan.target_payments} payments, realized {len(behavior.payments)}"
+        )
     metadata: dict[str, object] = {
         "profile": plan.profile,
+        "target_unit": "payments",
+        "target_payments": plan.target_payments,
+        "payments_realized": len(behavior.payments),
+        "target_met": len(behavior.payments) >= plan.target_payments,
         "target_logical_events": plan.target_logical_events,
-        "logical_events_realized": len(records),
+        "logical_events_realized": realized_logical_rows,
         "shard_count": plan.shard_count,
         "chunk_size": plan.chunk_size,
         "worker_count": plan.worker_count,
@@ -408,7 +449,7 @@ def _scale_metadata(
         completions, reconciliation, checkpoint_path = write_scale_partitions(
             run_dir,
             plan,
-            records,
+            _scale_records(behavior),
             checkpoint_dir=checkpoint_dir,
             resolved_configuration=config.model_dump(mode="json"),
         )
@@ -418,6 +459,8 @@ def _scale_metadata(
                 "partition_fingerprints": {item.shard_id: item.fingerprint for item in completions},
                 "checkpoint": str(checkpoint_path),
                 "reconciliation": reconciliation.model_dump(mode="json"),
+                "derived_counts": behavior.event_counts,
+                "target_met": len(behavior.payments) >= plan.target_payments,
             }
         )
     return metadata
@@ -507,6 +550,12 @@ def generate(
         simulation_run_id=base_manifest.run_id,
         calibration=calibration,
     ).generate()
+    scale_plan = resolve_scale_plan(resolved_config, run_id=base_manifest.run_id)
+    if write and scale_plan is not None and len(behavior.payments) < scale_plan.target_payments:
+        raise ValueError(
+            "scale target not met: expected at least "
+            f"{scale_plan.target_payments} payments, realized {len(behavior.payments)}"
+        )
 
     output_root = Path(output_dir)
     run_dir = output_root / base_manifest.run_id

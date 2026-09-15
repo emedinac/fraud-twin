@@ -20,7 +20,13 @@ When label observation is enabled, inspect `label_observations/<id>/observable/o
 
 ## Generate and resume large runs
 
-Large-scale profiles use the same simulator and output contracts as ordinary runs while writing deterministic shard/chunk Parquet artifacts and a checkpoint manifest. Worker count changes scheduling only. Resume validates the stored configuration and seed tree, reuses valid completed partitions, and regenerates incomplete work deterministically:
+Large-scale profiles use the same simulator and output contracts as ordinary
+runs while writing deterministic shard/chunk Parquet artifacts and a checkpoint
+manifest. The target is measured in canonical payment rows; lifecycle and
+workflow rows are reported separately. Use the `dev` profile for a bounded
+laptop smoke run. Worker count changes scheduling only. Resume validates the
+stored configuration and seed tree, reuses valid completed chunks, and
+regenerates incomplete work deterministically:
 
 ```bash
 poetry run fraudtwin generate configs/scale-1b.yaml --workers 16 --checkpoint-dir .fraudtwin/run-1b
@@ -28,6 +34,11 @@ poetry run fraudtwin resume .fraudtwin/run-1b
 ```
 
 The `billion` profile is a hardware-dependent benchmark target and is not part of unit, smoke, or CI validation.
+
+The compatibility API retains in-memory entity/behavior objects, so use
+`dev` for laptop checks. For 100M/1B jobs, connect a streaming canonical-row
+producer on self-hosted SSD or S3/MinIO; the writer and checkpoint format are
+partition-aware and resume-safe.
 
 ## Replay a historical window
 

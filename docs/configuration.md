@@ -48,11 +48,20 @@ Enabled runs write append-only `label_observations/<id>/observable/observed_labe
 
 ## Large-scale generation
 
-Scale generation reuses the canonical simulator and is disabled by default. Profiles target 100k, 1M, 10M, 100M, and 1B logical events. Stable shard IDs and hierarchical seed streams make IDs, timestamps, scenario semantics, financial state, schemas, and partition fingerprints independent of worker scheduling. Chunked Parquet output is bounded by `chunk_size` and `output_batch_size`; completed chunks are recorded in an atomic checkpoint manifest.
+Scale generation reuses the canonical simulator and is disabled by default. The
+primary target is canonical payment rows; lifecycle, ledger, fraud, and
+workflow rows are reported separately. Profiles target 100k, 1M, 10M, 100M,
+and 1B payments. The `dev` profile is a bounded 1,000-payment smoke profile
+for laptops. Stable shard IDs and hierarchical seed streams make IDs,
+timestamps, scenario semantics, financial state, schemas, and partition
+fingerprints independent of worker scheduling. Chunked Parquet output is
+bounded by `chunk_size` and `output_batch_size`; completed chunks are recorded
+in an atomic checkpoint manifest.
 
 ```yaml
 scale:
-  profile: small
+  profile: dev
+  target_payments: 1000
   shard_count: 4
   chunk_size: 1000
   worker_count: 2
@@ -68,7 +77,16 @@ fraudtwin generate configs/scale-1b.yaml --workers 16 --checkpoint-dir .fraudtwi
 fraudtwin resume .fraudtwin/run-1b
 ```
 
-The billion profile is a published benchmark target for suitable documented hardware; it does not require Kafka, Spark, or cloud infrastructure merely to demonstrate generator scalability. A completed run records partition checksums, canonical fingerprints, and cross-partition reconciliation results.
+The billion profile is a published benchmark target for suitable documented
+hardware; it does not require Kafka, Spark, or cloud infrastructure merely to
+demonstrate generator scalability. A completed run records target and
+realized payment counts, partition checksums, canonical fingerprints, and
+cross-partition reconciliation results. Use `poetry install -E scale` for the
+optional PyArrow/DuckDB out-of-core tooling.
+
+The compatibility API still materializes canonical entity/behavior objects;
+use `dev` on a laptop. Production 100M/1B executions should wire a streaming
+canonical-row producer to this chunk writer on SSD or S3/MinIO.
 
 ## Reference calibration
 

@@ -9,12 +9,16 @@ from fraudtwin.config import ScaleConfig, SimulationRunConfig, load_config
 from fraudtwin.generation import generate, resume_generation
 from fraudtwin.scale import (
     ScalePlan,
+    aggregate_fingerprint,
     checkpoint_fingerprint,
     iter_chunks,
+    iter_partition_rows,
+    iter_payment_ranges,
     load_checkpoint,
     partition_id,
     reconcile_logical_ids,
     resolve_scale_plan,
+    write_scale_benchmark_manifest,
 )
 
 
@@ -24,6 +28,7 @@ def _scale_config():
         update={
             "scale": ScaleConfig(
                 profile="small",
+                target_payments=100,
                 shard_count=3,
                 chunk_size=7,
                 worker_count=2,
@@ -47,6 +52,13 @@ def test_scale_profiles_and_strict_controls() -> None:
         SimulationRunConfig.model_validate(values)
 
 
+def test_dev_scale_profile_is_bounded() -> None:
+    config = load_config(Path("configs/scale-dev.yaml"))
+    plan = resolve_scale_plan(config)
+    assert plan is not None
+    assert plan.target_payments == 1_000
+
+
 def test_disabled_scale_preserves_legacy_config_hash() -> None:
     base = load_config(Path("configs/minimal.yaml"))
     values = base.model_dump(mode="python")
@@ -62,6 +74,18 @@ def test_partition_mapping_and_chunks_are_stable() -> None:
         (7, 14),
         (14, 17),
     ]
+
+
+def test_payment_ranges_cover_target_without_overlap() -> None:
+    ranges = list(iter_payment_ranges(10, 3))
+    assert [(item[2], item[3]) for item in ranges] == [(0, 3), (3, 6), (6, 10)]
+    assert sum(end - start for _, _, start, end in ranges) == 10
+
+
+def test_aggregate_fingerprint_is_order_sensitive_and_streamable() -> None:
+    first = aggregate_fingerprint(({"logical_id": "a"}, {"logical_id": "b"}))
+    second = aggregate_fingerprint(({"logical_id": "b"}, {"logical_id": "a"}))
+    assert first != second
 
 
 def test_reconciliation_detects_duplicate_and_missing_ids() -> None:
@@ -85,6 +109,33 @@ def test_scale_generation_and_resume_are_reproducible(tmp_path: Path) -> None:
     assert checkpoint_fingerprint(checkpoint) == checkpoint_fingerprint(
         load_checkpoint(tmp_path / "checkpoint" / "checkpoint.json")
     )
+    rows = tuple(iter_partition_rows(first.run_dir))
+    assert len(rows) == checkpoint.reconciliation.partition_row_count
+    assert checkpoint.completed_chunks
+
+
+def test_scale_benchmark_manifest_records_target_and_host(tmp_path: Path) -> None:
+    destination = write_scale_benchmark_manifest(
+        tmp_path / "benchmark.json",
+        target_payments=10,
+        realized_counts={"payments": 10, "payment_events": 12},
+        configuration_hash="a" * 64,
+        seed=7,
+        shard_count=2,
+        worker_count=1,
+        elapsed_seconds=2.0,
+    )
+    payload = destination.read_text(encoding="utf-8")
+    assert '"target_met": true' in payload
+    assert '"throughput_payments_per_second": 5.0' in payload
+
+
+def test_scale_target_mismatch_is_rejected_before_output(tmp_path: Path) -> None:
+    config = _scale_config().model_copy(
+        update={"scale": _scale_config().scale.model_copy(update={"target_payments": 101})}
+    )
+    with pytest.raises(ValueError, match="scale target not met"):
+        generate(config, write=True, output_dir=tmp_path / "runs")
 
 
 def test_scale_plan_is_typed() -> None:
