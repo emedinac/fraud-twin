@@ -8,6 +8,9 @@
 - Added deterministic payment ordinal helpers, incremental fingerprints,
   cross-account payee reconciliation markers, benchmark evidence manifests, and
   optional PyArrow/DuckDB scale tooling.
+- Added table-qualified entity chunks, physical chunk checksum validation on
+  resume, a completed-run resume fast path, lazy partition-table readers, and
+  optional M22 ingestion of M18 scale evidence manifests.
 
 ## 0.32.0 — Milestone 27 Minimal Observability
 

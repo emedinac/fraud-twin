@@ -358,11 +358,13 @@ def _label_observation_metadata(
     return metadata
 
 
-def _scale_records(behavior: BehaviorDataset) -> Iterator[dict[str, object]]:
+def _scale_records(
+    entities: EntityDataset, behavior: BehaviorDataset
+) -> Iterator[dict[str, object]]:
     """Yield stable logical records for the M18 partition writer."""
 
     ordinal = 0
-    for table_name, table_rows in behavior.tables().items():
+    for table_name, table_rows in {**entities.all_tables(), **behavior.tables()}.items():
         for row in table_rows:
             values = row.model_dump(mode="json")
             source_id = next(
@@ -412,6 +414,7 @@ def _scale_records(behavior: BehaviorDataset) -> Iterator[dict[str, object]]:
 
 def _scale_metadata(
     config: SimulationRunConfig,
+    entities: EntityDataset,
     behavior: BehaviorDataset,
     run_dir: Path,
     *,
@@ -449,7 +452,7 @@ def _scale_metadata(
         completions, reconciliation, checkpoint_path = write_scale_partitions(
             run_dir,
             plan,
-            _scale_records(behavior),
+            _scale_records(entities, behavior),
             checkpoint_dir=checkpoint_dir,
             resolved_configuration=config.model_dump(mode="json"),
         )
@@ -585,6 +588,7 @@ def generate(
 
     scale_metadata = _scale_metadata(
         resolved_config,
+        entities,
         behavior,
         run_dir,
         write=write,

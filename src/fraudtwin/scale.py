@@ -120,6 +120,8 @@ class ReconciliationResult(BaseModel):
     ledger_debit_total: float = 0.0
     ledger_credit_total: float = 0.0
     ledger_balanced: bool = True
+    shard_ledger_totals: dict[str, dict[str, float]] = Field(default_factory=dict)
+    transfer_reconciliation_records: int = Field(default=0, ge=0)
     valid: bool
     checks: dict[str, bool] = Field(default_factory=dict)
 
@@ -129,7 +131,7 @@ class ScaleCheckpoint(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    checkpoint_version: str = "M18-checkpoint-3"
+    checkpoint_version: str = "M18-checkpoint-4"
     run_id: str
     run_dir: str
     configuration_hash: str
@@ -286,6 +288,27 @@ def iter_partition_rows(
         yield from pl.read_parquet(path, columns=columns).iter_rows(named=True)
 
 
+def iter_partition_table(
+    run_dir: str | Path,
+    logical_type: str,
+    *,
+    shard_id: str | None = None,
+    columns: list[str] | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Yield rows for one logical table from partitioned scale output.
+
+    This is intentionally lazy and keeps the existing in-memory readers
+    untouched.  Consumers that can operate out-of-core should use this helper
+    instead of loading a complete generated run.
+    """
+
+    if not logical_type:
+        raise ValueError("logical_type must not be empty")
+    for row in iter_partition_rows(run_dir, shard_id=shard_id, columns=columns):
+        if row.get("logical_type") == logical_type:
+            yield row
+
+
 def iter_partition_query(
     run_dir: str | Path,
     query: str,
@@ -402,6 +425,34 @@ def _package_versions() -> dict[str, str]:
         except importlib.metadata.PackageNotFoundError:
             continue
     return versions
+
+
+def _file_checksum(path: Path) -> str:
+    """Return a streaming SHA-256 checksum for one output chunk."""
+
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _checkpoint_files_valid(run_root: Path, checkpoint: ScaleCheckpoint) -> bool:
+    """Validate completed chunk files before reusing checkpoint state."""
+
+    for completion in checkpoint.completed_chunks:
+        path = run_root / completion.path
+        if not path.is_file():
+            return False
+        # M18-checkpoint-2/3 stored the logical fingerprint as ``checksum``;
+        # those artifacts remain readable, while current checkpoints verify
+        # the physical file bytes.
+        if (
+            completion.checksum != completion.fingerprint
+            and _file_checksum(path) != completion.checksum
+        ):
+            return False
+    return True
 
 
 def run_scale_benchmark(
@@ -530,6 +581,7 @@ def write_scale_partitions(
     descriptors = shard_descriptors(plan)
     checkpoint_root = Path(checkpoint_dir) if checkpoint_dir is not None else run_root / "scale"
     prior_chunks: dict[tuple[str, str, int], ChunkCompletion] = {}
+    prior_checkpoint_model: ScaleCheckpoint | None = None
     prior_checkpoint = checkpoint_root / "checkpoint.json"
     if prior_checkpoint.is_file():
         try:
@@ -540,6 +592,7 @@ def write_scale_partitions(
                 and checkpoint.seed_tree_version == plan.seed_tree_version
                 and checkpoint.plan == plan
             ):
+                prior_checkpoint_model = checkpoint
                 prior_chunks = {
                     (item.shard_id, item.logical_type, item.chunk_index): item
                     for item in checkpoint.completed_chunks
@@ -548,6 +601,22 @@ def write_scale_partitions(
             # A corrupt or legacy checkpoint is never trusted for reuse; the
             # current run will rewrite the affected chunks deterministically.
             prior_chunks = {}
+
+    # A completed, integrity-checked run is already resumable and must not be
+    # regenerated.  This fast path is especially important for billion-row
+    # jobs where a resume invocation should do no producer work at all.
+    if (
+        prior_checkpoint_model is not None
+        and prior_checkpoint_model.reconciliation is not None
+        and prior_checkpoint_model.reconciliation.valid
+        and prior_checkpoint_model.completed_partitions
+        and _checkpoint_files_valid(run_root, prior_checkpoint_model)
+    ):
+        return (
+            prior_checkpoint_model.completed_partitions,
+            prior_checkpoint_model.reconciliation,
+            prior_checkpoint,
+        )
 
     # Chunk markers are written immediately after each atomic Parquet rename.
     # They make an interrupted run resumable even when the final checkpoint
@@ -574,6 +643,8 @@ def write_scale_partitions(
     total_rows = 0
     ledger_debit_total = Decimal("0")
     ledger_credit_total = Decimal("0")
+    shard_ledger_totals: dict[str, dict[str, Decimal]] = {}
+    transfer_reconciliation_records = 0
     try:
         for record in records:
             row = dict(record)
@@ -584,10 +655,17 @@ def write_scale_partitions(
             row["partition_id"] = partition_id(owner_key, plan.shard_count)
             if row.get("logical_type") == "ledger_entries":
                 amount = Decimal(str(row.get("amount", 0)))
+                shard_totals = shard_ledger_totals.setdefault(
+                    row["partition_id"], {"debit": Decimal("0"), "credit": Decimal("0")}
+                )
                 if row.get("entry_type") == "DEBIT":
                     ledger_debit_total += amount
+                    shard_totals["debit"] += amount
                 elif row.get("entry_type") == "CREDIT":
                     ledger_credit_total += amount
+                    shard_totals["credit"] += amount
+            if row.get("logical_type") == "transfer_reconciliation":
+                transfer_reconciliation_records += 1
             handles[row["partition_id"]].write(
                 json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n"
             )
@@ -628,6 +706,14 @@ def write_scale_partitions(
                 and prior.end_ordinal == end
                 and prior.row_count == len(partition_rows)
                 and prior.path == str(path.relative_to(run_root))
+                # New checkpoints carry a file checksum.  Older M18
+                # checkpoints used the logical fingerprint in this field;
+                # accept those for compatibility but never trust a mismatched
+                # current file.
+                and (
+                    prior.checksum == prior.fingerprint
+                    or prior.checksum == _file_checksum(path)
+                )
             ):
                 chunk_completions.append(prior)
             else:
@@ -644,7 +730,7 @@ def write_scale_partitions(
                         end_ordinal=end,
                         row_count=len(partition_rows),
                         fingerprint=fingerprint,
-                        checksum=fingerprint,
+                        checksum=_file_checksum(path),
                         path=str(path.relative_to(run_root)),
                     )
                 )
@@ -711,6 +797,11 @@ def write_scale_partitions(
         ledger_debit_total=float(ledger_debit_total),
         ledger_credit_total=float(ledger_credit_total),
         ledger_balanced=ledger_debit_total == ledger_credit_total,
+        shard_ledger_totals={
+            shard_id: {name: float(amount) for name, amount in totals.items()}
+            for shard_id, totals in shard_ledger_totals.items()
+        },
+        transfer_reconciliation_records=transfer_reconciliation_records,
         valid=total_rows == emitted_rows and ledger_debit_total == ledger_credit_total,
         checks={
             "row_counts": total_rows == emitted_rows,
@@ -747,15 +838,21 @@ def _checkpoint_integrity_payload(checkpoint: ScaleCheckpoint) -> dict[str, Any]
     # M18-checkpoint-2 predates table-qualified chunks and ledger aggregate
     # fields.  Preserve its original integrity calculation while accepting
     # those artifacts as readable inputs.
-    if checkpoint.checkpoint_version == "M18-checkpoint-2":
+    if checkpoint.checkpoint_version in {"M18-checkpoint-2", "M18-checkpoint-3"}:
         for item in payload.get("completed_chunks", []):
-            if item.get("logical_type") == "records":
+            if (
+                checkpoint.checkpoint_version == "M18-checkpoint-2"
+                and item.get("logical_type") == "records"
+            ):
                 item.pop("logical_type", None)
         reconciliation = payload.get("reconciliation")
         if isinstance(reconciliation, dict):
-            reconciliation.pop("ledger_debit_total", None)
-            reconciliation.pop("ledger_credit_total", None)
-            reconciliation.pop("ledger_balanced", None)
+            reconciliation.pop("shard_ledger_totals", None)
+            reconciliation.pop("transfer_reconciliation_records", None)
+            if checkpoint.checkpoint_version == "M18-checkpoint-2":
+                reconciliation.pop("ledger_debit_total", None)
+                reconciliation.pop("ledger_credit_total", None)
+                reconciliation.pop("ledger_balanced", None)
     return payload
 
 
@@ -779,6 +876,7 @@ __all__ = [
     "iter_payment_ranges",
     "chunk_payment_ranges",
     "iter_partition_rows",
+    "iter_partition_table",
     "iter_partition_query",
     "write_scale_benchmark_manifest",
     "run_scale_benchmark",

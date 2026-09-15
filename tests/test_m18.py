@@ -13,6 +13,7 @@ from fraudtwin.scale import (
     checkpoint_fingerprint,
     iter_chunks,
     iter_partition_rows,
+    iter_partition_table,
     iter_payment_ranges,
     load_checkpoint,
     partition_id,
@@ -112,6 +113,7 @@ def test_scale_generation_and_resume_are_reproducible(tmp_path: Path) -> None:
     rows = tuple(iter_partition_rows(first.run_dir))
     assert len(rows) == checkpoint.reconciliation.partition_row_count
     assert checkpoint.completed_chunks
+    assert tuple(iter_partition_table(first.run_dir, "payments"))
 
 
 def test_scale_benchmark_manifest_records_target_and_host(tmp_path: Path) -> None:

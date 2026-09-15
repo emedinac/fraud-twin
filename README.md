@@ -132,6 +132,14 @@ poetry run fraudtwin report RUN-<id>
 
 The report keeps correctness, fidelity, fraud difficulty, scalability, engineering performance, and reproducibility independent. External generators may provide a normalized bundle or a `module:factory` adapter; unsupported dimensions are reported as `N/A`.
 
+To include measured M18 scalability evidence without running a large workload
+as part of the quality command, pass the completed scale manifest:
+
+```bash
+poetry run fraudtwin quality-benchmark --profile standard-v1-dev \
+  --scale-manifest runs/scale-benchmarks/<run>-benchmark.json
+```
+
 For comparable results across machines and FraudTwin releases, run one of the
 bundled immutable public benchmark packs:
 

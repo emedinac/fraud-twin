@@ -269,6 +269,13 @@ def quality_benchmark_command(
     bundle: Annotated[
         Path | None, typer.Option("--bundle", help="Normalized external artifact bundle JSON.")
     ] = None,
+    scale_manifest: Annotated[
+        Path | None,
+        typer.Option(
+            "--scale-manifest",
+            help="Optional M18 scale benchmark evidence JSON for scalability metrics.",
+        ),
+    ] = None,
 ) -> None:
     """Run the Milestone 22 generator-quality protocol."""
 
@@ -278,6 +285,7 @@ def quality_benchmark_command(
             output_dir=output_dir,
             adapter=adapter,
             bundle=bundle,
+            scale_manifest=scale_manifest,
         )
     except (OSError, RuntimeError, ValueError) as exc:
         typer.echo(f"Quality benchmark failed: {exc}", err=True)

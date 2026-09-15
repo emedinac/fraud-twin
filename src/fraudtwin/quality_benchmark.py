@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from fraudtwin import __version__
 from fraudtwin.benchmark import BenchmarkResult, load_public_pack, run_public_benchmark
 from fraudtwin.calibration import load_calibration_profile
+from fraudtwin.config import SCALE_PROFILE_TARGETS
 from fraudtwin.domain import validate_ledger, validate_payment_lifecycle
 from fraudtwin.label_observation import validate_label_observation
 from fraudtwin.ml import load_generated_run
@@ -188,6 +189,7 @@ class QualityBenchmarkRequest(BaseModel):
     output_dir: Path = Path("runs/quality-benchmarks")
     adapter: str | None = None
     bundle: Path | None = None
+    scale_manifest: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -502,6 +504,8 @@ def _difficulty_metrics(pack_results: tuple[_NativePackResult, ...]) -> tuple[Qu
 def _scale_metrics(
     profile: QualityBenchmarkProfile,
     pack_results: tuple[_NativePackResult, ...] = (),
+    *,
+    scale_manifest: dict[str, Any] | None = None,
 ) -> tuple[QualityMetric, ...]:
     scale_runs: list[dict[str, Any]] = []
     for item in pack_results:
@@ -510,6 +514,8 @@ def _scale_metrics(
         scale = manifest.get("scale")
         if isinstance(scale, dict):
             scale_runs.append(scale)
+    if scale_manifest is not None:
+        scale_runs.append(scale_manifest)
     if not scale_runs:
         details: dict[str, Any] = {
             "scale_size": profile.scale_size,
@@ -522,17 +528,31 @@ def _scale_metrics(
 
     event_count = 0
     target_met = True
+    elapsed = 0.0
+    output_bytes = 0
+    resume_elapsed: float | None = None
     for scale in scale_runs:
-        event_count += int(scale.get("payments_realized", 0))
+        counts = scale.get("realized_counts", {})
+        realized = scale.get("payments_realized", counts.get("payments", 0))
+        event_count += int(realized or 0)
         target_met = target_met and bool(scale.get("target_met", False))
-    elapsed = sum(item.elapsed_seconds for item in pack_results)
+        elapsed += float(scale.get("elapsed_seconds", 0.0) or 0.0)
+        output_bytes += int(scale.get("output_bytes", 0) or 0)
+        resume = scale.get("resume")
+        if isinstance(resume, dict) and resume.get("elapsed_seconds") is not None:
+            resume_elapsed = float(resume["elapsed_seconds"])
+    if elapsed <= 0:
+        elapsed = sum(item.elapsed_seconds for item in pack_results)
     throughput = event_count / elapsed if elapsed > 0 else None
     peak_memory = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) / 1024.0
-    status = "MEASURED" if target_met else "N/A"
+    expected_target = SCALE_PROFILE_TARGETS[cast(Any, profile.scale_size)]
+    status = "MEASURED" if target_met and event_count >= expected_target else "N/A"
     details = {
         "scale_size": profile.scale_size,
+        "expected_target_payments": expected_target,
         "target_met": target_met,
         "realized_payments": event_count,
+        "output_bytes": output_bytes or None,
     }
     return (
         _metric(
@@ -547,7 +567,16 @@ def _scale_metrics(
             details={**details, "peak_rss_mb": peak_memory},
             status=status,
         ),
-        _metric("resume_overhead", score=None, details=details, status="N/A"),
+        _metric(
+            "resume_overhead",
+            score=(
+                resume_elapsed / elapsed
+                if resume_elapsed is not None and elapsed > 0
+                else None
+            ),
+            details={**details, "resume_elapsed_seconds": resume_elapsed},
+            status=("MEASURED" if resume_elapsed is not None and elapsed > 0 else "N/A"),
+        ),
     )
 
 
@@ -639,9 +668,12 @@ def _bundle_report(bundle_path: Path) -> QualityCandidateReport:
 
 
 def _native_report(
-    profile: QualityBenchmarkProfile, pack_results: tuple[_NativePackResult, ...]
+    profile: QualityBenchmarkProfile,
+    pack_results: tuple[_NativePackResult, ...],
+    *,
+    scale_manifest: dict[str, Any] | None = None,
 ) -> QualityCandidateReport:
-    scale_metrics = _scale_metrics(profile, pack_results)
+    scale_metrics = _scale_metrics(profile, pack_results, scale_manifest=scale_manifest)
     return QualityCandidateReport(
         candidate_id="fraudtwin",
         candidate_version=__version__,
@@ -662,6 +694,7 @@ def run_quality_benchmark(
     output_dir: Path = Path("runs/quality-benchmarks"),
     adapter: str | None = None,
     bundle: Path | None = None,
+    scale_manifest: Path | None = None,
 ) -> QualityBenchmarkResult:
     """Run the native or external M22 quality protocol."""
 
@@ -671,14 +704,24 @@ def run_quality_benchmark(
         output_dir = benchmark_request.output_dir
         adapter = benchmark_request.adapter
         bundle = benchmark_request.bundle
+        scale_manifest = benchmark_request.scale_manifest
     if adapter is not None and bundle is not None:
         raise ValueError("quality benchmark accepts either --adapter or --bundle, not both")
+    if scale_manifest is not None and (adapter is not None or bundle is not None):
+        raise ValueError("scale manifests are supported only for native quality benchmarks")
     resolved = (
         profile if isinstance(profile, QualityBenchmarkProfile) else load_quality_profile(profile)
     )
     root = output_dir / (
         "QB-"
-        + sha256_json({"profile": resolved.fingerprint, "adapter": adapter, "bundle": str(bundle)})[
+        + sha256_json(
+            {
+                "profile": resolved.fingerprint,
+                "adapter": adapter,
+                "bundle": str(bundle),
+                "scale_manifest": str(scale_manifest),
+            }
+        )[
             :16
         ]
     )
@@ -715,7 +758,20 @@ def run_quality_benchmark(
             engineering_details={"generation_seconds": elapsed},
         )
     else:
-        candidate = _native_report(resolved, _run_native_packs(resolved, root))
+        scale_evidence: dict[str, Any] | None = None
+        if scale_manifest is not None:
+            try:
+                payload = json.loads(scale_manifest.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                raise ValueError(f"invalid scale benchmark manifest: {scale_manifest}") from exc
+            if not isinstance(payload, dict):
+                raise ValueError("scale benchmark manifest must be a JSON object")
+            scale_evidence = payload
+        candidate = _native_report(
+            resolved,
+            _run_native_packs(resolved, root),
+            scale_manifest=scale_evidence,
+        )
     report_id = root.name
     report = {
         "report_id": report_id,

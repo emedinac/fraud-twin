@@ -63,6 +63,7 @@ from fraudtwin.domain import (
 from fraudtwin.label_observation import validate_label_observation, visible_label_at
 from fraudtwin.manifest import DatasetManifest, RunManifest
 from fraudtwin.reproducibility import as_utc, canonical_json, sha256_json
+from fraudtwin.scale import iter_partition_table
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
 from fraudtwin.simulation.graph_fraud import GraphFraudDataset
@@ -296,11 +297,27 @@ def _read_run_table(
     *,
     fallback_delivery: bool = False,
 ) -> tuple[T, ...]:
-    return _read_models(
-        run_dir / group / f"{table}.parquet",
-        model,
-        fallback_delivery=fallback_delivery,
-    )
+    path = run_dir / group / f"{table}.parquet"
+    if path.is_file():
+        return _read_models(path, model, fallback_delivery=fallback_delivery)
+    # Scale runs store table-qualified chunks instead of consolidated files.
+    # Keep this compatibility loader chunk-aware; callers needing truly
+    # out-of-core processing should consume ``iter_partition_table`` directly.
+    scale_rows = []
+    for row in iter_partition_table(run_dir, table):
+        values = {
+            key: value
+            for key, value in row.items()
+            if key
+            not in {"logical_id", "logical_type", "source_id", "partition_key", "partition_id"}
+        }
+        if fallback_delivery and "source_available_at" in values:
+            values.setdefault("ingested_at", values["source_available_at"])
+            values.setdefault("processed_at", values["ingested_at"])
+        scale_rows.append(model.model_validate(values))  # type: ignore[attr-defined]
+    if scale_rows:
+        return tuple(scale_rows)
+    return _read_models(path, model, fallback_delivery=fallback_delivery)
 
 
 def _read_optional_models(path: Path, model: type[T]) -> tuple[T, ...]:
