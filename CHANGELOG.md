@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.24.0 — Baseline ML + Evaluation Adapter
+
+- Added deterministic Logistic Regression, LightGBM, XGBoost, and CatBoost baseline training over frozen point-in-time datasets.
+- Added strict Parquet/JSONL external prediction evaluation, required fraud metrics and segments, model artifacts, and manifest lineage with optional MLflow tracking.
+- Preserved M1–M18 generation, label-observation, scale, and legacy heuristic backtest behavior.
+
 ## 0.23.0 — Large-Scale Deterministic Generation
 
 - Added opt-in deterministic scale profiles with stable sharding, hierarchical seed streams, bounded chunked Parquet output, parallel scheduling, checkpoint/resume, partition fingerprints, and cross-partition reconciliation.

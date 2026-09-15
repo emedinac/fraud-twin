@@ -56,6 +56,25 @@ poetry run fraudtwin ml backtest configs/minimal.yaml \
 
 Windows are chronological and non-overlapping. A benchmark pack freezes its own label-maturity gap, regime policy, seed/configuration identity, and metric definition so later comparisons remain meaningful.
 
+## Train baselines and evaluate external predictions
+
+M19 trains deterministic Logistic Regression, LightGBM, XGBoost, and CatBoost oracles on the same frozen PIT feature allowlist. Install the optional model stack before training:
+
+```bash
+poetry install -E ml
+poetry run fraudtwin ml train runs/<run-id>/ml/dataset.parquet \
+  --config configs/ml-baselines.yaml \
+  --output-dir runs/ml-evaluations
+```
+
+External models can submit strict Parquet or JSONL records containing one event/payment/customer/account ID, a prediction timestamp, a fraud score, and an optional predicted class:
+
+```bash
+poetry run fraudtwin ml evaluate runs/<run-id>/ml/dataset.parquet predictions.jsonl
+```
+
+The evaluator reports ranking, threshold, calibration, monetary, detection-delay, and segment metrics. It resolves labels and features at each prediction timestamp and records an immutable evaluation manifest. MLflow is used when a tracking URI is configured; otherwise local artifacts are sufficient.
+
 ## A practical evaluation sequence
 
 1. Generate a clean source run and validate its ledger.

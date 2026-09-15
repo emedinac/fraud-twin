@@ -1,6 +1,6 @@
 [project]
 name = "fraudtwin"
-version = "0.23.0"
+version = "0.24.0"
 description = "Fraud emulator for real-world ML and data pipelines"
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
@@ -38,6 +38,13 @@ fraudtwin = "fraudtwin.cli:main"
 
 [project.optional-dependencies]
 graph = ["torch>=2.2,<3.0", "torch-geometric>=2.5,<3.0"]
+ml = [
+    "scikit-learn>=1.5,<2.0",
+    "lightgbm>=4.0,<5.0",
+    "xgboost>=2.0,<4.0",
+    "catboost>=1.2,<2.0",
+]
+mlflow = ["mlflow>=2.14,<4.0"]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

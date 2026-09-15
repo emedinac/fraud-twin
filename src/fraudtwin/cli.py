@@ -19,10 +19,16 @@ from fraudtwin.graph import GraphDataset, build_graph, validate_graph, write_gra
 from fraudtwin.ml import (
     BenchmarkPack,
     PointInTimeDatasetBuilder,
+    evaluate_predictions,
+    load_baseline_config,
     load_benchmark_pack,
     load_generated_run,
+    load_predictions,
     run_backtest,
+    run_model_backtest,
+    train_baselines,
     write_backtest,
+    write_evaluation,
     write_point_in_time_dataset,
 )
 from fraudtwin.replay import ReplayOrder, replay_run, write_replay
@@ -462,6 +468,92 @@ def build_dataset(
     typer.echo(f"Rows: {dataset.count}")
 
 
+def _read_ml_dataset(path: Path) -> list[dict[str, object]]:
+    """Read a previously materialized PIT dataset without regenerating its source run."""
+
+    try:
+        frame = pl.read_parquet(path)
+    except (FileNotFoundError, OSError) as exc:
+        raise ValueError(f"dataset does not exist or cannot be read: {path}") from exc
+    required = {"dataset_row_id", "prediction_time", "label", "split"}
+    if not required.issubset(frame.columns):
+        missing = sorted(required - set(frame.columns))
+        raise ValueError(f"dataset is missing required columns: {missing}")
+    return cast(list[dict[str, object]], frame.to_dicts())
+
+
+def _infer_source_run_dir(dataset: Path) -> Path | None:
+    """Infer a generated run directory for segment enrichment when possible."""
+
+    candidate = dataset.parent.parent if dataset.parent.name == "ml" else None
+    return candidate if candidate is not None and (candidate / "manifest.json").is_file() else None
+
+
+@ml_app.command("train")
+def train_baselines_command(
+    dataset: Annotated[Path, typer.Argument(help="Point-in-time dataset Parquet file.")],
+    config_path: Annotated[
+        Path, typer.Option("--config", help="Baseline evaluation YAML configuration.")
+    ] = Path("configs/ml-baselines.yaml"),
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for evaluation artifacts.")
+    ] = Path("runs/ml-evaluations"),
+) -> None:
+    """Train deterministic M19 baseline models on frozen PIT rows."""
+
+    try:
+        evaluation_config = load_baseline_config(config_path)
+        rows = _read_ml_dataset(dataset)
+        result = train_baselines(
+            rows, evaluation_config, source_run_dir=_infer_source_run_dir(dataset)
+        )
+        destination = output_dir / ("EV-" + result.manifest["output_fingerprint"][:16])
+        predictions_path, metrics_path, manifest_path = write_evaluation(result, destination)
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Baseline training failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Baseline evaluation generated: {destination.name}")
+    typer.echo(f"Predictions: {predictions_path}")
+    typer.echo(f"Metrics: {metrics_path}")
+    typer.echo(f"Manifest: {manifest_path}")
+
+
+@ml_app.command("evaluate")
+def evaluate_predictions_command(
+    dataset: Annotated[Path, typer.Argument(help="Point-in-time dataset Parquet file.")],
+    predictions: Annotated[
+        Path, typer.Argument(help="External predictions Parquet or JSONL file.")
+    ],
+    config_path: Annotated[
+        Path, typer.Option("--config", help="Baseline evaluation YAML configuration.")
+    ] = Path("configs/ml-baselines.yaml"),
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory for evaluation artifacts.")
+    ] = Path("runs/ml-evaluations"),
+) -> None:
+    """Evaluate external model predictions against PIT-safe labels."""
+
+    try:
+        evaluation_config = load_baseline_config(config_path)
+        rows = _read_ml_dataset(dataset)
+        records = load_predictions(predictions)
+        result = evaluate_predictions(
+            rows,
+            records,
+            evaluation_config,
+            source_run_dir=_infer_source_run_dir(dataset),
+        )
+        destination = output_dir / ("EV-" + result.manifest["output_fingerprint"][:16])
+        predictions_path, metrics_path, manifest_path = write_evaluation(result, destination)
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"External prediction evaluation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"External evaluation generated: {destination.name}")
+    typer.echo(f"Predictions: {predictions_path}")
+    typer.echo(f"Metrics: {metrics_path}")
+    typer.echo(f"Manifest: {manifest_path}")
+
+
 @app.command("replay")
 def replay_command(
     run_id: Annotated[str, typer.Option("--run-id", help="Existing generated run identifier.")],
@@ -510,6 +602,16 @@ def backtest_command(
         Path,
         typer.Option("--output-dir", help="Directory containing generated runs."),
     ] = Path("runs"),
+    models: Annotated[
+        str,
+        typer.Option(
+            "--models",
+            help=(
+                "Comma-separated M19 models; default deterministic_heuristic "
+                "for M10 compatibility."
+            ),
+        ),
+    ] = "deterministic_heuristic",
 ) -> None:
     """Build deterministic rolling PIT backtest folds from an existing run."""
 
@@ -520,12 +622,18 @@ def backtest_command(
         )
         run_dir = output_dir / run_id
         entities, behavior, source_manifest = load_generated_run(run_dir)
-        result = run_backtest(
-            config,
-            entities,
-            behavior,
-            source_manifest,
-            benchmark_pack=pack,
+        selected_models = tuple(item.strip() for item in models.split(",") if item.strip())
+        result = (
+            run_backtest(config, entities, behavior, source_manifest, benchmark_pack=pack)
+            if selected_models == ("deterministic_heuristic",)
+            else run_model_backtest(
+                config,
+                entities,
+                behavior,
+                source_manifest,
+                models=selected_models,
+                benchmark_pack=pack,
+            )
         )
         rows_path, metrics_path, manifest_path = write_backtest(
             result, run_dir / "ml" / "backtests"

@@ -14,7 +14,9 @@
 
 > Synthetic financial behavior for testing fraud systems
 
-FraudTwin generates a small, coherent payment world: customers have accounts, cards, merchants, devices, habits, and transaction histories. The same seed and configuration produce the same world, which makes a difficult fraud case reproducible instead of anecdotal.
+FraudTwin generates evolving adversarial financial environments in which fraud actors coordinate, camouflage their behavior, change strategies over time, and may remain undiscovered for weeks or indefinitely.
+
+Each environment is a small, coherent payment world: customers have accounts, cards, merchants, devices, habits, and transaction histories. The same seed and configuration produce the same world, which makes a difficult fraud case reproducible instead of anecdotal.
 
 ## Documentation
 
@@ -49,6 +51,7 @@ examples.
 - Reference calibration profiles that tune aggregate amounts, timing, balances, activity, and merchant behavior without copying reference rows.
 - An opt-in label observation engine for selective, delayed, missing, preliminary, corrected, and reopened labels with point-in-time-safe history.
 - Opt-in large-scale generation profiles with stable sharding, bounded chunked Parquet output, parallel scheduling, checkpoint/resume, partition fingerprints, and cross-partition reconciliation.
+- Reproducible baseline ML oracles (Logistic Regression, LightGBM, XGBoost, CatBoost), point-in-time external prediction evaluation, fraud metrics, and optional MLflow tracking.
 
 FraudTwin is designed for fraud engineers, data scientists, ML engineers, and data teams who need realistic relationships and timing before introducing a larger streaming or production stack.
 
@@ -87,6 +90,14 @@ poetry run fraudtwin resume .fraudtwin/run-1b
 ```
 
 Scale execution uses the same canonical simulator. Worker scheduling does not change logical IDs or partition fingerprints, and checkpoints support deterministic retry/resume. The billion profile is a documented benchmark target for suitable hardware, not a test-suite requirement.
+
+For baseline model evaluation, install the optional ML dependencies and train on a previously built PIT dataset:
+
+```bash
+poetry install -E ml
+poetry run fraudtwin ml train runs/<run-id>/ml/dataset.parquet --output-dir runs/ml-evaluations
+poetry run fraudtwin ml evaluate runs/<run-id>/ml/dataset.parquet predictions.parquet
+```
 
 ## Generated output
 

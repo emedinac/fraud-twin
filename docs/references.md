@@ -36,6 +36,9 @@ These references informed FraudTwin’s design. The repository does not bundle c
 
 ## Engineering references
 
+- [scikit-learn model evaluation](https://scikit-learn.org/stable/modules/model_evaluation.html) - informed ranking, threshold, calibration, and classification metrics.
+- [MLflow Tracking](https://mlflow.org/docs/latest/ml/tracking) - informed optional experiment lineage and model-artifact logging.
+
 ## Reference calibration
 
 - [SDV data quality reports](https://docs.sdv.dev/sdv/multi-table-data/evaluation/data-quality) and [SDMetrics quality reports](https://docs.sdv.dev/sdmetrics/data-metrics/quality/quality-report) - informed aggregate distribution, pair-trend, cardinality, and fidelity-report concepts. FraudTwin stores deterministic summaries rather than source rows.
