@@ -21,37 +21,80 @@ original names and stable URLs.
 tutorials/getting-started
 tutorials/core-workflows
 tutorials/production-ml
+tutorials/graph-analytics
+tutorials/streaming-reliability
 tutorials/operations
 ```
 
-## Get started
+## Categories at a glance
 
-| Tutorial | Goal and prerequisites | Produces / verify |
-| --- | --- | --- |
-| [Getting Started](tutorials/01-getting-started.ipynb) | Goal: generate and inspect a first deterministic run. Prerequisite: a base install. | Produces a run manifest and tables. Verify the seed and row counts; next read [determinism](concepts.md#determinism-and-seed-streams). |
-| [Configure a Simulation](tutorials/02-configure-a-simulation.ipynb) | Goal: edit YAML and reproduce a run. Prerequisite: the first tutorial. | Produces a validated configuration. Verify the logical fingerprint; next read [configuration](configuration.md). |
-| [Explore Payments and Lifecycle Events](tutorials/03-explore-payments-and-lifecycles.ipynb) | Goal: trace entities, payments, events, and ledger effects. Prerequisite: a generated run. | Produces lifecycle and ledger views. Verify balanced postings; next read [payment lifecycle](concepts.md#payment-and-ledger-lifecycle). |
-| [Explore Fraud and Delayed Labels](tutorials/04-explore-fraud-and-delayed-labels.ipynb) | Goal: compare fraud truth, workflow artifacts, and label availability. Prerequisite: fraud-enabled configuration. | Produces observable and oracle comparisons. Verify mature labels only appear after their availability time; next read [point-in-time safety](concepts.md#observable-and-oracle-data). |
+The cards summarize the learning path. Open a category to see its explicit
+notebook toctree and the complete workflow context; no notebook is intentionally
+listed twice on this page.
 
-## Core tutorials
+````{grid} 2
+:gutter: 3
 
-| Tutorial | Goal and prerequisites | Produces / verify |
-| --- | --- | --- |
-| [From Events to an ML Dataset](tutorials/05-from-events-to-ml-dataset.ipynb) | Goal: build point-in-time features and labels. Prerequisite: a generated run. | Produces an ML dataset. Verify no feature timestamp exceeds the cutoff; next read [dataset workflows](workflows.md#build-a-point-in-time-dataset). |
-| [Stress-Test Fraud Scenarios](tutorials/06-stress-test-fraud-scenarios.ipynb) | Goal: replay runs, inspect graphs, and vary difficulty. Prerequisite: graph and fraud extras when enabled. | Produces comparable scenario outputs. Verify fingerprints differ only where expected; next read [graph workflows](graph-and-benchmarks.md). |
-| [Build a Simple Fraud Scoring Model](tutorials/07-train-a-simple-fraud-model.ipynb) | Goal: train a transparent baseline. Prerequisite: the `ml` extra and a point-in-time dataset. | Produces scored predictions and metrics. Verify evaluation uses a held-out time window; next read [backtesting](workflows.md#run-rolling-backtests). |
+```{grid-item-card} Getting started
+:link: tutorials/getting-started
+:link-type: doc
 
-## Production and advanced tutorials
+**Tutorials 01–04 · 60–90 min · base install · offline**
 
-| Tutorial | Time / requirements | Source size and outcome |
-| --- | --- | --- |
-| [Build a Reproducible Fraud Benchmark](tutorials/08-build-a-reproducible-fraud-benchmark.ipynb) | 20 min · base + benchmark extras · offline | 1k–10k payments; benchmark manifest, metrics, and frozen fingerprint. |
-| [Train, Evaluate, and Track a Fraud Model](tutorials/09-10k-payments-to-fraud-model.ipynb) | 30 min · `ml` extra · offline | 10k payments; PIT data, model artifact, metrics table, and MLflow-compatible manifest. |
-| [Promote and Serve the Model](tutorials/10-stress-drift-and-camouflage.ipynb) | 20 min · `ml,serving` extras · Docker optional | One model artifact; FastAPI health/score responses, validation errors, latency, and parity check. |
-| [Detect Data, Domain, and Concept Shift](tutorials/11-checkpoint-resume-scale.ipynb) | 20 min · base install · offline | Two temporal windows; PSI/Wasserstein/JS drift report and performance comparison. |
-| [Kafka Reliability and Event-Time Correctness](tutorials/12-avro-kafka-stream.ipynb) | 30 min · base for harness; `kafka` + Docker for broker | 1k–10k logical records; chaos audit with loss, retries, duplicates, lag, and fingerprints. |
-| [Data-Quality Incident Response and Replay](tutorials/13-operational-lakehouse-observability.ipynb) | 25 min · base install · offline | Hostile quality profile; diagnostics, replay manifest, and invariant checks. |
-| [Operational Lakehouse and Observability](tutorials/14-lakehouse-observability.ipynb) | 35 min · postgres/kafka/lakehouse/observability extras + Docker | Bounded run; Bronze/Silver/Gold snapshot and SLO verification manifest. |
+Generate a world, configure it, inspect lifecycle events, and understand fraud
+truth versus delayed labels. Produces manifests, tables, and ledger checks.
+```
+
+```{grid-item-card} Core workflows
+:link: tutorials/core-workflows
+:link-type: doc
+
+**Tutorials 05, 06, 08 · 90–120 min · base + optional ML/graph · offline**
+
+Build point-in-time datasets, stress scenarios, and reproducible benchmarks at
+1k–10k source payments.
+```
+
+```{grid-item-card} Production ML and reliability
+:link: tutorials/production-ml
+:link-type: doc
+
+**Tutorials 07, 09–11, 18–19 · 2–3 h · ML/serving/MLflow optional**
+
+Train and evaluate models, validate serving hand-offs, promote artifacts, and
+measure segmented drift. Docker services enhance but do not block offline work.
+```
+
+```{grid-item-card} Graph analytics
+:link: tutorials/graph-analytics
+:link-type: doc
+
+**Tutorials 16–17 · 60–90 min · graph + ML extras · Neo4j optional**
+
+Export provenance-rich graphs, investigate fraud with Cypher, and build temporal
+PyTorch Geometric features with an evaluation split.
+```
+
+```{grid-item-card} Streaming and Kafka reliability
+:link: tutorials/streaming-reliability
+:link-type: doc
+
+**Tutorials 12, 20–21 · 60–90 min · Kafka extra; Docker optional**
+
+Exercise logical loss, retries, duplicates, delays, reordering, outages, and
+Avro compatibility without simulating physical network packets.
+```
+
+```{grid-item-card} Operations and incident response
+:link: tutorials/operations
+:link-type: doc
+
+**Tutorials 13–15, 22–24 · 2–3 h · service extras + Docker optional**
+
+Repair damaged projections, resume scale runs, reconcile PostgreSQL, and verify
+Iceberg snapshots and observability SLOs.
+```
+````
 
 The notebooks use the `python3` kernel. Install the project and the optional
 ML extra before running the model and benchmark tutorials:

@@ -5,6 +5,11 @@ machine learning. It runs locally with the base installation and establishes
 the identities, timestamps, ledger, and observable/oracle boundary used by
 later tutorials.
 
+| Tutorials | Time | Extras | Output |
+| --- | --- | --- | --- |
+| 01–02 | 20–30 min | base install | run manifest and configuration tables |
+| 03–04 | 30–45 min | base install | lifecycle tables and delayed-label view |
+
 ```{toctree}
 :maxdepth: 1
 

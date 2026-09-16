@@ -69,6 +69,25 @@ class GeneratedData:
 
         return self.manifest.run_id
 
+    def require_dataset(self) -> PointInTimeDataset:
+        """Return the point-in-time dataset, or explain how to enable it.
+
+        ``generate`` only builds a dataset when ``config.dataset.enabled`` is
+        true.  This typed accessor keeps notebook and application code concise
+        while preserving the optional dataset for lightweight simulations.
+
+        Raises:
+            RuntimeError: If the supplied configuration did not enable the
+                point-in-time dataset builder.
+        """
+
+        if self.dataset is None:
+            raise RuntimeError(
+                "this run has no point-in-time dataset; enable dataset.enabled "
+                "in the simulation configuration"
+            )
+        return self.dataset
+
 
 @dataclass(frozen=True)
 class GeneratedRun:
@@ -85,6 +104,23 @@ class GeneratedRun:
         """Return the deterministic identifier for this generated run."""
 
         return self.manifest.run_id
+
+    def load_data(self) -> GeneratedData:
+        """Load the typed entities and behavior behind this written run.
+
+        A written run intentionally returns metadata and paths so large runs
+        are not retained in memory.  Call this method when a graph, dataset
+        builder, or publisher needs the persisted domain records.
+
+        Raises:
+            ValueError: If the run directory is missing or has an invalid
+                manifest or artifact.
+        """
+
+        from fraudtwin.ml.dataset import load_generated_run
+
+        entities, behavior, manifest = load_generated_run(self.run_dir)
+        return GeneratedData(manifest=manifest, entities=entities, behavior=behavior)
 
 
 def _resolve_config(

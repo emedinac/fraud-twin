@@ -12,6 +12,10 @@ runner = CliRunner()
 CONFIG_PATH = Path("configs/minimal.yaml")
 
 
+def test_package_ships_pep561_type_marker() -> None:
+    assert (Path("src/fraudtwin") / "py.typed").is_file()
+
+
 def test_generate_returns_deterministic_in_memory_data() -> None:
     first = fraudtwin.generate(CONFIG_PATH)
     second = fraudtwin.generate(CONFIG_PATH)
@@ -24,6 +28,18 @@ def test_generate_returns_deterministic_in_memory_data() -> None:
     assert first.behavior.event_counts == second.behavior.event_counts
     assert first.dataset is not None
     assert first.dataset.count == second.dataset.count
+    assert first.require_dataset() is first.dataset
+
+
+def test_require_dataset_explains_disabled_dataset() -> None:
+    config = fraudtwin.config.load_config(CONFIG_PATH)
+    disabled = config.model_copy(
+        update={"dataset": config.dataset.model_copy(update={"enabled": False})}
+    )
+    result = fraudtwin.generate(disabled)
+
+    with pytest.raises(RuntimeError, match="dataset.enabled"):
+        result.require_dataset()
 
 
 def test_generate_uses_built_in_config_outside_repository(
@@ -48,6 +64,16 @@ def test_generate_writes_run_and_returns_paths(tmp_path: Path) -> None:
     assert result.dataset_path is not None and result.dataset_path.is_file()
     assert result.dataset_manifest_path is not None and result.dataset_manifest_path.is_file()
     assert json.loads(result.manifest_path.read_text(encoding="utf-8"))["run_id"] == result.run_id
+
+
+def test_written_run_loads_typed_domain_data(tmp_path: Path) -> None:
+    result = fraudtwin.generate(CONFIG_PATH, write=True, output_dir=tmp_path)
+
+    loaded = result.load_data()
+
+    assert loaded.run_id == result.run_id
+    assert loaded.entities.counts
+    assert loaded.behavior.payments
 
 
 def test_library_and_cli_generation_have_equivalent_manifests(tmp_path: Path) -> None:

@@ -44,6 +44,12 @@ def _rows() -> list[dict[str, object]]:
 
 
 def test_prediction_contract_is_strict_and_timezone_safe() -> None:
+    prediction = PredictionRecord(
+        event_id="event-1",
+        prediction_timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+        fraud_score=0.5,
+    )
+    assert prediction.score == prediction.fraud_score
     with pytest.raises(ValidationError):
         PredictionRecord(
             event_id="event-1",

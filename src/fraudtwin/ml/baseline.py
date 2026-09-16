@@ -174,6 +174,17 @@ class PredictionRecord(BaseModel):
                 return field, value
         raise AssertionError("validated prediction has no target")
 
+    @property
+    def score(self) -> float:
+        """Backward-compatible alias for :attr:`fraud_score`.
+
+        ``fraud_score`` is the canonical serialized field.  The short alias is
+        intentionally read-only so existing scoring notebooks remain concise
+        without creating a second source of truth in prediction artifacts.
+        """
+
+        return self.fraud_score
+
 
 class PredictionAdapter:
     """Small file/library adapter for external point-in-time predictions."""

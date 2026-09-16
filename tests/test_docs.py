@@ -1,6 +1,7 @@
 import importlib
 import json
 import pkgutil
+import re
 import sys
 from pathlib import Path
 from unittest.mock import Mock
@@ -93,12 +94,77 @@ def test_public_module_inventory_writes_every_module_page(tmp_path: Path) -> Non
 def test_all_tutorials_are_valid_notebook_json() -> None:
     notebooks = sorted(Path("docs/tutorials").glob("*.ipynb"))
 
-    assert len(notebooks) == 14
+    assert len(notebooks) == 24
     for notebook in notebooks:
         document = json.loads(notebook.read_text(encoding="utf-8"))
         assert document["nbformat"] >= 4
         assert document["cells"]
         assert document["metadata"]["kernelspec"]["name"] == "python3"
+
+
+def test_post08_tutorials_have_marked_offline_code_cells() -> None:
+    """Prevent instructional notebooks from regressing to empty scaffolds."""
+
+    for notebook in sorted(Path("docs/tutorials").glob("[0-9][0-9]-*.ipynb")):
+        if int(notebook.name[:2]) < 9:
+            continue
+        document = json.loads(notebook.read_text(encoding="utf-8"))
+        tutorial_meta = document["metadata"].get("fraudtwin", {})
+        assert tutorial_meta.get("tutorial_id") == int(notebook.name[:2])
+        assert tutorial_meta.get("minimum_offline_code_cells", 0) >= 5
+        code_cells = [cell for cell in document["cells"] if cell.get("cell_type") == "code"]
+        assert code_cells, notebook.name
+        for cell in code_cells:
+            marker = cell.get("metadata", {}).get("fraudtwin", {}).get("offline")
+            assert isinstance(marker, bool), f"missing offline marker: {notebook.name}"
+            compile("".join(cell.get("source", [])), f"{notebook.name}:cell", "exec")
+        offline_cells = [
+            cell
+            for cell in code_cells
+            if cell["metadata"]["fraudtwin"]["offline"] is True
+        ]
+        assert len(offline_cells) >= 5, notebook.name
+
+
+def test_every_tutorial_belongs_to_exactly_one_category() -> None:
+    notebooks = {path.name for path in Path("docs/tutorials").glob("*.ipynb")}
+    category_pages = (
+        "getting-started.md",
+        "core-workflows.md",
+        "production-ml.md",
+        "graph-analytics.md",
+        "streaming-reliability.md",
+        "operations.md",
+    )
+    memberships = [
+        notebook
+        for page in category_pages
+        for notebook in re.findall(
+            r"^\d{2}-[^\s]+\.ipynb$", (Path("docs/tutorials") / page).read_text(), re.MULTILINE
+        )
+    ]
+    assert set(memberships) == notebooks
+    assert len(memberships) == len(notebooks)
+
+
+def test_representative_offline_tutorial_cells_execute() -> None:
+    """Keep the service-optional tutorials runnable without Docker services."""
+    tutorial_names = tuple(
+        path.name
+        for path in sorted(Path("docs/tutorials").glob("[0-9][0-9]-*.ipynb"))
+        if int(path.name[:2]) >= 9
+    )
+    for name in tutorial_names:
+        document = json.loads((Path("docs/tutorials") / name).read_text(encoding="utf-8"))
+        namespace = {"__name__": "__tutorial__", "display": lambda *args, **kwargs: None}
+        for index, cell in enumerate(document["cells"]):
+            if (
+                cell.get("cell_type") == "code"
+                and cell.get("metadata", {}).get("fraudtwin", {}).get("offline") is True
+            ):
+                code = "".join(cell.get("source", []))
+                compile(code, f"{name}:{index}", "exec")
+                exec(code, namespace)
 
 
 def test_versioned_site_preparation_creates_latest_and_switcher(tmp_path: Path) -> None:
@@ -113,3 +179,6 @@ def test_versioned_site_preparation_creates_latest_and_switcher(tmp_path: Path) 
     switcher = json.loads((tmp_path / "version-switcher.json").read_text(encoding="utf-8"))
     assert [item["version"] for item in switcher] == ["latest", "v0.32.0"]
     assert "url=latest/" in (tmp_path / "index.html").read_text(encoding="utf-8")
+    api_redirect = (tmp_path / "api.html").read_text(encoding="utf-8")
+    assert "url=latest/api.html" in api_redirect
+    assert "latest/api.html" in api_redirect
