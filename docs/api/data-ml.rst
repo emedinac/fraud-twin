@@ -30,3 +30,19 @@ Backtesting and prediction evaluation
    fraudtwin.ml.baseline.EvaluationResult
    fraudtwin.ml.baseline.evaluate_predictions
    fraudtwin.ml.baseline.train_baselines
+
+Drift analysis
+--------------
+
+Compare two point-in-time windows with deterministic PSI, Wasserstein, and
+Jensen–Shannon metrics. The report records window fingerprints and the label
+policy so an alert can be reproduced later.
+
+.. autosummary::
+   :nosignatures:
+
+   fraudtwin.ml.drift.DriftConfig
+   fraudtwin.ml.drift.DriftMetric
+   fraudtwin.ml.drift.DriftReport
+   fraudtwin.ml.drift.compare_windows
+   fraudtwin.ml.drift.compare_performance

@@ -31,13 +31,21 @@ Choose your path
 .. grid:: 2
    :gutter: 3
 
+   .. grid-item-card:: Visualize the payment world
+      :link: tutorials/visualization
+      :link-type: doc
+      :class-card: sd-border-0
+
+      Start by plotting temporal behavior, distributions, fraud scenarios, and
+      ML-ready features before choosing a modeling workflow.
+
    .. grid-item-card:: Generate and inspect
       :link: quickstart
       :link-type: doc
       :class-card: sd-border-0
 
-      Start with a small deterministic payment world and inspect the generated
-      entities, payments, lifecycle events, ledger, and manifest.
+      Generate a small deterministic payment world and inspect its entities,
+      payments, lifecycle events, ledger, and manifest.
 
    .. grid-item-card:: Build an ML dataset
       :link: workflows

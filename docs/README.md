@@ -10,7 +10,8 @@ FraudTwin is a deterministic synthetic payment world for fraud detection, graph 
 
 ## Tutorials
 
-The published sidebar groups these notebooks into six learning paths:
+The published sidebar groups these notebooks into seven learning paths:
+[Visualization and exploration](tutorials/visualization.md),
 [Getting started](tutorials/getting-started.md),
 [Core workflows](tutorials/core-workflows.md),
 [Production ML and reliability](tutorials/production-ml.md),
@@ -22,12 +23,17 @@ Start with a category page instead of a flat notebook list. Each page explains
 the expected input size, optional extras, service requirements, generated
 artifacts, and the next recommended step.
 
-- [Getting started](tutorials/getting-started.md) - Tutorials 01–04, from installation to delayed labels.
-- [Core workflows](tutorials/core-workflows.md) - Tutorials 05, 06, and 08 for PIT datasets and benchmarks.
-- [Production ML and reliability](tutorials/production-ml.md) - Tutorials 07, 09–11, 18, and 19 for model lifecycle and drift.
-- [Graph analytics](tutorials/graph-analytics.md) - Tutorials 16 and 17 for Neo4j and PyTorch Geometric.
-- [Streaming and Kafka reliability](tutorials/streaming-reliability.md) - Tutorials 12, 20, and 21 for delivery faults and Avro evolution.
-- [Operations and incident response](tutorials/operations.md) - Tutorials 13–15 and 22–24 for repair, scale, persistence, and observability.
+The numeric IDs are stable compatibility identifiers, not a required sequence.
+Follow the category order for the recommended learning path; descriptive
+filenames and rendered titles explain what each notebook teaches.
+
+- [Visualization and exploration](tutorials/visualization.md) - IDs 25–27 for temporal, spatial, distribution, scenario, and feature analysis.
+- [Getting started](tutorials/getting-started.md) - IDs 1–4, from installation to delayed labels.
+- [Core workflows](tutorials/core-workflows.md) - IDs 5, 6, and 8 for PIT datasets and benchmarks.
+- [Production ML and reliability](tutorials/production-ml.md) - IDs 7, 9–11, 18, and 19 for model lifecycle and drift.
+- [Graph analytics](tutorials/graph-analytics.md) - IDs 16 and 17 for Neo4j and PyTorch Geometric.
+- [Streaming and Kafka reliability](tutorials/streaming-reliability.md) - IDs 12, 20, and 21 for delivery faults and Avro evolution.
+- [Operations and incident response](tutorials/operations.md) - IDs 13–15 and 22–24 for repair, scale, persistence, and observability.
 
 ## Guides and concepts
 
@@ -43,11 +49,11 @@ artifacts, and the next recommended step.
 - [Troubleshooting](troubleshooting.md) - resolve installation, configuration, optional dependency, graph, and scale issues.
 - [Migration guides](migration.md) - check compatibility boundaries when moving between releases.
 - [Compatibility and support policy](compatibility.md) - understand stable, optional, and experimental surfaces before upgrading.
-- [v2.0.0 release-readiness roadmap](release-readiness.md) - M18 scale gates and deferred platform integrations.
+- [Release-readiness roadmap](release-readiness.md) - scale gates and deferred platform integrations.
 
 ## Package Reference
 
-- [Python API reference](api.rst) - workflow guides plus exhaustive generated indexes for every public `fraudtwin` export and importable module.
+- [Python API reference](api.rst) - workflow guides plus generated indexes for every supported `fraudtwin` export and importable module.
 - [Configuration parameter reference](configuration-reference.rst) - generated tables for every major Pydantic configuration section.
 - [CLI reference](cli.rst) - command groups, validation commands, and workflow entry points.
 - [Data contracts](data-contracts.rst) - generated-run artifacts, grains, and oracle boundaries.

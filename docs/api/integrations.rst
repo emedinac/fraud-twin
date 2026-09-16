@@ -36,6 +36,28 @@ Kafka and lakehouse
    fraudtwin.lakehouse.materialize_dataset
    fraudtwin.lakehouse.verify_materialization
 
+Kafka reliability
+~~~~~~~~~~~~~~~~~
+
+The chaos harness models logical delivery semantics without changing event
+identity or payload data. It is useful for testing retry, loss, duplication,
+delay, reordering, and partition-skew handling before connecting a broker.
+
+.. autosummary::
+   :nosignatures:
+
+   fraudtwin.kafka_chaos.KafkaChaosConfig
+   fraudtwin.kafka_chaos.ChaosEnvelope
+   fraudtwin.kafka_chaos.KafkaChaosResult
+   fraudtwin.kafka_chaos.simulate_delivery
+
+.. code-block:: python
+
+   from fraudtwin.kafka_chaos import KafkaChaosConfig, simulate_delivery
+
+   result = simulate_delivery(records, KafkaChaosConfig(seed=7, duplicate_probability=0.1))
+   print(result.manifest["counts"])
+
 Replay and scale
 ----------------
 

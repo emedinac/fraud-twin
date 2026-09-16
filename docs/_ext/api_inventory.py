@@ -1,4 +1,4 @@
-"""Generate an exhaustive public API inventory from a package ``__all__``."""
+"""Generate an exhaustive inventory of a package's supported public API."""
 
 import importlib
 import inspect
@@ -276,7 +276,7 @@ def write_module_stubs(output_dir: Path) -> None:
 
 
 class ApiInventoryDirective(Directive):
-    """Insert API summary sections for every export in a package ``__all__``."""
+    """Insert API summary sections for every supported package export."""
 
     required_arguments = 1
     optional_arguments = 0
@@ -286,7 +286,7 @@ class ApiInventoryDirective(Directive):
         package_path = self.arguments[0].strip()
         exports = _package_exports(package_path)
         lines: list[str] = [
-            "The following indexes are generated from ``fraudtwin.__all__``.",
+            "The following indexes are generated from the package's supported public API.",
             "Every listed symbol has a detail page with its signature, docstring,",
             "members, and source link.",
             "",

@@ -1,4 +1,5 @@
 import importlib
+import inspect
 import json
 import pkgutil
 import re
@@ -65,6 +66,22 @@ def test_public_api_inventory_reports_invalid_package(tmp_path: Path) -> None:
         api_inventory.write_api_stubs(tmp_path / "generated", "fraudtwin.not_a_module")
 
 
+def test_top_level_function_exports_are_typed_for_ide_completion() -> None:
+    import fraudtwin
+
+    for name in fraudtwin.__all__:
+        value = getattr(fraudtwin, name)
+        if not inspect.isfunction(value):
+            continue
+        signature = inspect.signature(value)
+        assert signature.return_annotation is not inspect.Signature.empty, name
+        assert all(
+            parameter.annotation is not inspect.Signature.empty
+            for parameter in signature.parameters.values()
+            if parameter.name != "self"
+        ), name
+
+
 def test_public_module_inventory_writes_every_module_page(tmp_path: Path) -> None:
     import fraudtwin
 
@@ -94,7 +111,7 @@ def test_public_module_inventory_writes_every_module_page(tmp_path: Path) -> Non
 def test_all_tutorials_are_valid_notebook_json() -> None:
     notebooks = sorted(Path("docs/tutorials").glob("*.ipynb"))
 
-    assert len(notebooks) == 24
+    assert len(notebooks) == 27
     for notebook in notebooks:
         document = json.loads(notebook.read_text(encoding="utf-8"))
         assert document["nbformat"] >= 4
@@ -102,31 +119,36 @@ def test_all_tutorials_are_valid_notebook_json() -> None:
         assert document["metadata"]["kernelspec"]["name"] == "python3"
 
 
-def test_post08_tutorials_have_marked_offline_code_cells() -> None:
+def test_tutorials_have_marked_offline_code_cells() -> None:
     """Prevent instructional notebooks from regressing to empty scaffolds."""
 
-    for notebook in sorted(Path("docs/tutorials").glob("[0-9][0-9]-*.ipynb")):
-        if int(notebook.name[:2]) < 9:
-            continue
+    tutorial_ids: list[int] = []
+    for notebook in sorted(Path("docs/tutorials").glob("*.ipynb")):
         document = json.loads(notebook.read_text(encoding="utf-8"))
         tutorial_meta = document["metadata"].get("fraudtwin", {})
-        assert tutorial_meta.get("tutorial_id") == int(notebook.name[:2])
-        assert tutorial_meta.get("minimum_offline_code_cells", 0) >= 5
+        tutorial_id = tutorial_meta.get("tutorial_id")
+        assert isinstance(tutorial_id, int)
+        tutorial_ids.append(tutorial_id)
+        assert tutorial_meta.get("minimum_offline_code_cells", 0) >= 10
         code_cells = [cell for cell in document["cells"] if cell.get("cell_type") == "code"]
         assert code_cells, notebook.name
         for cell in code_cells:
             marker = cell.get("metadata", {}).get("fraudtwin", {}).get("offline")
             assert isinstance(marker, bool), f"missing offline marker: {notebook.name}"
-            compile("".join(cell.get("source", [])), f"{notebook.name}:cell", "exec")
+            if marker is True:
+                compile("".join(cell.get("source", [])), f"{notebook.name}:cell", "exec")
         offline_cells = [
             cell for cell in code_cells if cell["metadata"]["fraudtwin"]["offline"] is True
         ]
-        assert len(offline_cells) >= 5, notebook.name
+        assert len(code_cells) >= 10, notebook.name
+        assert len(offline_cells) >= 10, notebook.name
+    assert sorted(tutorial_ids) == list(range(1, 28))
 
 
 def test_every_tutorial_belongs_to_exactly_one_category() -> None:
     notebooks = {path.name for path in Path("docs/tutorials").glob("*.ipynb")}
     category_pages = (
+        "visualization.md",
         "getting-started.md",
         "core-workflows.md",
         "production-ml.md",
@@ -138,7 +160,7 @@ def test_every_tutorial_belongs_to_exactly_one_category() -> None:
         notebook
         for page in category_pages
         for notebook in re.findall(
-            r"^\d{2}-[^\s]+\.ipynb$", (Path("docs/tutorials") / page).read_text(), re.MULTILINE
+            r"^[A-Za-z0-9][^\s]+\.ipynb$", (Path("docs/tutorials") / page).read_text(), re.MULTILINE
         )
     ]
     assert set(memberships) == notebooks
@@ -147,11 +169,7 @@ def test_every_tutorial_belongs_to_exactly_one_category() -> None:
 
 def test_representative_offline_tutorial_cells_execute() -> None:
     """Keep the service-optional tutorials runnable without Docker services."""
-    tutorial_names = tuple(
-        path.name
-        for path in sorted(Path("docs/tutorials").glob("[0-9][0-9]-*.ipynb"))
-        if int(path.name[:2]) >= 9
-    )
+    tutorial_names = tuple(path.name for path in sorted(Path("docs/tutorials").glob("*.ipynb")))
     for name in tutorial_names:
         document = json.loads((Path("docs/tutorials") / name).read_text(encoding="utf-8"))
         namespace = {"__name__": "__tutorial__", "display": lambda *args, **kwargs: None}
@@ -168,14 +186,14 @@ def test_representative_offline_tutorial_cells_execute() -> None:
 def test_versioned_site_preparation_creates_latest_and_switcher(tmp_path: Path) -> None:
     (tmp_path / "main").mkdir()
     (tmp_path / "main" / "index.html").write_text("latest", encoding="utf-8")
-    (tmp_path / "v0.32.0").mkdir()
-    (tmp_path / "v0.32.0" / "index.html").write_text("release", encoding="utf-8")
+    (tmp_path / "v0.34.0").mkdir()
+    (tmp_path / "v0.34.0" / "index.html").write_text("release", encoding="utf-8")
 
     prepare_site(tmp_path)
 
     assert (tmp_path / "latest" / "index.html").read_text(encoding="utf-8") == "latest"
     switcher = json.loads((tmp_path / "version-switcher.json").read_text(encoding="utf-8"))
-    assert [item["version"] for item in switcher] == ["latest", "v0.32.0"]
+    assert [item["version"] for item in switcher] == ["latest", "v0.34.0"]
     assert "url=latest/" in (tmp_path / "index.html").read_text(encoding="utf-8")
     api_redirect = (tmp_path / "api.html").read_text(encoding="utf-8")
     assert "url=latest/api.html" in api_redirect

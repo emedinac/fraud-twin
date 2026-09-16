@@ -3,7 +3,7 @@ Python API reference
 
 This is the reference for supported FraudTwin Python APIs. The task-oriented
 pages below group the most common workflows, while the exhaustive inventory
-lists every public export from ``fraudtwin.__all__``. Signatures and member
+lists every supported public export. Signatures and member
 lists are generated from the installed source; implementation helpers and
 private names are intentionally omitted.
 
@@ -79,7 +79,7 @@ Import the stable high-level API from :mod:`fraudtwin` whenever possible. The
 module pages identify optional dependencies and the output objects returned by
 each operation.
 
-Complete public API
--------------------
+Complete supported public API
+-----------------------------
 
 .. api-inventory:: fraudtwin

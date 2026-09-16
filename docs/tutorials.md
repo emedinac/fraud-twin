@@ -4,6 +4,11 @@ The tutorials are rendered from the checked-in Jupyter notebooks. Saved
 outputs are shown when included, and every page includes a download link so
 you can run it locally.
 
+Numeric IDs are stable compatibility identifiers, not a prescribed reading
+order. The category order below is the recommended learning path; notebook
+filenames and titles stay descriptive, while IDs remain in metadata and
+category tables for stable references.
+
 Every tutorial follows the same contract: start with a concrete goal, state
 the prerequisites, produce a named run or artifact, and finish with a quick
 verification step. The notebook is the executable companion; the surrounding
@@ -11,13 +16,14 @@ description tells you what to look for before you open it.
 
 ## Learning paths
 
-Choose a path first; each category page contains the same notebooks with their
-original names and stable URLs.
+Choose a path first; each category page contains the notebooks with stable
+numeric IDs, descriptive names, and direct download links.
 
 ```{toctree}
 :caption: Tutorial categories
 :maxdepth: 1
 
+tutorials/visualization
 tutorials/getting-started
 tutorials/core-workflows
 tutorials/production-ml
@@ -35,11 +41,21 @@ listed twice on this page.
 ````{grid} 2
 :gutter: 3
 
+```{grid-item-card} Visualization and exploration
+:link: tutorials/visualization
+:link-type: doc
+
+**IDs 25–27 · 60–90 min · base + optional notebook packages · offline**
+
+Plot payment timing, distributions, fraud scenarios, difficulty, and ML-ready
+features before choosing a modeling or production workflow.
+```
+
 ```{grid-item-card} Getting started
 :link: tutorials/getting-started
 :link-type: doc
 
-**Tutorials 01–04 · 60–90 min · base install · offline**
+**IDs 1–4 · 60–90 min · base install · offline**
 
 Generate a world, configure it, inspect lifecycle events, and understand fraud
 truth versus delayed labels. Produces manifests, tables, and ledger checks.
@@ -49,7 +65,7 @@ truth versus delayed labels. Produces manifests, tables, and ledger checks.
 :link: tutorials/core-workflows
 :link-type: doc
 
-**Tutorials 05, 06, 08 · 90–120 min · base + optional ML/graph · offline**
+**IDs 5, 6, 8 · 90–120 min · base + optional ML/graph · offline**
 
 Build point-in-time datasets, stress scenarios, and reproducible benchmarks at
 1k–10k source payments.
@@ -59,7 +75,7 @@ Build point-in-time datasets, stress scenarios, and reproducible benchmarks at
 :link: tutorials/production-ml
 :link-type: doc
 
-**Tutorials 07, 09–11, 18–19 · 2–3 h · ML/serving/MLflow optional**
+**IDs 7, 9–11, 18–19 · 2–3 h · ML/serving/MLflow optional**
 
 Train and evaluate models, validate serving hand-offs, promote artifacts, and
 measure segmented drift. Docker services enhance but do not block offline work.
@@ -69,7 +85,7 @@ measure segmented drift. Docker services enhance but do not block offline work.
 :link: tutorials/graph-analytics
 :link-type: doc
 
-**Tutorials 16–17 · 60–90 min · graph + ML extras · Neo4j optional**
+**IDs 16–17 · 60–90 min · graph + ML extras · Neo4j optional**
 
 Export provenance-rich graphs, investigate fraud with Cypher, and build temporal
 PyTorch Geometric features with an evaluation split.
@@ -79,7 +95,7 @@ PyTorch Geometric features with an evaluation split.
 :link: tutorials/streaming-reliability
 :link-type: doc
 
-**Tutorials 12, 20–21 · 60–90 min · Kafka extra; Docker optional**
+**IDs 12, 20–21 · 60–90 min · Kafka extra; Docker optional**
 
 Exercise logical loss, retries, duplicates, delays, reordering, outages, and
 Avro compatibility without simulating physical network packets.
@@ -89,7 +105,7 @@ Avro compatibility without simulating physical network packets.
 :link: tutorials/operations
 :link-type: doc
 
-**Tutorials 13–15, 22–24 · 2–3 h · service extras + Docker optional**
+**IDs 13–15, 22–24 · 2–3 h · service extras + Docker optional**
 
 Repair damaged projections, resume scale runs, reconcile PostgreSQL, and verify
 Iceberg snapshots and observability SLOs.

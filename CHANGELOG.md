@@ -1,5 +1,16 @@
 # Release notes
 
+## 0.34.0 — Documentation and visualization upgrade
+
+- Added a visualization-first tutorial path with temporal, spatial, distribution,
+  fraud-scenario, benchmark, correlation, leakage, and embedding analyses.
+- Expanded all maintained notebooks with deterministic inspection, verification,
+  artifacts, and explicit offline/service metadata.
+- Improved the generated Python API reference and typed examples for public
+  run, dataset, registry, scale, and Bronze/Silver workflows.
+- Preserved historical notebook URLs, the `/api.html` redirect, existing
+  dependencies, and optional integration boundaries.
+
 ## 0.33.0 — Fix: Milestone 18 bounded-scale contract
 
 - Made canonical payment rows the scale target, added the bounded `dev` smoke profile, derived row-count reporting, target validation, versioned checkpoints,chunk markers for interrupted resume, and partition-aware readers.

@@ -1,4 +1,4 @@
-__version__ = "0.32.0"
+__version__ = "0.34.0"
 
 from fraudtwin.benchmark import (
     PublicBenchmarkPack,
