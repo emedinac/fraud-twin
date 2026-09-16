@@ -9,6 +9,21 @@ the prerequisites, produce a named run or artifact, and finish with a quick
 verification step. The notebook is the executable companion; the surrounding
 description tells you what to look for before you open it.
 
+## Learning paths
+
+Choose a path first; each category page contains the same notebooks with their
+original names and stable URLs.
+
+```{toctree}
+:caption: Tutorial categories
+:maxdepth: 1
+
+tutorials/getting-started
+tutorials/core-workflows
+tutorials/production-ml
+tutorials/operations
+```
+
 ## Get started
 
 | Tutorial | Goal and prerequisites | Produces / verify |
@@ -51,19 +66,4 @@ CI.
 
 ```{toctree}
 :hidden:
-
-tutorials/01-getting-started.ipynb
-tutorials/02-configure-a-simulation.ipynb
-tutorials/03-explore-payments-and-lifecycles.ipynb
-tutorials/04-explore-fraud-and-delayed-labels.ipynb
-tutorials/05-from-events-to-ml-dataset.ipynb
-tutorials/06-stress-test-fraud-scenarios.ipynb
-tutorials/07-train-a-simple-fraud-model.ipynb
-tutorials/08-build-a-reproducible-fraud-benchmark.ipynb
-tutorials/09-10k-payments-to-fraud-model.ipynb
-tutorials/10-stress-drift-and-camouflage.ipynb
-tutorials/11-checkpoint-resume-scale.ipynb
-tutorials/12-avro-kafka-stream.ipynb
-tutorials/13-operational-lakehouse-observability.ipynb
-tutorials/14-lakehouse-observability.ipynb
 ```

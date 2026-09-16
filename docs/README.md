@@ -17,6 +17,12 @@ FraudTwin is a deterministic synthetic payment world for fraud detection, graph 
 
 ## Tutorials
 
+The published sidebar groups these notebooks into four learning paths:
+[Getting started](tutorials/getting-started.md),
+[Core workflows](tutorials/core-workflows.md),
+[Production ML and reliability](tutorials/production-ml.md), and
+[Operations](tutorials/operations.md).
+
 - [From Events to an ML Dataset](tutorials/05-from-events-to-ml-dataset.ipynb) - handle imperfect events and build a point-in-time dataset.
 - [Stress-Test Fraud Scenarios](tutorials/06-stress-test-fraud-scenarios.ipynb) - replay runs, inspect graphs, increase difficulty, and test counterfactuals.
 - [Build a Simple Fraud Scoring Model](tutorials/07-train-a-simple-fraud-model.ipynb) - score point-in-time features with a transparent formula.
