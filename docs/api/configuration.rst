@@ -15,10 +15,6 @@ Loading and hashing
    fraudtwin.config.load_config
    fraudtwin.config.config_hash
 
-.. autofunction:: fraudtwin.config.load_config
-
-.. autofunction:: fraudtwin.config.config_hash
-
 Configuration model classes
 ---------------------------
 

@@ -20,16 +20,3 @@ optional dependency.
    fraudtwin.validate_graph_scenarios
    fraudtwin.write_graph
    fraudtwin.to_pyg
-
-.. autofunction:: fraudtwin.build_graph
-
-.. autofunction:: fraudtwin.validate_graph
-
-.. autofunction:: fraudtwin.validate_graph_scenarios
-
-.. autofunction:: fraudtwin.write_graph
-
-.. autofunction:: fraudtwin.to_pyg
-
-.. autoclass:: fraudtwin.GraphDataset
-   :members:

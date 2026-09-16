@@ -34,7 +34,7 @@ FraudTwin is a deterministic synthetic payment world for fraud detection, graph 
 
 ## Package Reference
 
-- [Python API reference](api.rst) - curated, generated documentation for the public `fraudtwin` API.
+- [Python API reference](api.rst) - workflow guides plus exhaustive generated indexes for every public `fraudtwin` export and importable module.
 - [Configuration parameter reference](configuration-reference.rst) - generated tables for every major Pydantic configuration section.
 - [CLI reference](cli.rst) - command groups, validation commands, and workflow entry points.
 - [Data contracts](data-contracts.rst) - generated-run artifacts, grains, and oracle boundaries.

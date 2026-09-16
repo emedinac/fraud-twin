@@ -11,6 +11,11 @@ DOCS_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = DOCS_ROOT.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(DOCS_ROOT))
+api_inventory = import_module("_ext.api_inventory")
+write_api_stubs = api_inventory.write_api_stubs
+api_inventory.write_module_stubs(DOCS_ROOT / "api" / "modules")
+
+write_api_stubs(DOCS_ROOT / "api" / "generated", "fraudtwin")
 
 with (PROJECT_ROOT / "pyproject.toml").open("rb") as project_file:
     project_metadata = tomllib.load(project_file)["project"]
@@ -26,12 +31,12 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
-    "sphinx.ext.viewcode",
     "sphinx.ext.linkcode",
     "sphinx_autodoc_typehints",
     "sphinx_copybutton",
     "sphinx_design",
     "sphinx_multiversion",
+    "_ext.api_inventory",
     "_ext.config_schema",
 ]
 

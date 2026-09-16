@@ -15,10 +15,6 @@ the same deterministic run when ``write=True``.
    fraudtwin.GeneratedData
    fraudtwin.GeneratedRun
 
-.. autofunction:: fraudtwin.generate
-
-.. autofunction:: fraudtwin.resume_generation
-
 Large-scale iteration
 ---------------------
 
@@ -30,9 +26,3 @@ Large-scale iteration
    fraudtwin.iter_scale_records
    fraudtwin.run_scale_benchmark
    fraudtwin.write_scale_benchmark_manifest
-
-.. autoclass:: fraudtwin.GeneratedData
-   :members:
-
-.. autoclass:: fraudtwin.GeneratedRun
-   :members:

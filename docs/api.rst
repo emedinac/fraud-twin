@@ -1,9 +1,11 @@
 Python API reference
 ====================
 
-This is the curated reference for supported FraudTwin Python APIs. Signatures
-and member lists are generated from the installed source; implementation
-helpers and private names are intentionally omitted.
+This is the reference for supported FraudTwin Python APIs. The task-oriented
+pages below group the most common workflows, while the exhaustive inventory
+lists every public export from ``fraudtwin.__all__``. Signatures and member
+lists are generated from the installed source; implementation helpers and
+private names are intentionally omitted.
 
 API status at a glance
 ----------------------
@@ -33,6 +35,34 @@ objects with signatures, typed parameters, return values, exceptions, and
 source links. A symbol marked experimental or optional is still supported, but
 should be pinned to a documentation version in production integrations.
 
+Module index
+------------
+
+The workflow pages below are the module-level entry points. The complete
+alphabetized class, exception, function, and constant indexes follow them.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Module area
+     - Documentation page
+   * - ``fraudtwin.generation`` and ``fraudtwin.scale``
+     - :doc:`api/generation`
+   * - ``fraudtwin.config``
+     - :doc:`api/configuration` and :doc:`configuration-reference`
+   * - ``fraudtwin.ml``
+     - :doc:`api/data-ml`
+   * - ``fraudtwin.graph``
+     - :doc:`api/graph`
+   * - Calibration, difficulty, camouflage, and campaigns
+     - :doc:`api/advanced`
+   * - PostgreSQL, Kafka, lakehouse, replay, and storage
+     - :doc:`api/integrations`
+   * - Benchmarks, quality, and observability
+     - :doc:`api/quality`
+   * - All importable public modules
+     - :doc:`api/modules`
+
 .. toctree::
    :maxdepth: 2
 
@@ -43,7 +73,13 @@ should be pinned to a documentation version in production integrations.
    api/advanced
    api/integrations
    api/quality
+   api/modules
 
 Import the stable high-level API from :mod:`fraudtwin` whenever possible. The
 module pages identify optional dependencies and the output objects returned by
 each operation.
+
+Complete public API
+-------------------
+
+.. api-inventory:: fraudtwin

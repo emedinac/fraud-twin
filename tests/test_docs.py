@@ -1,5 +1,6 @@
 import importlib
 import json
+import pkgutil
 import sys
 from pathlib import Path
 from unittest.mock import Mock
@@ -9,6 +10,7 @@ from docutils.parsers.rst import DirectiveError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 ConfigModelDirective = importlib.import_module("docs._ext.config_schema").ConfigModelDirective
+api_inventory = importlib.import_module("docs._ext.api_inventory")
 prepare_site = importlib.import_module("docs.prepare_site").prepare_site
 
 
@@ -40,6 +42,40 @@ def test_configuration_directive_renders_root_and_nested_tables() -> None:
 def test_configuration_directive_reports_invalid_model_path() -> None:
     with pytest.raises(DirectiveError):
         _directive("fraudtwin.config:DoesNotExist").run()
+
+
+def test_public_api_inventory_covers_every_export(tmp_path: Path) -> None:
+    import fraudtwin
+
+    exports = api_inventory._package_exports("fraudtwin")
+    names = [name for category in exports.values() for name in category]
+    assert set(names) == {f"fraudtwin.{name}" for name in fraudtwin.__all__}
+    assert all(hasattr(fraudtwin, name) for name in fraudtwin.__all__)
+
+    output_dir = tmp_path / "generated"
+    api_inventory.write_api_stubs(output_dir, "fraudtwin")
+    assert {path.stem for path in output_dir.glob("*.rst")} == {
+        f"fraudtwin.{name}" for name in fraudtwin.__all__
+    }
+
+
+def test_public_module_inventory_writes_every_module_page(tmp_path: Path) -> None:
+    import fraudtwin
+
+    discovered = set()
+    for module_info in pkgutil.walk_packages(fraudtwin.__path__, "fraudtwin."):
+        module = importlib.import_module(module_info.name)
+        if hasattr(module, "__all__"):
+            discovered.add(module_info.name)
+    assert discovered <= set(api_inventory.PUBLIC_MODULES)
+
+    for module_name in api_inventory.PUBLIC_MODULES:
+        module = importlib.import_module(module_name)
+        assert getattr(module, "__all__", None) or module_name == "fraudtwin.config"
+
+    output_dir = tmp_path / "modules"
+    api_inventory.write_module_stubs(output_dir)
+    assert {path.stem for path in output_dir.glob("*.rst")} == set(api_inventory.PUBLIC_MODULES)
 
 
 def test_all_tutorials_are_valid_notebook_json() -> None:
