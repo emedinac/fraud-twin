@@ -30,11 +30,13 @@ def prepare_site(root: Path) -> None:
     for path in candidates:
         if path.name in {"main", "dev"}:
             continue
-        versions.append({
-            "name": path.name,
-            "version": path.name,
-            "url": f"https://emedinac.github.io/fraud-twin/{path.name}/",
-        })
+        versions.append(
+            {
+                "name": path.name,
+                "version": path.name,
+                "url": f"https://emedinac.github.io/fraud-twin/{path.name}/",
+            }
+        )
     (root / "version-switcher.json").write_text(
         json.dumps(versions, indent=2) + "\n", encoding="utf-8"
     )

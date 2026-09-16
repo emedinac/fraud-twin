@@ -89,16 +89,18 @@ def _clear_optional_fields(
             continue
         field = rng.choice(available)
         result.append(record.model_copy(update={field: None}))
-        audit.append({
-            "fault": fault,
-            "target": getattr(record, "event_id", getattr(record, "payment_id", "unknown")),
-            "field": field,
-            "requested_probability": probability,
-            "mutation": "set_null",
-            "logical_identity_preserved": True,
-            "affected_boundary": "source",
-            "expected_validation_rule": "optional field may be null",
-        })
+        audit.append(
+            {
+                "fault": fault,
+                "target": getattr(record, "event_id", getattr(record, "payment_id", "unknown")),
+                "field": field,
+                "requested_probability": probability,
+                "mutation": "set_null",
+                "logical_identity_preserved": True,
+                "affected_boundary": "source",
+                "expected_validation_rule": "optional field may be null",
+            }
+        )
         count += 1
     return tuple(result), count
 
@@ -120,15 +122,17 @@ def _negative_amounts(
             # a chaos dataset, while the clean domain remains strict.
             amount = record.model_dump(mode="python")["amount"]
             result.append(record.model_copy(update={"amount": -abs(amount)}))
-            audit.append({
-                "fault": "negative_amount",
-                "target": getattr(record, "event_id", getattr(record, "payment_id", "unknown")),
-                "requested_probability": probability,
-                "mutation": {"amount": -abs(amount)},
-                "logical_identity_preserved": True,
-                "affected_boundary": "source",
-                "expected_validation_rule": "amount > 0",
-            })
+            audit.append(
+                {
+                    "fault": "negative_amount",
+                    "target": getattr(record, "event_id", getattr(record, "payment_id", "unknown")),
+                    "requested_probability": probability,
+                    "mutation": {"amount": -abs(amount)},
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "source",
+                    "expected_validation_rule": "amount > 0",
+                }
+            )
             count += 1
         else:
             result.append(record)
@@ -239,9 +243,9 @@ class QualityFaultInjector:
         counts["duplicate_events"] = duplicate_event_count
 
         traffic_group_count = len({event.payment_id for event in events})
-        fraud_group_count = len({
-            event.scenario_id for event in events if event.scenario_id is not None
-        })
+        fraud_group_count = len(
+            {event.scenario_id for event in events if event.scenario_id is not None}
+        )
         events, traffic_count = self._apply_traffic_spikes(events)
         counts["traffic_spikes"] = traffic_count
         events, fraud_spike_count = self._apply_fraud_spikes(events)
@@ -295,10 +299,12 @@ class QualityFaultInjector:
             schema_evolution_rows={key: tuple(rows) for key, rows in schema_evolution_rows.items()},
         )
         diagnostics = build_quality_diagnostics(dataset, result)
-        diagnostics["oracle_fingerprint"] = sha256_json({
-            name: [record.model_dump(mode="json") for record in records]
-            for name, records in oracle_tables.items()
-        })
+        diagnostics["oracle_fingerprint"] = sha256_json(
+            {
+                name: [record.model_dump(mode="json") for record in records]
+                for name, records in oracle_tables.items()
+            }
+        )
         diagnostics["fault_audit"] = audit
         diagnostics["schema_evolution"] = {
             "changes": [schema_change_metadata(item) for item in self.quality.schema_changes],
@@ -335,13 +341,15 @@ class QualityFaultInjector:
                 elif action == "DELAY":
                     current = self._shift_envelope(current, timedelta(seconds=outage.delay_seconds))
                 count += 1
-                audit.append({
-                    "fault": "outage",
-                    "event_id": event.event_id,
-                    "source": outage.source,
-                    "behavior": action,
-                    "dropped": dropped,
-                })
+                audit.append(
+                    {
+                        "fault": "outage",
+                        "event_id": event.event_id,
+                        "source": outage.source,
+                        "behavior": action,
+                        "dropped": dropped,
+                    }
+                )
             if not dropped:
                 result.append(current)
         return tuple(result), count
@@ -365,16 +373,18 @@ class QualityFaultInjector:
                 row["schema_version"] = change.version
                 serialized_rows.setdefault(f"{change.event}:{change.version}", []).append(row)
                 count += 1
-                audit.append({
-                    "fault": "schema_change",
-                    "event_id": event.event_id,
-                    "event": change.event,
-                    "version": change.version,
-                    "change": change.change,
-                    "compatibility": schema_change_metadata(change)["compatibility"],
-                    "logical_identity_preserved": True,
-                    "affected_boundary": "serialized_source",
-                })
+                audit.append(
+                    {
+                        "fault": "schema_change",
+                        "event_id": event.event_id,
+                        "event": change.event,
+                        "version": change.version,
+                        "change": change.change,
+                        "compatibility": schema_change_metadata(change)["compatibility"],
+                        "logical_identity_preserved": True,
+                        "affected_boundary": "serialized_source",
+                    }
+                )
             result.append(current)
         return tuple(result), count, serialized_rows
 
@@ -464,15 +474,17 @@ class QualityFaultInjector:
                 continue
             updates, mutation_description = mutation(event)
             result.append(event.model_copy(update=updates))
-            audit.append({
-                "fault": fault,
-                "target": event.event_id,
-                "requested_probability": probability,
-                "mutation": mutation_description,
-                "logical_identity_preserved": True,
-                "affected_boundary": "typed_output",
-                "expected_validation_rule": expected_rule,
-            })
+            audit.append(
+                {
+                    "fault": fault,
+                    "target": event.event_id,
+                    "requested_probability": probability,
+                    "mutation": mutation_description,
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "typed_output",
+                    "expected_validation_rule": expected_rule,
+                }
+            )
             count += 1
         return tuple(result), count
 
@@ -589,21 +601,25 @@ class QualityFaultInjector:
             payload = json.dumps(
                 event.model_dump(mode="python", warnings=False), sort_keys=True, default=str
             ).encode("utf-8")
-            raw_faults.append({
-                "fault": "encoding_error",
-                "target": event.event_id,
-                "encoding": "invalid-utf8",
-                "payload_base64": base64.b64encode(payload + b"\xff").decode("ascii"),
-            })
-            audit.append({
-                "fault": "encoding_error",
-                "target": event.event_id,
-                "requested_probability": probability,
-                "mutation": "raw payload contains invalid UTF-8 byte",
-                "logical_identity_preserved": True,
-                "affected_boundary": "raw_fault_artifact",
-                "expected_validation_rule": "payload decodes as UTF-8",
-            })
+            raw_faults.append(
+                {
+                    "fault": "encoding_error",
+                    "target": event.event_id,
+                    "encoding": "invalid-utf8",
+                    "payload_base64": base64.b64encode(payload + b"\xff").decode("ascii"),
+                }
+            )
+            audit.append(
+                {
+                    "fault": "encoding_error",
+                    "target": event.event_id,
+                    "requested_probability": probability,
+                    "mutation": "raw payload contains invalid UTF-8 byte",
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "raw_fault_artifact",
+                    "expected_validation_rule": "payload decodes as UTF-8",
+                }
+            )
             result.append(event)
             count += 1
         return tuple(result), count
@@ -626,17 +642,19 @@ class QualityFaultInjector:
                 partition = 0
             result.append(event.model_copy(update={"transport_partition": partition}))
         for payment_id in sorted(selected):
-            audit.append({
-                "fault": "partition_skew",
-                "target": payment_id,
-                "requested_probability": probability,
-                "mutation": {"transport_partition": 0},
-                "logical_identity_preserved": True,
-                "affected_boundary": "transport_partition",
-                "expected_validation_rule": (
-                    "partition distribution remains within configured skew"
-                ),
-            })
+            audit.append(
+                {
+                    "fault": "partition_skew",
+                    "target": payment_id,
+                    "requested_probability": probability,
+                    "mutation": {"transport_partition": 0},
+                    "logical_identity_preserved": True,
+                    "affected_boundary": "transport_partition",
+                    "expected_validation_rule": (
+                        "partition distribution remains within configured skew"
+                    ),
+                }
+            )
         return tuple(result), len(selected)
 
     def _apply_source_delay(

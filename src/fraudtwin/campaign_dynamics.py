@@ -285,9 +285,9 @@ def _campaign_actions(
     )
     model = _TRANSITION_MODELS[binding.transition_model]
     intensity = _INTENSITY_MODELS[binding.intensity_model]
-    members = sorted({
-        item.member_id for item in source.memberships if item.campaign_id == campaign.campaign_id
-    })
+    members = sorted(
+        {item.member_id for item in source.memberships if item.campaign_id == campaign.campaign_id}
+    )
     accounts_by_id = {item.account_id: item for item in accounts}
     member_accounts = [accounts_by_id[item] for item in members if item in accounts_by_id]
     if len(member_accounts) < 2:
@@ -308,24 +308,30 @@ def _campaign_actions(
             source_campaign_ids=(campaign.campaign_id,),
             source_entity_ids=tuple(members),
             source_event_ids=tuple(
-                sorted({
-                    item.source_event_id
-                    for item in source.memberships
-                    if item.campaign_id == campaign.campaign_id and item.source_event_id
-                })
+                sorted(
+                    {
+                        item.source_event_id
+                        for item in source.memberships
+                        if item.campaign_id == campaign.campaign_id and item.source_event_id
+                    }
+                )
             ),
             source_payment_ids=tuple(
-                sorted({
-                    item.payment_id
-                    for item in source.memberships
-                    if item.campaign_id == campaign.campaign_id and item.payment_id
-                })
+                sorted(
+                    {
+                        item.payment_id
+                        for item in source.memberships
+                        if item.campaign_id == campaign.campaign_id and item.payment_id
+                    }
+                )
             ),
             configuration_hash=sha256_json(config.model_dump(mode="json")),
-            schema_fingerprint=sha256_json({
-                "version": "m15-1",
-                "models": ["CampaignStateSnapshot", "CampaignTransition"],
-            }),
+            schema_fingerprint=sha256_json(
+                {
+                    "version": "m15-1",
+                    "models": ["CampaignStateSnapshot", "CampaignTransition"],
+                }
+            ),
         )
     ]
     current = "compromise"
@@ -614,10 +620,12 @@ def _campaign_actions(
         item.model_copy(
             update={
                 "payment_ids": tuple(
-                    sorted({
-                        *item.payment_ids,
-                        *[p.payment_id for p in payments if p.payment_id.startswith("M15-")],
-                    })
+                    sorted(
+                        {
+                            *item.payment_ids,
+                            *[p.payment_id for p in payments if p.payment_id.startswith("M15-")],
+                        }
+                    )
                 ),
                 "window_to": end,
             }

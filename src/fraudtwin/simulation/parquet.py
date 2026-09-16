@@ -917,13 +917,15 @@ def write_label_observation_sidecar(
             "case_reopenings": "1",
             "observation_provenance": "1",
         },
-        "schema_fingerprint": sha256_json({
-            "label_history": list(LABEL_VERSION_SCHEMA),
-            "observed_labels": list(FINAL_OBSERVED_LABEL_SCHEMA),
-            "label_corrections": list(LABEL_CORRECTION_SCHEMA),
-            "case_reopenings": list(CASE_REOPENING_SCHEMA),
-            "observation_provenance": list(OBSERVATION_PROVENANCE_SCHEMA),
-        }),
+        "schema_fingerprint": sha256_json(
+            {
+                "label_history": list(LABEL_VERSION_SCHEMA),
+                "observed_labels": list(FINAL_OBSERVED_LABEL_SCHEMA),
+                "label_corrections": list(LABEL_CORRECTION_SCHEMA),
+                "case_reopenings": list(CASE_REOPENING_SCHEMA),
+                "observation_provenance": list(OBSERVATION_PROVENANCE_SCHEMA),
+            }
+        ),
         "output_fingerprint": sha256_json(checksums),
         "counts": {
             "observations": len(observations),
@@ -1057,9 +1059,9 @@ def write_campaign_dynamics_sidecar(
         "source_run_id": source_run_id,
         "configuration_hash": dataset.configuration_hash,
         "seed_stream_ids": list(dataset.stream_ids),
-        "schema_fingerprint": sha256_json({
-            name: list(schema) for name, schema in CAMPAIGN_DYNAMIC_SCHEMAS.items()
-        }),
+        "schema_fingerprint": sha256_json(
+            {name: list(schema) for name, schema in CAMPAIGN_DYNAMIC_SCHEMAS.items()}
+        ),
         "output_fingerprint": sha256_json(checksums),
         "counts": {
             "payments": len(dynamic_payments),
@@ -1083,10 +1085,12 @@ def write_campaign_dynamics_sidecar(
 def _sidecar_id(dataset: DynamicCampaignDataset) -> str:
     return (
         "M15-"
-        + sha256_json({
-            "configuration_hash": dataset.configuration_hash,
-            "campaign_ids": [item.campaign_id for item in dataset.graph.campaigns],
-        })[:16]
+        + sha256_json(
+            {
+                "configuration_hash": dataset.configuration_hash,
+                "campaign_ids": [item.campaign_id for item in dataset.graph.campaigns],
+            }
+        )[:16]
     )
 
 
