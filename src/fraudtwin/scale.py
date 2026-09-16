@@ -200,6 +200,23 @@ def resolve_scale_plan(
     )
 
 
+def require_scale_plan(config: SimulationRunConfig, *, run_id: str | None = None) -> ScalePlan:
+    """Resolve an enabled scale plan and narrow away the optional result.
+
+    Use this helper in applications that require scale execution.  It turns a
+    disabled scale section into a clear configuration error and gives static
+    type checkers a concrete :class:`ScalePlan` for shard and checkpoint code.
+
+    Raises:
+        ValueError: If scale generation is not enabled in ``config``.
+    """
+
+    plan = resolve_scale_plan(config, run_id=run_id)
+    if plan is None:
+        raise ValueError("scale generation is not enabled; configure scale.profile first")
+    return plan
+
+
 def shard_descriptors(plan: ScalePlan) -> tuple[ShardDescriptor, ...]:
     """Return shard descriptors in canonical index order."""
 
@@ -1071,6 +1088,7 @@ __all__ = [
     "ReconciliationResult",
     "ScaleCheckpoint",
     "resolve_scale_plan",
+    "require_scale_plan",
     "shard_descriptors",
     "partition_index",
     "partition_id",

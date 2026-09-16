@@ -2228,12 +2228,13 @@ class SimulationRunConfig(_StrictModel):
 
 
 def load_config(
-    path: Path,
+    path: str | Path,
     *,
     calibration_profile_override: Path | None = None,
 ) -> SimulationRunConfig:
     """Load and validate a YAML configuration file."""
 
+    path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"configuration file does not exist: {path}")
 

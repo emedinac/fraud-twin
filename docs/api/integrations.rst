@@ -45,6 +45,7 @@ Replay and scale
    fraudtwin.replay.replay_run
    fraudtwin.replay.write_replay
    fraudtwin.scale.resolve_scale_plan
+   fraudtwin.scale.require_scale_plan
    fraudtwin.scale.iter_chunks
    fraudtwin.scale.write_checkpoint
    fraudtwin.scale.load_checkpoint

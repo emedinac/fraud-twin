@@ -8,25 +8,26 @@ FraudTwin is a deterministic synthetic payment world for fraud detection, graph 
 - [Python package and CLI](../README.md#quick-start) - choose between the Python API and command-line workflows.
 - Build the documentation with `poetry run sphinx-build -E -W --keep-going -b html docs docs/_build/html`.
 
-## Get Started
-
-- [Getting Started](tutorials/01-getting-started.ipynb) - generate and inspect a first run in a notebook.
-- [Configure a Simulation](tutorials/02-configure-a-simulation.ipynb) - use a YAML configuration and reproduce a run.
-- [Explore Payments and Lifecycle Events](tutorials/03-explore-payments-and-lifecycles.ipynb) - follow entities, payments, events, and ledger effects.
-- [Explore Fraud and Delayed Labels](tutorials/04-explore-fraud-and-delayed-labels.ipynb) - compare fraud truth, hard negatives, workflow artifacts, and label availability.
-
 ## Tutorials
 
-- [From Events to an ML Dataset](tutorials/05-from-events-to-ml-dataset.ipynb) - handle imperfect events and build a point-in-time dataset.
-- [Stress-Test Fraud Scenarios](tutorials/06-stress-test-fraud-scenarios.ipynb) - replay runs, inspect graphs, increase difficulty, and test counterfactuals.
-- [Build a Simple Fraud Scoring Model](tutorials/07-train-a-simple-fraud-model.ipynb) - score point-in-time features with a transparent formula.
-- [Build a Reproducible Fraud Benchmark](tutorials/08-build-a-reproducible-fraud-benchmark.ipynb) - connect counterfactuals, campaigns, calibration, label observation, scale planning, and evaluation.
-- [From 10k Payments to a Leakage-Safe Fraud Model](tutorials/09-10k-payments-to-fraud-model.ipynb) - train baselines and report the source-payment to ML-row mapping.
-- [Promote and Serve the Model](tutorials/10-stress-drift-and-camouflage.ipynb) - validate a model hand-off with typed HTTP requests and parity checks.
-- [Detect Data, Domain, and Concept Shift](tutorials/11-checkpoint-resume-scale.ipynb) - quantify drift and compare matured-label performance.
-- [Kafka Reliability and Event-Time Correctness](tutorials/12-avro-kafka-stream.ipynb) - inject logical delivery faults and verify recovery.
-- [Data-Quality Incident Response and Replay](tutorials/13-operational-lakehouse-observability.ipynb) - diagnose hostile inputs and repair projections.
-- [Operational Lakehouse and Observability](tutorials/14-lakehouse-observability.ipynb) - connect PostgreSQL, Kafka, Iceberg, and metrics.
+The published sidebar groups these notebooks into six learning paths:
+[Getting started](tutorials/getting-started.md),
+[Core workflows](tutorials/core-workflows.md),
+[Production ML and reliability](tutorials/production-ml.md),
+[Graph analytics](tutorials/graph-analytics.md),
+[Streaming and Kafka reliability](tutorials/streaming-reliability.md), and
+[Operations and incident response](tutorials/operations.md).
+
+Start with a category page instead of a flat notebook list. Each page explains
+the expected input size, optional extras, service requirements, generated
+artifacts, and the next recommended step.
+
+- [Getting started](tutorials/getting-started.md) - Tutorials 01–04, from installation to delayed labels.
+- [Core workflows](tutorials/core-workflows.md) - Tutorials 05, 06, and 08 for PIT datasets and benchmarks.
+- [Production ML and reliability](tutorials/production-ml.md) - Tutorials 07, 09–11, 18, and 19 for model lifecycle and drift.
+- [Graph analytics](tutorials/graph-analytics.md) - Tutorials 16 and 17 for Neo4j and PyTorch Geometric.
+- [Streaming and Kafka reliability](tutorials/streaming-reliability.md) - Tutorials 12, 20, and 21 for delivery faults and Avro evolution.
+- [Operations and incident response](tutorials/operations.md) - Tutorials 13–15 and 22–24 for repair, scale, persistence, and observability.
 
 ## Guides and concepts
 

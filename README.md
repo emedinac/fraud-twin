@@ -29,13 +29,19 @@ Build realistic payment worlds, trace every fraud signal, and create reproducibl
 </p>
 
 <p align="center">
-  <a href="https://emedinac.github.io/fraud-twin/api.html">Python API reference</a>
+  <a href="https://emedinac.github.io/fraud-twin/latest/api.html">Python API reference</a>
   ·
   <a href="docs/README.md">Documentation sources</a>
 </p>
 
-Start with a guided tutorial, then move from configuration to fraud scenarios, graph exports, and point-in-time ML workflows—all backed by deterministic
-examples.
+The documentation is versioned. Use [`latest`](https://emedinac.github.io/fraud-twin/latest/)
+for the main branch, or select a release when an API, schema, or manifest must
+match a pinned package version. The former unversioned `/api.html` URL is kept as
+a redirect for existing bookmarks.
+
+Start with a guided tutorial, then move from configuration to fraud scenarios,
+graph exports, point-in-time ML workflows, streaming reliability, and
+operational replay—all backed by deterministic examples.
 
 ## What it provides
 
@@ -85,6 +91,36 @@ poetry run fraudtwin generate configs/minimal.yaml \
 ```
 
 The minimal configuration creates 10 customers, 10 behavior profiles, and 100 target payments. Fraud is disabled in this baseline; enable it in a copied YAML file or start with a fixture under `configs/benchmarks/`.
+
+### Python API
+
+The high-level API is typed and has two deliberate return modes:
+
+```python
+from pathlib import Path
+
+import fraudtwin
+from fraudtwin.config import load_config
+
+config = load_config(Path("configs/minimal.yaml"))
+
+# In-memory workflow: entities, behavior, manifest, and an optional PIT dataset.
+data = fraudtwin.generate(config)
+dataset = data.require_dataset().frame
+print(data.run_id, dataset.shape)
+
+# Persisted workflow: metadata and paths first; load domain records explicitly.
+written = fraudtwin.generate(config, write=True, output_dir=Path("/tmp/fraudtwin-run"))
+loaded = written.load_data()
+print(written.run_id, len(loaded.behavior.payments), written.manifest_path)
+```
+
+`generate(..., write=False)` returns `GeneratedData`. Use
+`data.require_dataset()` when the configuration enables point-in-time data.
+`generate(..., write=True)` returns a lightweight `GeneratedRun`; call
+`run.load_data()` when a graph, dataset builder, or publisher needs the typed
+entities and behavior records. This keeps large persisted runs from being
+silently retained in memory and gives IDEs precise autocomplete.
 
 For a laptop-scale smoke run, use the bounded `dev` profile (1,000 payments)
 and keep the normal feature path small. The 100k–1B profiles are manual
@@ -164,6 +200,24 @@ Pack definitions freeze their generation controls, PIT windows, metrics,
 calibration identity, descriptors, and logical fingerprints. Historical pack
 versions remain runnable; changes publish a new version.
 
+## Learning paths
+
+The documentation is organized by the work an engineer needs to complete, not
+by an unstructured notebook list:
+
+| Path | Focus |
+| --- | --- |
+| [Getting started](docs/tutorials/getting-started.md) | Generate a run, configure it, inspect lifecycles, and understand delayed labels. |
+| [Core workflows](docs/tutorials/core-workflows.md) | Build point-in-time datasets, stress scenarios, and reproducible benchmarks. |
+| [Production ML and reliability](docs/tutorials/production-ml.md) | Train, evaluate, serve, promote, and monitor fraud models. |
+| [Graph analytics](docs/tutorials/graph-analytics.md) | Investigate graph fraud with Neo4j and PyTorch Geometric. |
+| [Streaming and Kafka reliability](docs/tutorials/streaming-reliability.md) | Validate Avro contracts and recover from logical delivery faults. |
+| [Operations and incident response](docs/tutorials/operations.md) | Resume scale runs, repair projections, reconcile storage, and inspect observability. |
+
+The [Python API reference](https://emedinac.github.io/fraud-twin/latest/api.html)
+then provides signatures, parameters, return types, exceptions, optional
+dependencies, and source links for every supported public export.
+
 ## Generated output
 
 Runs are written under `runs/<run_id>/` (or the directory supplied with `--output-dir`):
@@ -176,13 +230,13 @@ runs/<run_id>/
 ├── payments/{payments,payment_events}.parquet
 ├── ledger/ledger_entries.parquet
 ├── fraud/{fraud_records,fraud_alerts,fraud_cases,fraud_labels}.parquet
-└── ml/
-    ├── dataset.parquet
-    └── dataset_manifest.json
-└── counterfactuals/<counterfactual_id>/
-    ├── observable/{original,modified}/
-    ├── oracle/change_sets.parquet
-    └── counterfactual_manifest.json
+├── ml/
+│   ├── dataset.parquet
+│   └── dataset_manifest.json
+├── counterfactuals/<counterfactual_id>/
+│   ├── observable/{original,modified}/
+│   ├── oracle/change_sets.parquet
+│   └── counterfactual_manifest.json
 └── campaign_dynamics/<m15_id>/
     ├── observable/
     ├── oracle/
@@ -200,6 +254,42 @@ Calibration profiles contain only deterministic statistical summaries and proven
 **Observed data stays separate from truth.** Operational outputs model what a detector could know at the time. Oracle artifacts preserve the complete causal explanation for evaluation and audit.
 
 **Financial and temporal invariants are explicit.** Payment lifecycles, ledger entries, source availability, labels, graph relationships, and schemas are validated rather than inferred after the fact.
+
+**Optional infrastructure stays at the boundary.** Core generation and
+point-in-time analysis run without Kafka, PostgreSQL, Iceberg, Neo4j, or a
+broker. Integrations consume stable records and manifests, so an experiment
+can begin offline and move to services without changing the simulated source
+truth.
+
+**Evaluation is leakage-aware.** Operational views contain only data available
+at the selected cutoff. Oracle views are reserved for evaluation, calibration,
+and audit. Temporal splits, label maturity, fingerprints, and manifests make
+the distinction inspectable.
+
+## Optional integrations
+
+Install only the capabilities needed for a workflow:
+
+| Extra | Capability | Typical use |
+| --- | --- | --- |
+| `ml` | scikit-learn and gradient-boosting baselines | Train and evaluate fraud models. |
+| `graph` | PyTorch and PyTorch Geometric | Convert temporal graphs and run graph ML experiments. |
+| `kafka` | Confluent Kafka and Schema Registry clients | Publish Avro events and validate delivery contracts. |
+| `postgres` | PostgreSQL client | Persist an operational mirror and reconcile counts. |
+| `lakehouse` | Iceberg/PyArrow/Spark tooling | Materialize Bronze/Silver/Gold snapshots and backfill late events. |
+| `observability` | Prometheus client | Expose lag, quality, and reconciliation metrics. |
+| `mlflow` / `serving` | MLflow, FastAPI, and Uvicorn | Track artifacts and run the local reference scoring service. |
+
+For example:
+
+```bash
+poetry install -E ml -E graph
+poetry install -E kafka -E postgres -E lakehouse -E observability
+```
+
+Service-backed examples include Docker Compose instructions and an offline
+fallback. Docker is not required for the core simulator or documentation
+build.
 
 ## Project status
 

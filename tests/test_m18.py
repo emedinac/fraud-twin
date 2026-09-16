@@ -24,6 +24,7 @@ from fraudtwin.scale import (
     load_checkpoint,
     partition_id,
     reconcile_logical_ids,
+    require_scale_plan,
     resolve_scale_plan,
     write_scale_benchmark_manifest,
     write_scale_partitions,
@@ -66,6 +67,12 @@ def test_dev_scale_profile_is_bounded() -> None:
     plan = resolve_scale_plan(config)
     assert plan is not None
     assert plan.target_payments == 1_000
+
+
+def test_require_scale_plan_narrows_enabled_and_rejects_disabled() -> None:
+    assert require_scale_plan(_scale_config()).target_payments == 100
+    with pytest.raises(ValueError, match="scale generation is not enabled"):
+        require_scale_plan(load_config(Path("configs/minimal.yaml")))
 
 
 def test_disabled_scale_preserves_legacy_config_hash() -> None:

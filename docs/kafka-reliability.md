@@ -5,10 +5,20 @@ partition keys, idempotence, retries, acknowledgements, and pacing. The chaos
 harness adds deterministic logical-message faults around either boundary:
 
 ```python
+from pathlib import Path
+
+from fraudtwin import generate
+from fraudtwin.config import load_config
 from fraudtwin.kafka import publication_records
 from fraudtwin.kafka_chaos import KafkaChaosConfig, simulate_delivery
 
-records = publication_records(run.behavior, run.run_id)
+written_run = generate(
+    load_config(Path("configs/minimal.yaml")),
+    write=True,
+    output_dir=Path("/tmp/fraudtwin-kafka-example"),
+)
+data = written_run.load_data()
+records = publication_records(data.behavior, written_run.run_id)
 result = simulate_delivery(
     records,
     KafkaChaosConfig(
