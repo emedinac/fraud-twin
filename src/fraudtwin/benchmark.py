@@ -5,6 +5,8 @@ delegates generation to the existing deterministic engines and model scoring to
 the M19 prediction contract.
 """
 
+from __future__ import annotations
+
 import importlib
 import json
 import platform

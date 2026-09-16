@@ -1,5 +1,7 @@
 """Native Kafka publication for the clean observable M24 event contracts."""
 
+from __future__ import annotations
+
 import importlib
 import json
 import os
