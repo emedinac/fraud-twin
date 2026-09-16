@@ -5,8 +5,6 @@ bounded-memory spooling, persistence, and checkpoint metadata. It does not
 contain a second simulation model.
 """
 
-from __future__ import annotations
-
 import hashlib
 import importlib.metadata
 import json

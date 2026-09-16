@@ -5,8 +5,6 @@ generation remain usable without the optional ML stack, while a trained run is
 fully described by local, content-addressed artifacts.
 """
 
-from __future__ import annotations
-
 import hashlib
 import importlib.metadata
 import io
@@ -203,13 +201,11 @@ def _record_for_row(row: Mapping[str, Any], score: float) -> PredictionRecord:
         value = row.get(field)
         if value is not None:
             prediction_timestamp = _utc(row["prediction_time"])
-            return PredictionRecord.model_validate(
-                {
-                    field: str(value),
-                    "prediction_timestamp": prediction_timestamp,
-                    "fraud_score": float(score),
-                }
-            )
+            return PredictionRecord.model_validate({
+                field: str(value),
+                "prediction_timestamp": prediction_timestamp,
+                "fraud_score": float(score),
+            })
     raise ValueError("PIT row has no supported prediction target ID")
 
 
@@ -720,13 +716,11 @@ def evaluate_predictions(
     metrics = []
     for split in ("train", "validation", "test"):
         values = [row for row in selected if row.get("split") == split]
-        metrics.append(
-            {
-                "model_id": model_id,
-                "partition": split,
-                **metric_row(values, thresholds, config),
-            }
-        )
+        metrics.append({
+            "model_id": model_id,
+            "partition": split,
+            **metric_row(values, thresholds, config),
+        })
     for dimension in (
         "fraud_type",
         "payment_rail",
@@ -741,15 +735,13 @@ def evaluate_predictions(
                 for row in selected
                 if str(row.get(dimension, "unavailable")) == value and row.get("split") == "test"
             ]
-            metrics.append(
-                {
-                    "model_id": model_id,
-                    "partition": "test",
-                    "segment_dimension": dimension,
-                    "segment_value": value,
-                    **metric_row(values, thresholds, config),
-                }
-            )
+            metrics.append({
+                "model_id": model_id,
+                "partition": "test",
+                "segment_dimension": dimension,
+                "segment_value": value,
+                **metric_row(values, thresholds, config),
+            })
     canonical_predictions = tuple(
         {
             **_record_for_row(row, float(row["fraud_score"])).model_dump(
@@ -770,12 +762,10 @@ def evaluate_predictions(
         "label_policy": config.label_policy,
         "configuration": config.model_dump(mode="json"),
         "thresholds": thresholds,
-        "output_fingerprint": sha256_json(
-            {
-                "predictions": canonical_predictions,
-                "metrics": metrics,
-            }
-        ),
+        "output_fingerprint": sha256_json({
+            "predictions": canonical_predictions,
+            "metrics": metrics,
+        }),
         "tracking": _tracking_metadata(config),
         "lineage": lineage,
         "preprocessing": PREPROCESSING_METADATA.copy(),
@@ -909,12 +899,10 @@ def write_evaluation(result: EvaluationResult, output_dir: Path) -> tuple[Path, 
             raise RuntimeError("MLflow tracking was requested but mlflow is not installed") from exc
         mlflow.set_tracking_uri(str(tracking_uri))
         with mlflow.start_run(run_name=str(result.manifest.get("evaluation_version"))):
-            mlflow.log_params(
-                {
-                    "feature_version": str(result.manifest.get("feature_version")),
-                    "model_id": str(result.manifest.get("model_id", "multiple")),
-                }
-            )
+            mlflow.log_params({
+                "feature_version": str(result.manifest.get("feature_version")),
+                "model_id": str(result.manifest.get("model_id", "multiple")),
+            })
             mlflow.log_artifacts(str(output_dir))
     return predictions_path, metrics_path, manifest_path
 

@@ -6,26 +6,22 @@ publishes run-level values, and holds the endpoint briefly so a local
 Prometheus instance can scrape the completed batch job.
 """
 
-from __future__ import annotations
-
 import time
 from collections.abc import Mapping
 from typing import Any
 
 from fraudtwin.manifest import RunManifest
 
-_INVALID_FAULTS = frozenset(
-    {
-        "negative_amount",
-        "invalid_enum",
-        "invalid_reference",
-        "corrupted_timestamp",
-        "timezone_error",
-        "schema_mismatch",
-        "extreme_value",
-        "encoding_error",
-    }
-)
+_INVALID_FAULTS = frozenset({
+    "negative_amount",
+    "invalid_enum",
+    "invalid_reference",
+    "corrupted_timestamp",
+    "timezone_error",
+    "schema_mismatch",
+    "extreme_value",
+    "encoding_error",
+})
 
 
 class ObservabilityDependencyError(RuntimeError):

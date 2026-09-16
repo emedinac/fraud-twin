@@ -1,7 +1,5 @@
 """Deterministic graph views over one generated FraudTwin run."""
 
-from __future__ import annotations
-
 import csv
 import hashlib
 from collections import defaultdict
@@ -127,6 +125,8 @@ GRAPH_HYPEREDGE_MEMBERSHIP_SCHEMA: dict[str, Any] = {
 
 
 class GraphNode(BaseModel):
+    """Versioned entity node in an observable or oracle graph view."""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node_id: str
@@ -138,6 +138,8 @@ class GraphNode(BaseModel):
 
 
 class GraphEdge(BaseModel):
+    """Time-bounded relationship with provenance back to source events."""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     edge_id: str
@@ -209,21 +211,19 @@ class GraphDataset:
 
     @property
     def output_fingerprint(self) -> str:
-        return sha256_json(
-            {
-                "view": self.view,
-                "nodes": [item.model_dump(mode="json") for item in self.nodes],
-                "edges": [item.model_dump(mode="json") for item in self.edges],
-                "memberships": [item.model_dump(mode="json") for item in self.memberships],
-                "campaigns": [item.model_dump(mode="json") for item in self.campaigns],
-                "patterns": [item.model_dump(mode="json") for item in self.patterns],
-                "evidence": [item.model_dump(mode="json") for item in self.evidence],
-                "hyperedges": [item.model_dump(mode="json") for item in self.hyperedges],
-                "hyperedge_memberships": [
-                    item.model_dump(mode="json") for item in self.hyperedge_memberships
-                ],
-            }
-        )
+        return sha256_json({
+            "view": self.view,
+            "nodes": [item.model_dump(mode="json") for item in self.nodes],
+            "edges": [item.model_dump(mode="json") for item in self.edges],
+            "memberships": [item.model_dump(mode="json") for item in self.memberships],
+            "campaigns": [item.model_dump(mode="json") for item in self.campaigns],
+            "patterns": [item.model_dump(mode="json") for item in self.patterns],
+            "evidence": [item.model_dump(mode="json") for item in self.evidence],
+            "hyperedges": [item.model_dump(mode="json") for item in self.hyperedges],
+            "hyperedge_memberships": [
+                item.model_dump(mode="json") for item in self.hyperedge_memberships
+            ],
+        })
 
 
 def _frame(records: tuple[BaseModel, ...], schema: dict[str, Any]) -> pl.DataFrame:
@@ -961,19 +961,17 @@ def validate_graph_scenarios(dataset: GraphDataset) -> None:
 
 
 def _schema_fingerprint() -> str:
-    return sha256_json(
-        {
-            "version": GRAPH_SCHEMA_VERSION,
-            "nodes": list(GRAPH_NODE_SCHEMA),
-            "edges": list(GRAPH_EDGE_SCHEMA),
-            "memberships": list(GRAPH_MEMBERSHIP_SCHEMA),
-            "campaigns": list(GRAPH_CAMPAIGN_SCHEMA),
-            "patterns": list(GRAPH_PATTERN_SCHEMA),
-            "evidence": list(GRAPH_EVIDENCE_SCHEMA),
-            "hyperedges": list(GRAPH_HYPEREDGE_SCHEMA),
-            "hyperedge_memberships": list(GRAPH_HYPEREDGE_MEMBERSHIP_SCHEMA),
-        }
-    )
+    return sha256_json({
+        "version": GRAPH_SCHEMA_VERSION,
+        "nodes": list(GRAPH_NODE_SCHEMA),
+        "edges": list(GRAPH_EDGE_SCHEMA),
+        "memberships": list(GRAPH_MEMBERSHIP_SCHEMA),
+        "campaigns": list(GRAPH_CAMPAIGN_SCHEMA),
+        "patterns": list(GRAPH_PATTERN_SCHEMA),
+        "evidence": list(GRAPH_EVIDENCE_SCHEMA),
+        "hyperedges": list(GRAPH_HYPEREDGE_SCHEMA),
+        "hyperedge_memberships": list(GRAPH_HYPEREDGE_MEMBERSHIP_SCHEMA),
+    })
 
 
 def _write_parquet_artifacts(dataset: GraphDataset, view_dir: Path) -> dict[str, str]:
@@ -1100,17 +1098,17 @@ def write_graph(
             for view, item in sorted(datasets.items())
         },
         schema_fingerprint=_schema_fingerprint(),
-        output_fingerprint=sha256_json(
-            {view: item.output_fingerprint for view, item in sorted(datasets.items())}
-        ),
+        output_fingerprint=sha256_json({
+            view: item.output_fingerprint for view, item in sorted(datasets.items())
+        }),
         output_artifacts=artifacts,
         ordering={
             "nodes": ["node_type", "node_id"],
             "edges": ["valid_from", "edge_type", "src_id", "dst_id", "edge_id"],
         },
-        canonical_content_fingerprint=sha256_json(
-            {view: item.output_fingerprint for view, item in sorted(datasets.items())}
-        ),
+        canonical_content_fingerprint=sha256_json({
+            view: item.output_fingerprint for view, item in sorted(datasets.items())
+        }),
         file_checksums={
             path: checksum
             for value in artifacts.values()
@@ -1202,15 +1200,13 @@ def _write_neo4j(dataset: GraphDataset, directory: Path) -> None:
             )
             writer.writeheader()
             for membership in dataset.memberships:
-                writer.writerow(
-                    {
-                        ":START_ID": membership.member_id,
-                        ":END_ID": membership.campaign_id,
-                        ":TYPE": "MEMBER_OF",
-                        "campaign_id": membership.campaign_id,
-                        "role": membership.role,
-                    }
-                )
+                writer.writerow({
+                    ":START_ID": membership.member_id,
+                    ":END_ID": membership.campaign_id,
+                    ":TYPE": "MEMBER_OF",
+                    "campaign_id": membership.campaign_id,
+                    "role": membership.role,
+                })
     (directory / "IMPORT.md").write_text(
         "# FraudTwin Neo4j import\n\n"
         "The CSV files are dependency-free, UTF-8, newline-delimited, and sorted by "

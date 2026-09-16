@@ -7,8 +7,6 @@ External implementations can either be loaded through a small adapter
 protocol or provide the same normalized artifact bundle on disk.
 """
 
-from __future__ import annotations
-
 import importlib
 import json
 import math
@@ -140,6 +138,8 @@ class QualityArtifactBundle(BaseModel):
 
 
 class QualityGeneratorAdapter(Protocol):
+    """Protocol implemented by an external generator benchmark adapter."""
+
     metadata: QualityAdapterMetadata
 
     def generate(self, request: QualityAdapterRequest) -> QualityArtifactBundle: ...
@@ -157,6 +157,8 @@ class QualityMetric(BaseModel):
 
 
 class QualityCandidateReport(BaseModel):
+    """Normalized quality dimensions for one generator candidate."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     candidate_id: str
@@ -172,6 +174,8 @@ class QualityCandidateReport(BaseModel):
 
 
 class QualityBenchmarkResult(BaseModel):
+    """Immutable result and artifact location for a quality benchmark run."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     report_id: str
@@ -712,14 +716,12 @@ def run_quality_benchmark(
     )
     root = output_dir / (
         "QB-"
-        + sha256_json(
-            {
-                "profile": resolved.fingerprint,
-                "adapter": adapter,
-                "bundle": str(bundle),
-                "scale_manifest": str(scale_manifest),
-            }
-        )[:16]
+        + sha256_json({
+            "profile": resolved.fingerprint,
+            "adapter": adapter,
+            "bundle": str(bundle),
+            "scale_manifest": str(scale_manifest),
+        })[:16]
     )
     root.mkdir(parents=True, exist_ok=False)
     if bundle is not None:
@@ -829,12 +831,10 @@ def report_run(
         }
     report_id = (
         "QR-"
-        + sha256_json(
-            {
-                "run_id": run_id,
-                "manifest": manifest.model_dump(mode="json") if manifest else correctness,
-            }
-        )[:16]
+        + sha256_json({
+            "run_id": run_id,
+            "manifest": manifest.model_dump(mode="json") if manifest else correctness,
+        })[:16]
     )
     destination = output_dir / report_id / "quality_report.json"
     write_json(

@@ -5,8 +5,6 @@ files through this small adapter.  Local storage is dependency-free; URI-based
 storage imports fsspec lazily and is therefore optional.
 """
 
-from __future__ import annotations
-
 import os
 import shutil
 from dataclasses import dataclass

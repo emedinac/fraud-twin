@@ -113,6 +113,8 @@ class GraphHyperedge(_EntityModel):
 
 
 class GraphHyperedgeMembership(_EntityModel):
+    """Membership of an entity in a higher-order graph relationship."""
+
     hyperedge_id: str
     member_id: str
     member_type: str

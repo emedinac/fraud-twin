@@ -1,7 +1,5 @@
 """Deterministic, opt-in Milestone 15 campaign evolution."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from random import Random
@@ -143,12 +141,32 @@ _INTENSITY_MODELS: dict[str, IntensityModel] = {
 
 
 def register_transition_model(name: str, model: TransitionModel) -> None:
+    """Register a campaign phase-transition model by stable name.
+
+    Args:
+        name: Non-empty name referenced by campaign-dynamics configuration.
+        model: Callable protocol implementation that chooses the next phase.
+
+    Raises:
+        ValueError: If ``name`` is empty.
+    """
+
     if not name.strip():
         raise ValueError("transition model name must not be empty")
     _TRANSITION_MODELS[name] = model
 
 
 def register_intensity_model(name: str, model: IntensityModel) -> None:
+    """Register a campaign intensity model by stable name.
+
+    Args:
+        name: Non-empty name referenced by campaign-dynamics configuration.
+        model: Callable protocol implementation that computes event intensity.
+
+    Raises:
+        ValueError: If ``name`` is empty.
+    """
+
     if not name.strip():
         raise ValueError("intensity model name must not be empty")
     _INTENSITY_MODELS[name] = model
@@ -265,9 +283,9 @@ def _campaign_actions(
     )
     model = _TRANSITION_MODELS[binding.transition_model]
     intensity = _INTENSITY_MODELS[binding.intensity_model]
-    members = sorted(
-        {item.member_id for item in source.memberships if item.campaign_id == campaign.campaign_id}
-    )
+    members = sorted({
+        item.member_id for item in source.memberships if item.campaign_id == campaign.campaign_id
+    })
     accounts_by_id = {item.account_id: item for item in accounts}
     member_accounts = [accounts_by_id[item] for item in members if item in accounts_by_id]
     if len(member_accounts) < 2:
@@ -288,30 +306,24 @@ def _campaign_actions(
             source_campaign_ids=(campaign.campaign_id,),
             source_entity_ids=tuple(members),
             source_event_ids=tuple(
-                sorted(
-                    {
-                        item.source_event_id
-                        for item in source.memberships
-                        if item.campaign_id == campaign.campaign_id and item.source_event_id
-                    }
-                )
+                sorted({
+                    item.source_event_id
+                    for item in source.memberships
+                    if item.campaign_id == campaign.campaign_id and item.source_event_id
+                })
             ),
             source_payment_ids=tuple(
-                sorted(
-                    {
-                        item.payment_id
-                        for item in source.memberships
-                        if item.campaign_id == campaign.campaign_id and item.payment_id
-                    }
-                )
+                sorted({
+                    item.payment_id
+                    for item in source.memberships
+                    if item.campaign_id == campaign.campaign_id and item.payment_id
+                })
             ),
             configuration_hash=sha256_json(config.model_dump(mode="json")),
-            schema_fingerprint=sha256_json(
-                {
-                    "version": "m15-1",
-                    "models": ["CampaignStateSnapshot", "CampaignTransition"],
-                }
-            ),
+            schema_fingerprint=sha256_json({
+                "version": "m15-1",
+                "models": ["CampaignStateSnapshot", "CampaignTransition"],
+            }),
         )
     ]
     current = "compromise"
@@ -600,12 +612,10 @@ def _campaign_actions(
         item.model_copy(
             update={
                 "payment_ids": tuple(
-                    sorted(
-                        {
-                            *item.payment_ids,
-                            *[p.payment_id for p in payments if p.payment_id.startswith("M15-")],
-                        }
-                    )
+                    sorted({
+                        *item.payment_ids,
+                        *[p.payment_id for p in payments if p.payment_id.startswith("M15-")],
+                    })
                 ),
                 "window_to": end,
             }

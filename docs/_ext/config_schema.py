@@ -6,8 +6,6 @@ aligned with the validation code while leaving narrative guidance in the
 configuration guide.
 """
 
-from __future__ import annotations
-
 import importlib
 import json
 from collections.abc import Iterable, Mapping

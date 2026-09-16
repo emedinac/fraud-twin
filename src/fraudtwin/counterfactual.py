@@ -5,8 +5,6 @@ It produces append-only sidecar data and never mutates the source models or the
 ordinary M1--M13 output tables.
 """
 
-from __future__ import annotations
-
 import hashlib
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
@@ -568,12 +566,10 @@ def _clone_trajectory(
     if "beneficiary" in changes:
         target = str(changes["beneficiary"]["value"])
         account = next(item for item in entities.accounts if item.account_id == target)
-        update.update(
-            {
-                "payee_account_id": account.account_id,
-                "payee_institution_id": account.institution_id,
-            }
-        )
+        update.update({
+            "payee_account_id": account.account_id,
+            "payee_institution_id": account.institution_id,
+        })
         if source.payer_account_id in {item.account_id for item in entities.accounts}:
             pix = next(
                 (
@@ -1002,20 +998,18 @@ def generate_counterfactuals(
             },
         },
         "seed_streams": ["milestone-14:selection", "milestone-14:mutation"],
-        "source_fingerprint": sha256_json(
-            [item.model_dump(mode="json") for item in original_payments]
-        ),
-        "output_fingerprint": sha256_json(
-            [item.model_dump(mode="json") for item in modified_payments]
-        ),
-        "schema_fingerprint": sha256_json(
-            {
-                "payments": list(Payment.model_fields),
-                "payment_events": list(PaymentEvent.model_fields),
-                "ledger_entries": list(LedgerEntry.model_fields),
-                "change_sets": list(CounterfactualChangeSet.model_fields),
-            }
-        ),
+        "source_fingerprint": sha256_json([
+            item.model_dump(mode="json") for item in original_payments
+        ]),
+        "output_fingerprint": sha256_json([
+            item.model_dump(mode="json") for item in modified_payments
+        ]),
+        "schema_fingerprint": sha256_json({
+            "payments": list(Payment.model_fields),
+            "payment_events": list(PaymentEvent.model_fields),
+            "ledger_entries": list(LedgerEntry.model_fields),
+            "change_sets": list(CounterfactualChangeSet.model_fields),
+        }),
         "transformation_order": ["M14", "M12", "M13"],
         "difficulty": resolved_difficulty.model_dump(mode="json"),
         "camouflage": resolved_camouflage.model_dump(mode="json"),

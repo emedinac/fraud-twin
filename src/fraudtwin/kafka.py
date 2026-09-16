@@ -1,7 +1,5 @@
 """Native Kafka publication for the clean observable M24 event contracts."""
 
-from __future__ import annotations
-
 import importlib
 import json
 import os
@@ -398,16 +396,14 @@ class KafkaPublisher:
             self._pace(item, index, first_time, started, mode)
             counts[item.subject] = counts.get(item.subject, 0) + 1
             digest.update(
-                canonical_json(
-                    {
-                        "subject": item.subject,
-                        "version": item.version,
-                        "fingerprint": item.fingerprint,
-                        "key": item.key,
-                        "record_id": item.record_id,
-                        "datum": item.datum,
-                    }
-                ).encode()
+                canonical_json({
+                    "subject": item.subject,
+                    "version": item.version,
+                    "fingerprint": item.fingerprint,
+                    "key": item.key,
+                    "record_id": item.record_id,
+                    "datum": item.datum,
+                }).encode()
             )
             schema_id = self._schema_ids.get(item.subject)
             if schema_id is None:

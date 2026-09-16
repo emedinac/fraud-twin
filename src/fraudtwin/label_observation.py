@@ -1,7 +1,5 @@
 """Deterministic, append-only observation of latent fraud labels."""
 
-from __future__ import annotations
-
 import math
 from collections.abc import Iterable
 from datetime import datetime, timedelta

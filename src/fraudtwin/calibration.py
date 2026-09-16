@@ -5,8 +5,6 @@ rows.  The causal payment, ledger, fraud, and graph generators remain the
 authoritative producers of output records.
 """
 
-from __future__ import annotations
-
 import hashlib
 import json
 import math
@@ -55,6 +53,8 @@ _NUMERIC_DTYPES = frozenset({pl.Float32, pl.Float64, pl.Int32, pl.Int64})
 
 
 class CalibrationModel(Protocol):
+    """Deterministic plug-in that fits summaries from a reference dataset."""
+
     name: str
     version: str
     supported_fields: tuple[str, ...]
@@ -65,6 +65,8 @@ class CalibrationModel(Protocol):
 
 
 class CalibrationMetric(Protocol):
+    """Deterministic plug-in that scores generated aggregate summaries."""
+
     name: str
     version: str
     required_fields: tuple[str, ...]
@@ -77,6 +79,8 @@ Scalar = str | int | float | bool | None
 
 
 class StatisticalSummary(BaseModel):
+    """Immutable aggregate statistic captured in a calibration profile."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     name: str
@@ -108,15 +112,13 @@ class StatisticalSummary(BaseModel):
 
         if not finite(self.parameters):
             raise ValueError("statistical summary parameters must be finite")
-        expected = sha256_json(
-            {
-                "name": self.name,
-                "version": self.version,
-                "available": self.available,
-                "fields": self.fields,
-                "parameters": self.parameters,
-            }
-        )
+        expected = sha256_json({
+            "name": self.name,
+            "version": self.version,
+            "available": self.available,
+            "fields": self.fields,
+            "parameters": self.parameters,
+        })
         if self.fingerprint and self.fingerprint != expected:
             raise ValueError("statistical summary fingerprint does not match its contents")
         object.__setattr__(self, "fingerprint", expected)
@@ -124,6 +126,8 @@ class StatisticalSummary(BaseModel):
 
 
 class FittedDistribution(BaseModel):
+    """Finite quantiles and bounds fitted from one reference column."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     name: str
@@ -142,6 +146,8 @@ class FittedDistribution(BaseModel):
 
 
 class FeatureDependency(BaseModel):
+    """Conditional relationship used to preserve feature dependencies."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     source: str
@@ -160,6 +166,8 @@ class FeatureDependency(BaseModel):
 
 
 class CalibrationProvenance(BaseModel):
+    """Inputs and versions that identify how a profile was fitted."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     calibration_version: str = CALIBRATION_VERSION
@@ -173,6 +181,8 @@ class CalibrationProvenance(BaseModel):
 
 
 class CalibrationProfile(BaseModel):
+    """Immutable collection of summaries, distributions, and provenance."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     profile_id: str
@@ -193,6 +203,8 @@ class CalibrationProfile(BaseModel):
 
 
 class ResolvedCalibration(BaseModel):
+    """Effective calibration context applied to a simulation configuration."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     enabled: bool
@@ -203,6 +215,8 @@ class ResolvedCalibration(BaseModel):
 
 
 class FidelityMetric(BaseModel):
+    """One weighted comparison between reference and generated aggregates."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     name: str
@@ -216,6 +230,8 @@ class FidelityMetric(BaseModel):
 
 
 class FidelityReport(BaseModel):
+    """Immutable per-summary and composite fidelity assessment."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     report_version: str = CALIBRATION_VERSION
@@ -665,6 +681,18 @@ def write_calibration_profile(profile: CalibrationProfile, path: Path | str) -> 
 
 
 def load_calibration_profile(path: Path | str) -> CalibrationProfile:
+    """Load and validate a YAML calibration profile.
+
+    Args:
+        path: YAML profile path written by :func:`write_calibration_profile`.
+
+    Returns:
+        The validated immutable profile.
+
+    Raises:
+        ValueError: If the path, YAML root, or profile schema is invalid.
+    """
+
     path = Path(path)
     if not path.is_file() or path.suffix.lower() not in {".yaml", ".yml"}:
         raise ValueError(f"calibration profile does not exist or is not YAML: {path}")
@@ -679,6 +707,16 @@ _CALIBRATION_METRICS: dict[str, CalibrationMetric] = {}
 
 
 def register_calibration_model(name: str, model: CalibrationModel) -> None:
+    """Register a deterministic calibration model under a unique name.
+
+    Args:
+        name: Stable configuration name for the model.
+        model: Plug-in implementing the :class:`CalibrationModel` protocol.
+
+    Raises:
+        ValueError: If the name is empty/duplicate or metadata is incomplete.
+    """
+
     if not name.strip() or name in _CALIBRATION_MODELS:
         raise ValueError("calibration model name must be non-empty and unique")
     if not model.deterministic or not model.version or not model.supported_fields:
@@ -689,6 +727,16 @@ def register_calibration_model(name: str, model: CalibrationModel) -> None:
 
 
 def register_calibration_metric(name: str, metric: CalibrationMetric) -> None:
+    """Register a deterministic fidelity metric under a unique name.
+
+    Args:
+        name: Stable configuration name for the metric.
+        metric: Plug-in implementing the :class:`CalibrationMetric` protocol.
+
+    Raises:
+        ValueError: If the name is empty/duplicate or metadata is incomplete.
+    """
+
     if not name.strip() or name in _CALIBRATION_METRICS:
         raise ValueError("calibration metric name must be non-empty and unique")
     if not metric.deterministic or not metric.version:
@@ -822,6 +870,19 @@ def compute_fidelity_report(
     weights: Mapping[Any, float] | None = None,
     minimum_scores: Mapping[Any, float] | None = None,
 ) -> FidelityReport:
+    """Compare generated aggregate values with a fitted profile.
+
+    Args:
+        profile: Reference summaries to score.
+        generated: Mapping of summary names to generated values or score payloads.
+        weights: Optional positive weight per summary name.
+        minimum_scores: Optional threshold that marks a metric below target.
+
+    Returns:
+        A deterministic report containing one metric per profile summary and a
+        weighted composite score when at least one value is available.
+    """
+
     metrics: list[FidelityMetric] = []
     weights = weights or {}
     minimum_scores = minimum_scores or {}

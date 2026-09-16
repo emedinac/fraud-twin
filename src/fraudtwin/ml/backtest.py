@@ -1,7 +1,5 @@
 """Leakage-safe rolling backtests over one generated FraudTwin history."""
 
-from __future__ import annotations
-
 import hashlib
 import math
 import re
@@ -718,14 +716,12 @@ def run_backtest(
             if partition == "stress" and fold.stress_from is None:
                 continue
             metrics = _metrics(fold_row_values[partition])
-            fold_metrics.append(
-                {
-                    "model_id": "deterministic_heuristic",
-                    "fold_id": fold.fold_id,
-                    "partition": partition,
-                    **metrics,
-                }
-            )
+            fold_metrics.append({
+                "model_id": "deterministic_heuristic",
+                "fold_id": fold.fold_id,
+                "partition": partition,
+                **metrics,
+            })
         metadata = fold.as_metadata()
         metadata["trainable_label_count"] = sum(
             row["label"] in {"FRAUD", "LEGITIMATE"} for row in fold_row_values["train"]
@@ -742,13 +738,11 @@ def run_backtest(
     parameters = config.backtest.model_dump(mode="json")
     if benchmark_pack is not None:
         parameters["benchmark_pack"] = benchmark_pack.identity
-    output_fingerprint = sha256_json(
-        {
-            "rows": fold_rows,
-            "metrics": fold_metrics,
-            "folds": fold_metadata,
-        }
-    )
+    output_fingerprint = sha256_json({
+        "rows": fold_rows,
+        "metrics": fold_metrics,
+        "folds": fold_metadata,
+    })
     backtest_id = "BT-" + sha256_json({"source": source_hash, "parameters": parameters})[:16]
     manifest = BacktestManifest(
         backtest_id=backtest_id,
@@ -881,47 +875,41 @@ def run_model_backtest(
                         str(prediction["prediction_timestamp"]).replace("Z", "+00:00")
                     )
                 )
-                fold_rows.append(
-                    {
-                        "model_id": model_id,
-                        "fold_id": fold_id,
-                        "partition": partitions[str(source_row["dataset_row_id"])],
-                        "dataset_row_id": source_row["dataset_row_id"],
-                        "payment_id": source_row["payment_id"],
-                        "prediction_time": source_row["prediction_time"],
-                        "source_available_at": source_row["source_available_at"],
-                        "feature_available_at": source_row["feature_available_at"],
-                        "label_available_at": source_row["label_available_at"],
-                        "label": source_row["label"],
-                        "fraud_score": prediction["fraud_score"],
-                    }
-                )
+                fold_rows.append({
+                    "model_id": model_id,
+                    "fold_id": fold_id,
+                    "partition": partitions[str(source_row["dataset_row_id"])],
+                    "dataset_row_id": source_row["dataset_row_id"],
+                    "payment_id": source_row["payment_id"],
+                    "prediction_time": source_row["prediction_time"],
+                    "source_available_at": source_row["source_available_at"],
+                    "feature_available_at": source_row["feature_available_at"],
+                    "label_available_at": source_row["label_available_at"],
+                    "label": source_row["label"],
+                    "fraud_score": prediction["fraud_score"],
+                })
             for metric in result.metrics:
                 if "segment_dimension" not in metric:
-                    fold_metrics.append(
-                        {
-                            "model_id": model_id,
-                            "fold_id": fold_id,
-                            "partition": metric["partition"],
-                            "row_count": metric["row_count"],
-                            "labelled_row_count": metric["labelled_row_count"],
-                            "positive_count": metric["positive_count"],
-                            "roc_auc": metric["roc_auc"],
-                            "pr_auc": metric["pr_auc"],
-                            "precision": metric["precision"],
-                            "recall": metric["recall"],
-                            "f1": metric["f1"],
-                            "brier_score": metric["brier_score"],
-                        }
-                    )
+                    fold_metrics.append({
+                        "model_id": model_id,
+                        "fold_id": fold_id,
+                        "partition": metric["partition"],
+                        "row_count": metric["row_count"],
+                        "labelled_row_count": metric["labelled_row_count"],
+                        "positive_count": metric["positive_count"],
+                        "roc_auc": metric["roc_auc"],
+                        "pr_auc": metric["pr_auc"],
+                        "precision": metric["precision"],
+                        "recall": metric["recall"],
+                        "f1": metric["f1"],
+                        "brier_score": metric["brier_score"],
+                    })
     aggregate = {
-        model: _aggregate(
-            [
-                item
-                for item in fold_metrics
-                if item["model_id"] == model and item["partition"] == "test"
-            ]
-        )
+        model: _aggregate([
+            item
+            for item in fold_metrics
+            if item["model_id"] == model and item["partition"] == "test"
+        ])
         for model in models
     }
     manifest = legacy.manifest.model_copy(
@@ -929,13 +917,11 @@ def run_model_backtest(
             "parameters": {**legacy.manifest.parameters, "models": list(models)},
             "per_fold_metrics": fold_metrics,
             "aggregate_metrics": aggregate,
-            "output_fingerprint": sha256_json(
-                {
-                    "rows": fold_rows,
-                    "metrics": fold_metrics,
-                    "models": models,
-                }
-            ),
+            "output_fingerprint": sha256_json({
+                "rows": fold_rows,
+                "metrics": fold_metrics,
+                "models": models,
+            }),
         }
     )
     return BacktestResult(tuple(fold_rows), tuple(fold_metrics), manifest)

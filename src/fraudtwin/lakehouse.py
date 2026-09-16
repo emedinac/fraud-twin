@@ -5,8 +5,6 @@ backfill and a small Kafka consumer adapter at the integration boundary.  All
 Iceberg and Kafka imports are lazy so normal installs remain dependency-free.
 """
 
-from __future__ import annotations
-
 import base64
 import hashlib
 import importlib
@@ -48,16 +46,14 @@ CONTRACT_TABLES = {
     "fraud-case-confirmation": "case_confirmations",
     "fraud-label": "fraud_labels",
 }
-TRANSPORT_FIELDS = frozenset(
-    {
-        "received_at",
-        "source",
-        "kafka_topic",
-        "kafka_partition",
-        "kafka_offset",
-        "raw_payload_b64",
-    }
-)
+TRANSPORT_FIELDS = frozenset({
+    "received_at",
+    "source",
+    "kafka_topic",
+    "kafka_partition",
+    "kafka_offset",
+    "raw_payload_b64",
+})
 ENTITY_TABLES = (
     "institutions",
     "customers",
@@ -123,12 +119,10 @@ class LakehouseEnvironment:
             "s3.region": self.s3_region,
         }
         if self.s3_endpoint:
-            properties.update(
-                {
-                    "s3.endpoint": self.s3_endpoint,
-                    "s3.path-style-access": "true",
-                }
-            )
+            properties.update({
+                "s3.endpoint": self.s3_endpoint,
+                "s3.path-style-access": "true",
+            })
         if self.s3_access_key:
             properties["s3.access-key-id"] = self.s3_access_key
         if self.s3_secret_key:
@@ -358,21 +352,19 @@ def silver_rows(records: Iterable[BronzeRecord]) -> tuple[dict[str, Any], ...]:
         candidates = grouped[key]
         record = candidates[0]
         event_time = record.event_time
-        result.append(
-            {
-                **record.as_row(),
-                "normalized_event_time": event_time,
-                "event_date": event_time[:10] if event_time else None,
-                "deduplication_key": f"{record.subject}:{record.record_id}",
-                "contributing_bronze_ids": [item.record_id for item in candidates],
-                "decision": "accepted",
-                "decision_reason": (
-                    "first deterministic record for subject and record_id"
-                    if len(candidates) == 1
-                    else f"deterministic winner among {len(candidates)} Bronze records"
-                ),
-            }
-        )
+        result.append({
+            **record.as_row(),
+            "normalized_event_time": event_time,
+            "event_date": event_time[:10] if event_time else None,
+            "deduplication_key": f"{record.subject}:{record.record_id}",
+            "contributing_bronze_ids": [item.record_id for item in candidates],
+            "decision": "accepted",
+            "decision_reason": (
+                "first deterministic record for subject and record_id"
+                if len(candidates) == 1
+                else f"deterministic winner among {len(candidates)} Bronze records"
+            ),
+        })
     return tuple(result)
 
 
@@ -381,9 +373,9 @@ def logical_fingerprint(rows: Iterable[Mapping[str, Any]]) -> str:
 
     canonical = []
     for row in rows:
-        canonical.append(
-            {key: value for key, value in sorted(row.items()) if key not in TRANSPORT_FIELDS}
-        )
+        canonical.append({
+            key: value for key, value in sorted(row.items()) if key not in TRANSPORT_FIELDS
+        })
     return sha256_json(sorted(canonical, key=canonical_json))
 
 
@@ -599,8 +591,7 @@ def _write_immutable_json(path: Path, payload: Mapping[str, Any]) -> None:
     if path.exists():
         if path.read_text(encoding="utf-8") != serialized:
             raise LakehouseConfigurationError(
-                "immutable lakehouse materialization already exists with different content: "
-                f"{path}"
+                f"immutable lakehouse materialization already exists with different content: {path}"
             )
         return
     path.write_text(serialized, encoding="utf-8")
@@ -721,14 +712,12 @@ def materialize_dataset(
     source_manifest_hash = sha256_json(manifest.model_dump(mode="json"))
     materialization_id = (
         "LH-"
-        + sha256_json(
-            {
-                "run_id": manifest.run_id,
-                "source_mode": source_mode,
-                "oracle": allow_oracle,
-                "fingerprint": logical_hash,
-            }
-        )[:16]
+        + sha256_json({
+            "run_id": manifest.run_id,
+            "source_mode": source_mode,
+            "oracle": allow_oracle,
+            "fingerprint": logical_hash,
+        })[:16]
     )
     result = LakehouseMaterializationResult(
         materialization_id=materialization_id,
@@ -846,27 +835,23 @@ def consume_kafka_once(  # pragma: no cover - optional integration dependency
         raise LakehouseConfigurationError(
             "Kafka ingestion requires FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS"
         )
-    consumer = consumer_class(
-        {
-            "bootstrap.servers": brokers,
-            "group.id": group,
-            "auto.offset.reset": "earliest",
-            "enable.auto.commit": False,
-        }
-    )
-    consumer.subscribe(
-        [
-            os.environ.get("FRAUDTWIN_KAFKA_TOPIC_PREFIX", "fraudsim") + "." + suffix
-            for suffix in (
-                "payment.events.v1",
-                "customer.disputes.v1",
-                "fraud.alerts.v1",
-                "fraud.cases.v1",
-                "fraud.case-confirmations.v1",
-                "fraud.labels.v1",
-            )
-        ]
-    )
+    consumer = consumer_class({
+        "bootstrap.servers": brokers,
+        "group.id": group,
+        "auto.offset.reset": "earliest",
+        "enable.auto.commit": False,
+    })
+    consumer.subscribe([
+        os.environ.get("FRAUDTWIN_KAFKA_TOPIC_PREFIX", "fraudsim") + "." + suffix
+        for suffix in (
+            "payment.events.v1",
+            "customer.disputes.v1",
+            "fraud.alerts.v1",
+            "fraud.cases.v1",
+            "fraud.case-confirmations.v1",
+            "fraud.labels.v1",
+        )
+    ])
     rows: list[dict[str, Any]] = []
     registry = contract_registry()
     try:
@@ -885,17 +870,15 @@ def consume_kafka_once(  # pragma: no cover - optional integration dependency
         fingerprint = logical_fingerprint([*rows, *silver])
         materialization_id = (
             "LH-"
-            + sha256_json(
-                {
-                    "source_mode": "kafka",
-                    "source_run_ids": source_run_ids,
-                    "fingerprint": fingerprint,
-                    "snapshots": {
-                        "bronze.records": bronze_snapshot,
-                        "silver.records": silver_snapshot,
-                    },
-                }
-            )[:16]
+            + sha256_json({
+                "source_mode": "kafka",
+                "source_run_ids": source_run_ids,
+                "fingerprint": fingerprint,
+                "snapshots": {
+                    "bronze.records": bronze_snapshot,
+                    "silver.records": silver_snapshot,
+                },
+            })[:16]
         )
         manifest_dir = Path(lakehouse.config.checkpoint_location) / "materializations"
         manifest_dir.mkdir(parents=True, exist_ok=True)
