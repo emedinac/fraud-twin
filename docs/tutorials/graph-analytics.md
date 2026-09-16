@@ -8,6 +8,11 @@ database or a PyTorch Geometric experiment.
 | 16 | 30–45 min | base; Neo4j optional | graph tables, Cypher, fingerprint |
 | 17 | 30–45 min | `graph` optional | temporal features and evaluation |
 
+Tutorial 16 includes the optional `!pip install neo4j` cell, a local Neo4j
+startup command, connectivity check, and a small Cypher query. The offline
+graph export and Polars investigation remain the default path. Tutorial 17
+uses the existing `graph` extra; no external service is required.
+
 ```{toctree}
 :maxdepth: 1
 

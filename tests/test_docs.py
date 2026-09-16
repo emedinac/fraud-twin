@@ -231,6 +231,80 @@ def test_tutorials_have_marked_offline_code_cells() -> None:
     assert sorted(tutorial_ids) == list(range(1, 28))
 
 
+def test_integration_tutorials_have_guarded_client_smoke_cells() -> None:
+    requirements = {
+        "neo4j-graph-fraud.ipynb": ("neo4j", ("verify_connectivity", "RETURN 1", "MERGE")),
+        "avro-kafka-stream.ipynb": (
+            "confluent-kafka",
+            ("list_topics", "get_subjects", "publish"),
+        ),
+        "kafka-outage-recovery.ipynb": ("confluent-kafka", ("list_topics", "publish")),
+        "schema-evolution-compatibility.ipynb": (
+            "confluent-kafka",
+            ("get_subjects", "get_latest_version"),
+        ),
+        "postgres-persistence-reconciliation.ipynb": (
+            "psycopg",
+            ("migrate_database", "persist_run", "database_status"),
+        ),
+        "iceberg-time-travel-observability.ipynb": (
+            "pyiceberg",
+            ("load_catalog", "list_namespaces", "prometheus", "api/v1/query", "api/health"),
+        ),
+        "lakehouse-observability.ipynb": (
+            "pyiceberg",
+            ("load_catalog", "list_namespaces", "prometheus"),
+        ),
+        "operational-lakehouse-observability.ipynb": (
+            "pyiceberg",
+            ("load_catalog", "list_namespaces", "prometheus"),
+        ),
+        "mlflow-model-promotion.ipynb": ("mlflow", ("start_run", "log_metric", "get_run")),
+        "train-and-track-fraud-model.ipynb": ("fastapi", ("TestClient", "/health", "/score")),
+        "pyg-graph-model.ipynb": ("torch-geometric", ("to_pyg", "num_nodes")),
+    }
+    startup_markers = {
+        "neo4j-graph-fraud.ipynb": "docker run --name fraudtwin-neo4j",
+        "avro-kafka-stream.ipynb": "docker compose --profile streaming up -d",
+        "kafka-outage-recovery.ipynb": "docker compose --profile streaming up -d",
+        "schema-evolution-compatibility.ipynb": "docker compose --profile streaming up -d",
+        "postgres-persistence-reconciliation.ipynb": "docker compose --profile integration up -d",
+        "iceberg-time-travel-observability.ipynb": "docker compose --profile lakehouse up -d",
+        "lakehouse-observability.ipynb": "docker compose --profile lakehouse up -d",
+        "operational-lakehouse-observability.ipynb": "docker compose --profile lakehouse up -d",
+        "mlflow-model-promotion.ipynb": "mlflow server --host 127.0.0.1",
+        "train-and-track-fraud-model.ipynb": "uvicorn examples.model_service.app:app",
+    }
+    for filename, (package, operations) in requirements.items():
+        document = json.loads((Path("docs/tutorials") / filename).read_text(encoding="utf-8"))
+        service_cells = [
+            cell
+            for cell in document["cells"]
+            if cell.get("cell_type") == "code"
+            and cell.get("metadata", {}).get("fraudtwin", {}).get("offline") is False
+        ]
+        assert service_cells, filename
+        source = "\n".join("".join(cell.get("source", [])) for cell in service_cells)
+        assert re.search(
+            rf"^!pip install .*{re.escape(package)}.*$", source, re.MULTILINE
+        ), filename
+        assert "--disable-pip-version-check" not in source
+        assert " -q" not in source
+        for operation in operations:
+            assert operation in source, (filename, operation)
+        assert "except Exception" in source, filename
+        assert "offline_fallback" in source, filename
+        if filename in startup_markers:
+            notebook_source = "\n".join(
+                "".join(cell.get("source", [])) for cell in document["cells"]
+            )
+            assert startup_markers[filename] in notebook_source, filename
+        for cell in service_cells:
+            metadata = cell["metadata"]["fraudtwin"]
+            assert metadata.get("integration"), filename
+            assert metadata.get("requires_service") in {True, False}, filename
+
+
 def test_every_tutorial_belongs_to_exactly_one_category() -> None:
     notebooks = {path.name for path in Path("docs/tutorials").glob("*.ipynb")}
     category_pages = (

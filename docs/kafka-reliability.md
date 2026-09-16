@@ -4,6 +4,21 @@ FraudTwin's Kafka publisher is intentionally explicit about contract versions,
 partition keys, idempotence, retries, acknowledgements, and pacing. The chaos
 harness adds deterministic logical-message faults around either boundary:
 
+For the optional broker-backed path, install the client and start the local
+profile:
+
+```console
+!pip install confluent-kafka
+```
+
+```console
+docker compose --profile streaming up -d kafka schema-registry streaming-topics
+```
+
+The publication tutorials then list broker topics, list Schema Registry
+subjects, and publish a contract-backed record. The cells use short timeouts;
+when the broker is unavailable they continue with the deterministic chaos path.
+
 ```python
 from pathlib import Path
 
@@ -111,3 +126,7 @@ exactly-once; it only shows that the consumer projection was idempotent.
 Researchers can run the same logic with `simulate_delivery` and no broker;
 the offline result is suitable for deterministic tests and teaching, but it is
 not a substitute for socket-level failure testing or broker capacity testing.
+
+For broker configuration, security, capacity, and production operations, use
+the [Confluent Kafka Python documentation](https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html)
+and [Schema Registry documentation](https://docs.confluent.io/platform/current/schema-registry/index.html).

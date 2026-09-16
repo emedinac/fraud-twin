@@ -5,6 +5,8 @@ backfill and a small Kafka consumer adapter at the integration boundary.  All
 Iceberg and Kafka imports are lazy so normal installs remain dependency-free.
 """
 
+from __future__ import annotations
+
 import base64
 import hashlib
 import importlib

@@ -10,6 +10,11 @@ signals. Docker services are required for the full lakehouse workflow.
 | 22–23 | 45–60 min | `postgres` optional | repair report and reconciliation |
 | 24 | 30–45 min | `lakehouse`, `observability` optional | snapshot and SLO evidence |
 
+The PostgreSQL and lakehouse notebooks include their client installation cells,
+local startup commands, bounded health checks, and cleanup guidance. Offline
+Bronze/Silver/Gold projections and reconciliation manifests remain complete
+without Docker.
+
 ```{toctree}
 :maxdepth: 1
 

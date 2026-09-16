@@ -5,10 +5,25 @@ The repository includes a small local FastAPI reference service in
 trained FraudTwin artifact and an online scoring system, not to replace a
 production platform.
 
+Install the optional client packages in a notebook or local environment with:
+
+```console
+!pip install fastapi uvicorn httpx
+```
+
 ```console
 poetry install -E ml -E serving
 FRAUDTWIN_MODEL_ARTIFACT=runs/evaluations/models/logistic_regression.joblib \
   poetry run uvicorn examples.model_service.app:app --host 0.0.0.0 --port 8000
+```
+
+Verify the running adapter with:
+
+```console
+curl -fsS http://127.0.0.1:8000/health
+curl -fsS -X POST http://127.0.0.1:8000/score \
+  -H 'content-type: application/json' \
+  -d '{"event_id":"tutorial-10","prediction_timestamp":"2026-01-01T00:00:00Z","features":{}}'
 ```
 
 Endpoints:

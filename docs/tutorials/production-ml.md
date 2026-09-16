@@ -10,6 +10,10 @@ core exercises run offline; MLflow and serving integrations are optional.
 | 10, 18 | 30–60 min | `serving`, `mlflow` (optional) | service checks, promotion manifest |
 | 11, 19 | 30–60 min | base + `ml` (optional) | drift report and segment alerts |
 
+The model lifecycle notebooks include optional `mlflow` and FastAPI/Uvicorn
+client cells. They log or score a bounded artifact when available and retain a
+local manifest fallback when no tracking server or HTTP process is running.
+
 ```{toctree}
 :maxdepth: 1
 

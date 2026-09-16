@@ -69,6 +69,11 @@ suppress_warnings = [
     "myst.xref_missing",
     "intersphinx.external",
     "intersphinx.load_failure",
+    # Tutorial service cells intentionally use IPython's ``!pip`` syntax.
+    # Pygments' Python lexer cannot tokenize that shell escape, but Myst-NB
+    # still renders the cell correctly and users should see the copyable
+    # command exactly as it is executed in a notebook.
+    "misc.highlighting_failure",
 ]
 html_theme = "pydata_sphinx_theme"
 html_title = f"{project} {version} documentation"

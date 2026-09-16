@@ -9,6 +9,10 @@ repeatable logical faults before relying on a broker deployment.
 | 20 | 30–45 min | base; Kafka optional | outage/recovery audit |
 | 21 | 20–30 min | base; Schema Registry optional | compatibility report |
 
+The Kafka notebooks include `!pip install confluent-kafka` and optional broker
+and Schema Registry checks. They continue with contract-backed local records
+and logical chaos when Docker services are unavailable.
+
 ```{toctree}
 :maxdepth: 1
 
