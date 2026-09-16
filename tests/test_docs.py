@@ -119,9 +119,7 @@ def test_post08_tutorials_have_marked_offline_code_cells() -> None:
             assert isinstance(marker, bool), f"missing offline marker: {notebook.name}"
             compile("".join(cell.get("source", [])), f"{notebook.name}:cell", "exec")
         offline_cells = [
-            cell
-            for cell in code_cells
-            if cell["metadata"]["fraudtwin"]["offline"] is True
+            cell for cell in code_cells if cell["metadata"]["fraudtwin"]["offline"] is True
         ]
         assert len(offline_cells) >= 5, notebook.name
 

@@ -200,9 +200,7 @@ def resolve_scale_plan(
     )
 
 
-def require_scale_plan(
-    config: SimulationRunConfig, *, run_id: str | None = None
-) -> ScalePlan:
+def require_scale_plan(config: SimulationRunConfig, *, run_id: str | None = None) -> ScalePlan:
     """Resolve an enabled scale plan and narrow away the optional result.
 
     Use this helper in applications that require scale execution.  It turns a
