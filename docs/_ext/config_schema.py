@@ -113,20 +113,27 @@ def _table(
 ) -> nodes.table:
     required_names = set(required)
     table = nodes.table(classes=["config-schema-table"])
-    tgroup = nodes.tgroup(cols=5)
+    tgroup = nodes.tgroup(cols=6)
     table += tgroup
-    for width in (18, 18, 18, 22, 24):
+    for width in (18, 12, 18, 18, 22, 24):
         tgroup += nodes.colspec(colwidth=width)
     header = nodes.row()
-    for title in ("Field", "Type", "Default", "Constraints", "Description"):
+    for title in (
+        "Field",
+        "Required",
+        "Type",
+        "Default",
+        "Constraints",
+        "Description",
+    ):
         header += nodes.entry("", nodes.paragraph("", title))
     tgroup += nodes.thead("", header)
     tbody = nodes.tbody()
     for name, schema in properties.items():
         schema = schema if isinstance(schema, Mapping) else {}
         row = nodes.row()
-        field_name = name + (" *" if name in required_names else "")
-        row += nodes.entry("", nodes.literal("", field_name))
+        row += nodes.entry("", nodes.literal("", name))
+        row += nodes.entry("", nodes.paragraph("", "yes" if name in required_names else "no"))
         row += nodes.entry("", _type_cell(schema, definitions))
         row += nodes.entry("", nodes.paragraph("", _display(schema.get("default"))))
         row += nodes.entry("", nodes.paragraph("", _constraints(schema)))

@@ -16,10 +16,6 @@ Point-in-time datasets
    fraudtwin.ml.dataset.write_point_in_time_dataset
    fraudtwin.ml.dataset.load_generated_run
 
-.. autofunction:: fraudtwin.ml.dataset.build_point_in_time_dataset
-
-.. autofunction:: fraudtwin.ml.dataset.write_point_in_time_dataset
-
 Backtesting and prediction evaluation
 --------------------------------------
 
@@ -34,7 +30,3 @@ Backtesting and prediction evaluation
    fraudtwin.ml.baseline.EvaluationResult
    fraudtwin.ml.baseline.evaluate_predictions
    fraudtwin.ml.baseline.train_baselines
-
-.. autofunction:: fraudtwin.ml.backtest.run_backtest
-
-.. autofunction:: fraudtwin.ml.baseline.evaluate_predictions

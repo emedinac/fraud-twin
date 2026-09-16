@@ -1,6 +1,6 @@
 # FraudTwin documentation
 
-FraudTwin is a deterministic synthetic payment world for fraud detection, graph analysis, data engineering, and machine-learning experiments. Follow the learning path below to move from a first generated run to reproducible fraud benchmarks.
+FraudTwin is a deterministic synthetic payment world for fraud detection, graph analysis, data engineering, and machine-learning experiments. Follow the learning path below to move from a first generated run to reproducible fraud benchmarks. The published manual is versioned; use the version selector when an example must match a specific release.
 
 ## Installation
 
@@ -22,16 +22,20 @@ FraudTwin is a deterministic synthetic payment world for fraud detection, graph 
 - [Build a Simple Fraud Scoring Model](tutorials/07-train-a-simple-fraud-model.ipynb) - score point-in-time features with a transparent formula.
 - [Build a Reproducible Fraud Benchmark](tutorials/08-build-a-reproducible-fraud-benchmark.ipynb) - connect counterfactuals, campaigns, calibration, label observation, scale planning, and evaluation.
 
-## Advanced Concepts
+## Guides and concepts
 
 - [Configuration](configuration.md) - control populations, behavior, payment rails, fraud, labels, calibration, scale, and campaign dynamics.
 - [Data and evaluation workflows](workflows.md) - build point-in-time datasets, replay runs, backtest models, and evaluate predictions.
 - [Graph and benchmark workflows](graph-and-benchmarks.md) - export observable and oracle graph views and compare stress levels.
+- [Concepts](concepts.md) - understand determinism, lifecycle events, labels, graph provenance, and quality faults.
+- [Troubleshooting](troubleshooting.md) - resolve installation, configuration, optional dependency, graph, and scale issues.
+- [Migration guides](migration.md) - check compatibility boundaries when moving between releases.
 - [v2.0.0 release-readiness roadmap](release-readiness.md) - M18 scale gates and deferred platform integrations.
 
 ## Package Reference
 
-- [Python API reference](api.rst) - curated, generated documentation for the public `fraudtwin` API.
+- [Python API reference](api.rst) - workflow guides plus exhaustive generated indexes for every public `fraudtwin` export and importable module.
+- [Configuration parameter reference](configuration-reference.rst) - generated tables for every major Pydantic configuration section.
 - [CLI reference](cli.rst) - command groups, validation commands, and workflow entry points.
 - [Data contracts](data-contracts.rst) - generated-run artifacts, grains, and oracle boundaries.
 - [Source code on GitHub](https://github.com/emedinac/fraud-twin) - implementation, tests, and issue tracker.
@@ -42,9 +46,10 @@ FraudTwin is a deterministic synthetic payment world for fraud detection, graph 
 - [Workflow cheatsheet](workflows.md#a-practical-evaluation-sequence) - the recommended generation and evaluation sequence.
 - [Graph and benchmark cheatsheet](graph-and-benchmarks.md#choosing-a-fixture) - choose the fixture that matches your experiment.
 
-## Development
+## Resources
 
 - [Development guide](development.md) - run checks, target tests, and contribute safely.
+- [Glossary](glossary.md) - definitions for observable views, label maturity, campaigns, fingerprints, and checkpoints.
 - [Release notes](../CHANGELOG.md) - follow release history and notable changes.
 - [Contributor entry point](../DEVELOPMENT.md) - the short repository-level workflow.
 

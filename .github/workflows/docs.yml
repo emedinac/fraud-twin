@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*.*.*"
     paths:
       - "src/**"
       - "docs/**"
@@ -12,6 +14,8 @@ on:
       - "poetry.lock"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 0"
 
 permissions:
   contents: read
@@ -27,23 +31,60 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install Poetry
         run: pipx install poetry
       - name: Install documentation dependencies
-        run: poetry install --with docs --no-root
+        run: poetry install --with docs
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Validate documentation assets
         run: poetry run pytest tests/test_docs.py -o addopts=
-      - name: Build documentation
-        run: poetry run sphinx-build -E -W --keep-going -b html docs docs/_build/html
+      - name: Build strict current documentation
+        run: poetry run sphinx-build -E -W -b html docs docs/_build/strict
+      - name: Build versioned documentation
+        # The PyData version switcher is resolved against the previously
+        # published Pages artifact.  The post-processing step below writes the
+        # new switcher after all refs have been built, so this matrix build is
+        # intentionally warning-tolerant while the current build above stays
+        # strict.
+        run: FRAUDTWIN_VERSIONED_BUILD=1 poetry run sphinx-multiversion -E docs docs/_build/html
+      - name: Prepare versioned Pages site
+        run: poetry run python docs/prepare_site.py docs/_build/html
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs/_build/html
+
+  examples:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install project
+        run: pipx install poetry && poetry install
+      - name: Execute representative documentation example
+        run: poetry run pytest tests/test_docs_examples.py -o addopts=
+
+  linkcheck:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install documentation dependencies
+        run: pipx install poetry && poetry install --with docs
+      - name: Check external documentation links
+        run: poetry run sphinx-build -E -b linkcheck docs docs/_build/linkcheck
 
   deploy:
     needs: build
