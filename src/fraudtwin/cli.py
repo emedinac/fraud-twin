@@ -15,6 +15,7 @@ from fraudtwin.benchmark import (
     load_public_pack,
     run_benchmark,
     run_public_benchmark,
+    verify_public_benchmark,
 )
 from fraudtwin.calibration import (
     fit_calibration_profile,
@@ -575,6 +576,24 @@ def benchmark_pack_describe(
         typer.echo(f"Public benchmark lookup failed: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(json.dumps(pack.model_dump(mode="json"), indent=2, sort_keys=True))
+
+
+@benchmark_app.command("verify")
+def benchmark_pack_verify(
+    run_dir: Annotated[Path, typer.Argument(help="Existing benchmark artifact directory.")],
+    pack_ref: Annotated[
+        str | None, typer.Option("--pack", help="Optional immutable public-pack reference.")
+    ] = None,
+) -> None:
+    """Verify an existing public benchmark artifact without rerunning it."""
+
+    try:
+        result = verify_public_benchmark(run_dir, reference=pack_ref)
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Public benchmark verification failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Public benchmark verified: {result['benchmark_id']}")
+    typer.echo(f"Pack: {result['pack']}")
 
 
 def _load_or_exit(

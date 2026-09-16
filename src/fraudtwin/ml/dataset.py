@@ -236,6 +236,7 @@ def _merge_records(
     *,
     identifier: str | None = None,
     prefer_additions: bool = False,
+    prefer_existing: bool = False,
 ) -> tuple[T, ...]:
     """Merge sidecar records in stable order, optionally overlaying updates."""
 
@@ -256,6 +257,17 @@ def _merge_records(
             if str(getattr(record, identifier)) not in existing_ids
         )
         return tuple(overlay)
+    if prefer_existing and identifier is not None:
+        existing_ids = {str(getattr(record, identifier)) for record in existing}
+        return _merge_records(
+            existing,
+            tuple(
+                record
+                for record in additions
+                if str(getattr(record, identifier)) not in existing_ids
+            ),
+            identifier=identifier,
+        )
     if identifier is not None:
         return _deduplicate((*existing, *additions), identifier)
     seen: set[str] = set()
@@ -578,12 +590,20 @@ def load_generated_run(
         )
         behavior = replace(
             behavior,
-            payments=_merge_records(behavior.payments, dynamic_payments, identifier="payment_id"),
+            payments=_merge_records(
+                behavior.payments,
+                dynamic_payments,
+                identifier="payment_id",
+                prefer_existing=True,
+            ),
             payment_events=_merge_records(
-                behavior.payment_events, dynamic_events, identifier="event_id"
+                behavior.payment_events, dynamic_events, identifier="event_id", prefer_existing=True
             ),
             ledger_entries=_merge_records(
-                behavior.ledger_entries, dynamic_entries, identifier="ledger_entry_id"
+                behavior.ledger_entries,
+                dynamic_entries,
+                identifier="ledger_entry_id",
+                prefer_existing=True,
             ),
             graph_memberships=_merge_records(
                 behavior.graph_memberships, dynamic_memberships, prefer_additions=True

@@ -348,9 +348,14 @@ def _correctness_metrics(pack_results: tuple[_NativePackResult, ...]) -> tuple[Q
             ledger.append(True)
             for payment in behavior.payments:
                 events = tuple(
-                    event
-                    for event in behavior.payment_events
-                    if event.payment_id == payment.payment_id
+                    sorted(
+                        (
+                            event
+                            for event in behavior.payment_events
+                            if event.payment_id == payment.payment_id
+                        ),
+                        key=lambda event: event.event_time,
+                    )
                 )
                 validate_payment_lifecycle(payment, events)
             temporal.append(True)

@@ -6,7 +6,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from fraudtwin.benchmark import list_public_packs, load_public_pack, run_public_benchmark
+from fraudtwin.benchmark import (
+    list_public_packs,
+    load_public_pack,
+    run_public_benchmark,
+    verify_public_benchmark,
+)
 from fraudtwin.cli import app
 
 PACK_IDS = (
@@ -36,6 +41,10 @@ def test_m21_pack_runs_match_frozen_goldens(pack_id: str, tmp_path: Path) -> Non
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     assert manifest["public_pack"]["identity"] == f"{pack_id}@1.0.0"
     assert manifest["public_pack"]["verification"]["descriptors_match"] is True
+    if pack_id == "FT-B04-CAMOUFLAGE":
+        row = result.results[0]
+        assert row["pr_auc"] is not None
+        assert row["f1"] is not None
 
 
 def test_m21_repeated_executions_are_identical(tmp_path: Path) -> None:
@@ -70,6 +79,24 @@ def test_m21_cli_describe_and_legacy_generic_command(tmp_path: Path) -> None:
     )
     assert generic.exit_code == 0, generic.stdout
     assert "Benchmark generated:" in generic.stdout
+
+
+def test_m21_verifies_existing_artifact_and_rejects_tampered_descriptors(
+    tmp_path: Path,
+) -> None:
+    result = run_public_benchmark("FT-B01-STABLE@1.0.0", output_dir=tmp_path / "run")
+    verified = verify_public_benchmark(result.root)
+    assert verified["descriptors_match"] is True
+
+    descriptors = json.loads(result.descriptors_path.read_text(encoding="utf-8"))
+    descriptors["baseline"]["fraud_prevalence"] = -1.0
+    result.descriptors_path.write_text(json.dumps(descriptors), encoding="utf-8")
+    with pytest.raises(ValueError, match="descriptors differ"):
+        verify_public_benchmark(result.root)
+
+    runner = CliRunner()
+    checked = runner.invoke(app, ["benchmark", "verify", str(result.root)])
+    assert checked.exit_code == 1
 
 
 def test_m21_rejects_unknown_pack_reference() -> None:

@@ -73,6 +73,7 @@ commands:
 ```bash
 fraudtwin benchmark run FT-B04-CAMOUFLAGE@1.0
 fraudtwin benchmark describe FT-B04-CAMOUFLAGE@1.0.0
+fraudtwin benchmark verify runs/benchmarks/BM-<id>
 ```
 
 These bundled definitions verify generator compatibility and logical output

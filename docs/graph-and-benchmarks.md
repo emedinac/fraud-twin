@@ -103,7 +103,9 @@ dependencies remain outside FraudTwin's core installation.
 Each benchmark manifest records the generator and suite versions, seed,
 scenario mix, resolved stress controls, calibration identity, label-observation
 policy, temporal ranges, ground-truth availability rules, model lineage, and
-output fingerprints.
+output fingerprints. Model scoring uses the isolated synthetic truth as its
+complete target while keeping the PIT feature set observable; operational label
+observations remain delayed and incomplete in the generated dataset.
 
 ## Run an immutable public benchmark pack
 
@@ -114,11 +116,13 @@ are frozen in the installed package:
 ```bash
 fraudtwin benchmark run FT-B04-CAMOUFLAGE@1.0
 fraudtwin benchmark describe FT-B04-CAMOUFLAGE@1.0.0
+fraudtwin benchmark verify runs/benchmarks/BM-<id>
 ```
 
 The shorthand `@1.0` is accepted only when it resolves to one patch version.
 Pack runs reject incompatible FraudTwin versions, altered definitions, and
-logical output drift. Released definitions are never edited or removed; a
+logical output drift. `benchmark verify` checks an existing artifact without
+rerunning it. Released definitions are never edited or removed; a
 change to seeds, scenarios, splits, metrics, label policy, or calibration
 creates a new pack version, while prior versions remain runnable.
 

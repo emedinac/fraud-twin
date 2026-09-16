@@ -7,6 +7,7 @@ the M19 prediction contract.
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import platform
@@ -24,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from fraudtwin import __version__
 from fraudtwin.config import SimulationRunConfig, config_hash
+from fraudtwin.domain import validate_ledger, validate_payment_lifecycle
 from fraudtwin.generation import GeneratedData, GeneratedRun, generate
 from fraudtwin.ml import (
     ALL_MODEL_NAMES,
@@ -32,6 +34,7 @@ from fraudtwin.ml import (
     PredictionRecord,
     evaluate_predictions,
     heuristic_predictions,
+    load_generated_run,
     train_baselines,
     write_evaluation,
 )
@@ -487,6 +490,27 @@ def _load_rows(dataset_path: Path) -> list[dict[str, Any]]:
     return pl.read_parquet(dataset_path).to_dicts()
 
 
+def _benchmark_rows(rows: Sequence[dict[str, Any]], behavior: Any) -> list[dict[str, Any]]:
+    """Attach the complete synthetic target used by benchmark model scoring.
+
+    Operational label observations are intentionally incomplete and delayed.
+    A frozen synthetic benchmark nevertheless needs both classes in its scoring
+    target, so evaluation uses the isolated generator truth while keeping all
+    model features observable.
+    """
+
+    fraud_payment_ids = {
+        record.payment_id for record in behavior.fraud_records if record.fraud_truth
+    }
+    return [
+        row
+        | {
+            "label": "FRAUD" if row["payment_id"] in fraud_payment_ids else "LEGITIMATE",
+        }
+        for row in rows
+    ]
+
+
 def _load_runner(reference: str) -> BenchmarkModelRunner:
     if ":" not in reference:
         raise ValueError("runner must use module:factory notation")
@@ -712,7 +736,7 @@ def _run_one(
     dataset_path = generated.dataset_path
     if dataset_path is None:
         raise ValueError("benchmark generation did not emit a PIT dataset")
-    rows = _load_rows(dataset_path)
+    rows = _benchmark_rows(_load_rows(dataset_path), in_memory.behavior)
     manifest = generated.manifest.model_dump(mode="json")
     dataset_manifest_values: dict[str, Any] = {}
     if generated.dataset_manifest_path is not None:
@@ -776,6 +800,7 @@ def _run_one(
             "dataset": dataset_manifest_values.get("output_fingerprint"),
         },
         "logical_fingerprints": _logical_fingerprints(in_memory, dataset_manifest_values),
+        "evaluation_label_policy": "synthetic_oracle_truth_with_observable_features",
     }
     return (
         evaluated,
@@ -1042,6 +1067,138 @@ def run_public_benchmark(
     return result
 
 
+def verify_public_benchmark(run_dir: Path, *, reference: str | None = None) -> dict[str, Any]:
+    """Verify an existing public benchmark artifact without regenerating it."""
+
+    manifest_path = run_dir / "benchmark_manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid benchmark manifest in {run_dir}") from exc
+    public_pack = manifest.get("public_pack")
+    if not isinstance(public_pack, dict):
+        raise ValueError("benchmark artifact has no public-pack verification metadata")
+    identity = reference or public_pack.get("identity")
+    if not isinstance(identity, str):
+        raise ValueError("benchmark artifact does not identify a public pack")
+    pack = load_public_pack(identity)
+    if public_pack.get("identity") != pack.identity:
+        raise ValueError("benchmark artifact public-pack identity differs from its definition")
+    if public_pack.get("definition_fingerprint") != pack.fingerprint:
+        raise ValueError("benchmark artifact public-pack definition fingerprint mismatch")
+    if public_pack.get("generator_compatibility") != pack.generator_compatibility:
+        raise ValueError("benchmark artifact generator compatibility differs from its definition")
+    if (
+        manifest.get("suite") != pack.suite
+        or manifest.get("difficulty") != pack.difficulty
+        or manifest.get("seed") != pack.seed
+    ):
+        raise ValueError("benchmark artifact run parameters differ from the released definition")
+    if not _pack_supports_generator(pack):
+        raise ValueError(
+            f"{pack.identity} is incompatible with FraudTwin {__version__} "
+            f"(requires {pack.generator_compatibility})"
+        )
+
+    suite_metadata = manifest.get("suites", {}).get(pack.suite)
+    if not isinstance(suite_metadata, dict):
+        raise ValueError(f"benchmark artifact is missing suite metadata: {pack.suite}")
+
+    def artifact_path(relative: object, label: str) -> Path:
+        if not isinstance(relative, str) or not relative:
+            raise ValueError(f"benchmark artifact is missing {label}")
+        root = run_dir.resolve()
+        path = (run_dir / relative).resolve()
+        try:
+            path.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(f"benchmark artifact {label} must remain inside its root") from exc
+        return path
+
+    descriptor_path = artifact_path(manifest.get("descriptors"), "descriptors")
+    try:
+        descriptors = json.loads(descriptor_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid benchmark descriptors: {descriptor_path}") from exc
+    if descriptors.get(pack.suite) != pack.expected_descriptors:
+        raise ValueError(
+            f"{pack.identity} generator descriptors differ from the released definition"
+        )
+
+    catalog = suite_metadata.get("catalog")
+    if not isinstance(catalog, dict):
+        raise ValueError("benchmark artifact is missing suite catalog")
+    source_run_dir = artifact_path(catalog.get("run_dir"), "source run")
+    entities, behavior, source_manifest = load_generated_run(source_run_dir)
+    for relative, expected in source_manifest.file_checksums.items():
+        path = source_run_dir / relative
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            raise ValueError(f"generated source checksum mismatch: {relative}")
+    dataset_path = artifact_path(catalog.get("dataset"), "dataset")
+    if not dataset_path.is_file():
+        raise ValueError(f"benchmark dataset does not exist: {dataset_path}")
+    dataset_manifest_path = artifact_path(catalog.get("dataset_manifest"), "dataset manifest")
+    dataset_manifest = json.loads(dataset_manifest_path.read_text(encoding="utf-8"))
+    if not dataset_manifest.get("output_fingerprint"):
+        raise ValueError("benchmark dataset manifest has no output fingerprint")
+    if source_manifest.model_dump(mode="json") != suite_metadata.get("manifest"):
+        raise ValueError("generated source manifest differs from the benchmark record")
+    validate_ledger(
+        entities.accounts,
+        behavior.payments,
+        behavior.payment_events,
+        behavior.ledger_entries,
+    )
+    for payment in behavior.payments:
+        validate_payment_lifecycle(
+            payment,
+            tuple(
+                sorted(
+                    (
+                        event
+                        for event in behavior.payment_events
+                        if event.payment_id == payment.payment_id
+                    ),
+                    key=lambda event: event.event_time,
+                )
+            ),
+        )
+    actual_fingerprints = suite_metadata.get("logical_fingerprints", {})
+    if actual_fingerprints != pack.expected_fingerprints:
+        raise ValueError(
+            f"{pack.identity} logical fingerprint mismatch: "
+            f"expected {pack.expected_fingerprints!r}, got {actual_fingerprints!r}"
+        )
+
+    results_path = artifact_path(manifest.get("results"), "results")
+    try:
+        results = (
+            pl.read_parquet(results_path).to_dicts()
+            if results_path.suffix == ".parquet"
+            else json.loads(results_path.read_text(encoding="utf-8"))
+        )
+    except (FileNotFoundError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid benchmark results: {results_path}") from exc
+    if sha256_json({"rows": results, "descriptors": descriptors}) != manifest.get(
+        "output_fingerprint"
+    ):
+        raise ValueError("benchmark result fingerprint mismatch")
+    verification = public_pack.get("verification", {})
+    if (
+        not isinstance(verification, dict)
+        or verification.get("configuration_hash") != pack.resolved_configuration_hash
+        or verification.get("logical_fingerprints") != actual_fingerprints
+    ):
+        raise ValueError("benchmark artifact verification metadata is stale")
+    return {
+        "benchmark_id": manifest.get("benchmark_id"),
+        "pack": pack.identity,
+        "suite": pack.suite,
+        "logical_fingerprints": actual_fingerprints,
+        "descriptors_match": True,
+    }
+
+
 __all__ = [
     "BenchmarkModelRunner",
     "BenchmarkRequest",
@@ -1055,5 +1212,6 @@ __all__ = [
     "list_public_packs",
     "load_public_pack",
     "run_public_benchmark",
+    "verify_public_benchmark",
     "run_benchmark",
 ]
