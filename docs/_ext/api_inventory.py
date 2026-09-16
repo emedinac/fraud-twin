@@ -8,41 +8,45 @@ from typing import Any
 from docutils.parsers.rst import Directive
 
 PUBLIC_MODULES = tuple(
-    sorted((
-        "fraudtwin.benchmark",
-        "fraudtwin.calibration",
-        "fraudtwin.camouflage",
-        "fraudtwin.campaign_dynamics",
-        "fraudtwin.config",
-        "fraudtwin.contracts",
-        "fraudtwin.contracts.registry",
-        "fraudtwin.counterfactual",
-        "fraudtwin.difficulty",
-        "fraudtwin.domain.campaign_dynamics",
-        "fraudtwin.domain.cases",
-        "fraudtwin.domain.graph",
-        "fraudtwin.domain.labels",
-        "fraudtwin.domain",
-        "fraudtwin.generation",
-        "fraudtwin.graph",
-        "fraudtwin.kafka",
-        "fraudtwin.label_observation",
-        "fraudtwin.lakehouse",
-        "fraudtwin.ml",
-        "fraudtwin.ml.backtest",
-        "fraudtwin.ml.baseline",
-        "fraudtwin.ml.dataset",
-        "fraudtwin.observability",
-        "fraudtwin.postgres",
-        "fraudtwin.quality_benchmark",
-        "fraudtwin.replay",
-        "fraudtwin.scale",
-        "fraudtwin.simulation.cases",
-        "fraudtwin.simulation.graph_fraud",
-        "fraudtwin.simulation.graph_planner",
-        "fraudtwin.simulation",
-        "fraudtwin.storage",
-    ))
+    sorted(
+        (
+            "fraudtwin.benchmark",
+            "fraudtwin.calibration",
+            "fraudtwin.camouflage",
+            "fraudtwin.campaign_dynamics",
+            "fraudtwin.config",
+            "fraudtwin.contracts",
+            "fraudtwin.contracts.registry",
+            "fraudtwin.counterfactual",
+            "fraudtwin.difficulty",
+            "fraudtwin.domain.campaign_dynamics",
+            "fraudtwin.domain.cases",
+            "fraudtwin.domain.graph",
+            "fraudtwin.domain.labels",
+            "fraudtwin.domain",
+            "fraudtwin.generation",
+            "fraudtwin.graph",
+            "fraudtwin.kafka",
+            "fraudtwin.kafka_chaos",
+            "fraudtwin.label_observation",
+            "fraudtwin.lakehouse",
+            "fraudtwin.ml",
+            "fraudtwin.ml.backtest",
+            "fraudtwin.ml.baseline",
+            "fraudtwin.ml.dataset",
+            "fraudtwin.ml.drift",
+            "fraudtwin.observability",
+            "fraudtwin.postgres",
+            "fraudtwin.quality_benchmark",
+            "fraudtwin.replay",
+            "fraudtwin.scale",
+            "fraudtwin.simulation.cases",
+            "fraudtwin.simulation.graph_fraud",
+            "fraudtwin.simulation.graph_planner",
+            "fraudtwin.simulation",
+            "fraudtwin.storage",
+        )
+    )
 )
 
 MODULE_PURPOSES = {
@@ -63,11 +67,13 @@ MODULE_PURPOSES = {
     "fraudtwin.generation": "Deterministic standard and scale run generation.",
     "fraudtwin.graph": "Temporal graph construction, validation, and export.",
     "fraudtwin.kafka": "Optional Kafka publication adapters.",
+    "fraudtwin.kafka_chaos": "Deterministic logical-message delivery fault simulation.",
     "fraudtwin.label_observation": "Label availability and observation histories.",
     "fraudtwin.lakehouse": "Optional Iceberg materialization and verification.",
     "fraudtwin.ml.backtest": "Replay, folds, backtesting, and metrics.",
     "fraudtwin.ml.baseline": "Baseline models and prediction evaluation.",
     "fraudtwin.ml.dataset": "Point-in-time dataset construction.",
+    "fraudtwin.ml.drift": "Deterministic data, domain, and concept drift reports.",
     "fraudtwin.ml": "Point-in-time datasets, replay, and machine-learning evaluation.",
     "fraudtwin.observability": "Optional run metrics and observability sessions.",
     "fraudtwin.postgres": "Optional PostgreSQL persistence adapters.",
@@ -85,11 +91,13 @@ MODULE_STATUSES = {
     "fraudtwin.counterfactual": "Experimental",
     "fraudtwin.difficulty": "Experimental",
     "fraudtwin.kafka": "Optional",
+    "fraudtwin.kafka_chaos": "Experimental",
     "fraudtwin.lakehouse": "Optional",
     "fraudtwin.observability": "Optional",
     "fraudtwin.postgres": "Optional",
     "fraudtwin.quality_benchmark": "Experimental",
     "fraudtwin.scale": "Experimental",
+    "fraudtwin.ml.drift": "Experimental",
 }
 
 
@@ -161,10 +169,12 @@ def _constant_summary(names: list[str]) -> list[str]:
         "     - Reference",
     ]
     for name in names:
-        lines.extend([
-            f"   * - ``{name.rsplit('.', 1)[-1]}``",
-            f"     - :py:data:`{name}`",
-        ])
+        lines.extend(
+            [
+                f"   * - ``{name.rsplit('.', 1)[-1]}``",
+                f"     - :py:data:`{name}`",
+            ]
+        )
     lines.append("")
     return lines
 
@@ -316,11 +326,13 @@ class ApiModuleIndexDirective(Directive):
         ]
         for module in PUBLIC_MODULES:
             purpose = MODULE_PURPOSES.get(module, f"Public API exported by ``{module}``.")
-            lines.extend([
-                f"   * - `{module} <modules/{module}.html>`_",
-                f"     - {purpose}",
-                f"     - {MODULE_STATUSES.get(module, 'Stable')}",
-            ])
+            lines.extend(
+                [
+                    f"   * - `{module} <modules/{module}.html>`_",
+                    f"     - {purpose}",
+                    f"     - {MODULE_STATUSES.get(module, 'Stable')}",
+                ]
+            )
         self.state_machine.insert_input(lines, self.state_machine.document["source"])
         return []
 

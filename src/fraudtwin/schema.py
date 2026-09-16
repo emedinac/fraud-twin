@@ -6,14 +6,16 @@ from typing import Any
 from fraudtwin.config import SchemaChangeConfig
 from fraudtwin.reproducibility import sha256_json
 
-SCHEMA_CHANGE_OPERATIONS = frozenset({
-    "add_optional_field",
-    "rename",
-    "remove_field",
-    "nullability",
-    "enum",
-    "type",
-})
+SCHEMA_CHANGE_OPERATIONS = frozenset(
+    {
+        "add_optional_field",
+        "rename",
+        "remove_field",
+        "nullability",
+        "enum",
+        "type",
+    }
+)
 
 
 class SchemaRegistry:
@@ -154,10 +156,12 @@ def schema_change_metadata(change: SchemaChangeConfig) -> dict[str, object]:
         "change": change.change,
         "compatibility": infer_compatibility(change),
         "effective_version": change.version,
-        "schema_fingerprint": schema_fingerprint({
-            "version": change.version,
-            "operation": operation,
-        }),
+        "schema_fingerprint": schema_fingerprint(
+            {
+                "version": change.version,
+                "operation": operation,
+            }
+        ),
         "migration_metadata": {
             "operation": operation[0] if operation else "version_only",
             "specification": operation[1] if operation else None,

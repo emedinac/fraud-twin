@@ -182,13 +182,13 @@ def apply_camouflage(resolved: ResolvedCamouflage, family: str, scenario: str) -
     family_feature = cast(float, values["feature_camouflage"])
     family_relation = cast(float, values["relation_camouflage"])
     features = {name: family_feature for name in FEATURES}
-    features.update({
-        name: float(value) for name, value in cast(dict[str, float], values["features"]).items()
-    })
+    features.update(
+        {name: float(value) for name, value in cast(dict[str, float], values["features"]).items()}
+    )
     relations = {name: family_relation for name in RELATIONS}
-    relations.update({
-        name: float(value) for name, value in cast(dict[str, float], values["relations"]).items()
-    })
+    relations.update(
+        {name: float(value) for name, value in cast(dict[str, float], values["relations"]).items()}
+    )
     return CamouflagePlan(
         family=family,
         scenario=scenario,
@@ -276,7 +276,7 @@ def _matches_profile(
 
 def _build_relation_support(
     config: SimulationRunConfig,
-    entities: EntityDataset,
+    entities: "EntityDataset",
     records: tuple[FraudRecord, ...],
     legitimate: list[Payment],
     plans_by_record_id: dict[str, CamouflagePlan],
@@ -431,7 +431,7 @@ def _build_relation_support(
 
 def transform_generated_data(
     config: SimulationRunConfig,
-    entities: EntityDataset,
+    entities: "EntityDataset",
     profiles: tuple[BehaviorProfile, ...],
     payments: tuple[Payment, ...],
     events: tuple[PaymentEvent, ...],
@@ -815,16 +815,20 @@ def transform_generated_data(
         "effective_strengths": resolved.resolved_families,
         "constraints": constraints,
         "feasibility_caps": constraints,
-        "schema_fingerprint": sha256_json({
-            "payments": list(Payment.model_fields),
-            "payment_events": list(PaymentEvent.model_fields),
-            "fraud_records": list(FraudRecord.model_fields),
-        }),
-        "output_fingerprint": sha256_json({
-            "payments": [item.model_dump(mode="json") for item in updated_payments],
-            "payment_events": [item.model_dump(mode="json") for item in updated_events],
-            "fraud_records": [item.model_dump(mode="json") for item in updated_records],
-        }),
+        "schema_fingerprint": sha256_json(
+            {
+                "payments": list(Payment.model_fields),
+                "payment_events": list(PaymentEvent.model_fields),
+                "fraud_records": list(FraudRecord.model_fields),
+            }
+        ),
+        "output_fingerprint": sha256_json(
+            {
+                "payments": [item.model_dump(mode="json") for item in updated_payments],
+                "payment_events": [item.model_dump(mode="json") for item in updated_events],
+                "fraud_records": [item.model_dump(mode="json") for item in updated_records],
+            }
+        ),
         "effective_configuration_hash": resolved.effective_configuration_hash,
         "resolver_version": resolved.resolver_version,
         "seed_stream_prefix": "milestone-13",

@@ -63,7 +63,7 @@ class QualityBenchmarkProfile(BaseModel):
     protocol_version: str = "M22-quality-1"
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> QualityBenchmarkProfile:
+    def from_payload(cls, payload: dict[str, Any]) -> "QualityBenchmarkProfile":
         profile = cls.model_validate(payload)
         if profile.scale_size not in SCALE_SIZES:
             raise ValueError(f"unsupported quality benchmark scale: {profile.scale_size}")
@@ -716,12 +716,14 @@ def run_quality_benchmark(
     )
     root = output_dir / (
         "QB-"
-        + sha256_json({
-            "profile": resolved.fingerprint,
-            "adapter": adapter,
-            "bundle": str(bundle),
-            "scale_manifest": str(scale_manifest),
-        })[:16]
+        + sha256_json(
+            {
+                "profile": resolved.fingerprint,
+                "adapter": adapter,
+                "bundle": str(bundle),
+                "scale_manifest": str(scale_manifest),
+            }
+        )[:16]
     )
     root.mkdir(parents=True, exist_ok=False)
     if bundle is not None:
@@ -831,10 +833,12 @@ def report_run(
         }
     report_id = (
         "QR-"
-        + sha256_json({
-            "run_id": run_id,
-            "manifest": manifest.model_dump(mode="json") if manifest else correctness,
-        })[:16]
+        + sha256_json(
+            {
+                "run_id": run_id,
+                "manifest": manifest.model_dump(mode="json") if manifest else correctness,
+            }
+        )[:16]
     )
     destination = output_dir / report_id / "quality_report.json"
     write_json(

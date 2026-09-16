@@ -85,6 +85,13 @@ from fraudtwin.graph import (
     validate_graph_scenarios,
     write_graph,
 )
+from fraudtwin.kafka_chaos import (
+    ChaosEnvelope,
+    KafkaChaosConfig,
+    KafkaChaosOutage,
+    KafkaChaosResult,
+    simulate_delivery,
+)
 from fraudtwin.label_observation import (
     apply_label_observation,
     reconstruct_label_history,
@@ -238,6 +245,11 @@ __all__ = [
     "resolve_label_observation",
     "validate_label_observation",
     "visible_label_at",
+    "ChaosEnvelope",
+    "KafkaChaosConfig",
+    "KafkaChaosOutage",
+    "KafkaChaosResult",
+    "simulate_delivery",
     "DynamicCampaignDataset",
     "evolve_campaigns",
     "register_intensity_model",

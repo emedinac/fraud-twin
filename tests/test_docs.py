@@ -93,7 +93,7 @@ def test_public_module_inventory_writes_every_module_page(tmp_path: Path) -> Non
 def test_all_tutorials_are_valid_notebook_json() -> None:
     notebooks = sorted(Path("docs/tutorials").glob("*.ipynb"))
 
-    assert len(notebooks) == 8
+    assert len(notebooks) == 14
     for notebook in notebooks:
         document = json.loads(notebook.read_text(encoding="utf-8"))
         assert document["nbformat"] >= 4

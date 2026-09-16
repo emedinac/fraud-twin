@@ -1,0 +1,7 @@
+{
+  "report_version": "M29-drift-1",
+  "reference_fingerprint": "e046883e2aef7f0aebca4be6bae3e51d1d63092ae9d884ade370f7e89f5a8b2f",
+  "comparison_fingerprint": "20cbdd2f5abade1291ba683c75d2c238cbb260de14c51f5e6a65cac45b5dbccf",
+  "alert_count": 5,
+  "methods": ["psi", "wasserstein", "jensen_shannon", "fraud_rate_delta"]
+}

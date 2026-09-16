@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -68,3 +69,46 @@ def test_generate_command_writes_manifest(tmp_path: Path) -> None:
     )
     assert ledger_result.exit_code == 0
     assert "Ledger is valid" in ledger_result.stdout
+
+
+def test_kafka_chaos_command_writes_audit_files(tmp_path: Path, monkeypatch) -> None:
+    from fraudtwin import cli
+    from fraudtwin.kafka import PublicationRecord
+
+    moment = datetime(2026, 1, 1, tzinfo=UTC)
+    records = tuple(
+        PublicationRecord(
+            subject="payment-event",
+            topic="fraudsim.payment.events.v1",
+            version="1.0.0",
+            fingerprint="schema",
+            key=f"PAY-{index}",
+            record_id=f"EVT-{index}",
+            observable_time=moment,
+            datum={"event_id": f"EVT-{index}"},
+            value=f"payload-{index}".encode(),
+            headers=(),
+        )
+        for index in range(20)
+    )
+
+    monkeypatch.setattr(cli, "load_generated_run", lambda _: (None, object(), None))
+    monkeypatch.setattr(cli, "publication_records", lambda *_args: records)
+    result = runner.invoke(
+        app,
+        [
+            "kafka",
+            "chaos",
+            "--run-id",
+            "RUN-TEST",
+            "--drop-rate",
+            "0.1",
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    destination = tmp_path / "RUN-TEST" / "kafka-chaos"
+    manifest = json.loads((destination / "manifest.json").read_text())
+    assert manifest["input_count"] == 20
+    assert (destination / "envelopes.jsonl").is_file()

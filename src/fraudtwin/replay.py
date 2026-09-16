@@ -407,18 +407,20 @@ def replay_run(
         "source_run_id": source_manifest.run_id,
     }
     schema_fingerprint = sha256_json(_schema_description())
-    output_fingerprint = sha256_json({
-        "schema": schema_fingerprint,
-        "envelopes": envelopes,
-        "entities": {
-            name: [item.model_dump(mode="json") for item in records]
-            for name, records in selected_entities.all_tables().items()
-        },
-        "records": {
-            name: [item.model_dump(mode="json") for item in records]
-            for name, records in behavior.tables().items()
-        },
-    })
+    output_fingerprint = sha256_json(
+        {
+            "schema": schema_fingerprint,
+            "envelopes": envelopes,
+            "entities": {
+                name: [item.model_dump(mode="json") for item in records]
+                for name, records in selected_entities.all_tables().items()
+            },
+            "records": {
+                name: [item.model_dump(mode="json") for item in records]
+                for name, records in behavior.tables().items()
+            },
+        }
+    )
     replay_id = "RPL-" + sha256_json({"source": source_hash, "parameters": parameters})[:16]
     manifest = ReplayManifest(
         replay_id=replay_id,

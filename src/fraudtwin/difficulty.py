@@ -285,8 +285,8 @@ def _schema_tables(tables: Mapping[str, tuple[BaseModel, ...]]) -> dict[str, lis
 
 def difficulty_metadata(
     config: SimulationRunConfig,
-    entities: EntityDataset,
-    behavior: BehaviorDataset,
+    entities: "EntityDataset",
+    behavior: "BehaviorDataset",
     run_id: str,
 ) -> dict[str, object]:
     """Build reproducibility and measured-output metadata for an active run."""
@@ -337,10 +337,12 @@ def difficulty_metadata(
         "graph_evidence_count": len(behavior.graph_evidence),
         "graph_hyperedge_count": len(behavior.graph_hyperedges),
     }
-    schema_fingerprint = sha256_json({
-        "entities": _schema_tables(entity_tables),
-        "behavior": _schema_tables(behavior_tables),
-    })
+    schema_fingerprint = sha256_json(
+        {
+            "entities": _schema_tables(entity_tables),
+            "behavior": _schema_tables(behavior_tables),
+        }
+    )
     return {
         "requested_difficulty": resolved.requested_difficulty,
         "requested_controls": resolved.requested_controls,

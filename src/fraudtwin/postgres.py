@@ -368,13 +368,15 @@ def persist_scale_records(
                     payload = json.dumps(row, sort_keys=True, separators=(",", ":"), default=str)
                     digest.update(payload.encode())
                     counts[logical_type] = counts.get(logical_type, 0) + 1
-                    batch.append((
-                        run_id,
-                        logical_type,
-                        logical_id,
-                        row.get("partition_id"),
-                        payload,
-                    ))
+                    batch.append(
+                        (
+                            run_id,
+                            logical_type,
+                            logical_id,
+                            row.get("partition_id"),
+                            payload,
+                        )
+                    )
                     if len(batch) >= batch_size:
                         flush()
                 flush()

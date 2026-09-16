@@ -61,7 +61,7 @@ class CalibrationModel(Protocol):
     deterministic: bool
     compatibility: Mapping[str, str]
 
-    def fit(self, reference: ReferenceDataset, seed: int) -> tuple[StatisticalSummary, ...]: ...
+    def fit(self, reference: "ReferenceDataset", seed: int) -> tuple["StatisticalSummary", ...]: ...
 
 
 class CalibrationMetric(Protocol):
@@ -72,7 +72,7 @@ class CalibrationMetric(Protocol):
     required_fields: tuple[str, ...]
     deterministic: bool
 
-    def score(self, reference: ReferenceDataset, generated: Mapping[str, object]) -> float: ...
+    def score(self, reference: "ReferenceDataset", generated: Mapping[str, object]) -> float: ...
 
 
 Scalar = str | int | float | bool | None
@@ -91,7 +91,7 @@ class StatisticalSummary(BaseModel):
     fingerprint: str = ""
 
     @model_validator(mode="after")
-    def fingerprint_is_stable(self) -> StatisticalSummary:
+    def fingerprint_is_stable(self) -> "StatisticalSummary":
         def freeze(value: Any) -> Any:
             if isinstance(value, list | tuple):
                 return tuple(freeze(item) for item in value)
@@ -112,13 +112,15 @@ class StatisticalSummary(BaseModel):
 
         if not finite(self.parameters):
             raise ValueError("statistical summary parameters must be finite")
-        expected = sha256_json({
-            "name": self.name,
-            "version": self.version,
-            "available": self.available,
-            "fields": self.fields,
-            "parameters": self.parameters,
-        })
+        expected = sha256_json(
+            {
+                "name": self.name,
+                "version": self.version,
+                "available": self.available,
+                "fields": self.fields,
+                "parameters": self.parameters,
+            }
+        )
         if self.fingerprint and self.fingerprint != expected:
             raise ValueError("statistical summary fingerprint does not match its contents")
         object.__setattr__(self, "fingerprint", expected)
@@ -193,7 +195,7 @@ class CalibrationProfile(BaseModel):
     dependencies: tuple[FeatureDependency, ...] = ()
 
     @model_validator(mode="after")
-    def validate_profile(self) -> CalibrationProfile:
+    def validate_profile(self) -> "CalibrationProfile":
         names = [summary.name for summary in self.summaries]
         if len(names) != len(set(names)):
             raise ValueError("calibration summary names must be unique")
@@ -241,7 +243,7 @@ class FidelityReport(BaseModel):
     report_fingerprint: str = ""
 
     @model_validator(mode="after")
-    def fingerprint_is_stable(self) -> FidelityReport:
+    def fingerprint_is_stable(self) -> "FidelityReport":
         payload = self.model_dump(mode="json", exclude={"report_fingerprint"})
         object.__setattr__(self, "report_fingerprint", sha256_json(payload))
         return self

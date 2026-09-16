@@ -145,6 +145,24 @@ process restarts remain at-least-once, so consumers deduplicate using the stable
 record ID header. `simulation.speed` controls publication pacing (`batch`,
 real-time, or accelerated); it never changes generated domain content.
 
+### Exercise delivery failures deterministically
+
+The logical-message chaos harness is useful before a broker is available and for
+repeatable integration tests. It preserves payloads and event identity while
+injecting drops, retries, duplicates, delays, reordering, partition skew, and
+outage behavior. It models delivery semantics—not raw TCP packet loss:
+
+```bash
+fraudtwin kafka chaos --run-id <run-id> --boundary producer \
+  --drop-rate 0.02 --duplicate-rate 0.03 --retry-rate 0.05 \
+  --delay-seconds 30 --reorder-window 100 --output-dir runs
+```
+
+The command writes `kafka-chaos/manifest.json` and `envelopes.jsonl` beside the
+run. Review sent, emitted, dropped, retried, duplicated, late, reordered, and
+deduplicated counts, partition counts, and input/output fingerprints. Use
+`boundary=consumer` to exercise downstream at-least-once handling.
+
 ## Validate Avro operational contracts
 
 Milestone 24 ships a source-controlled Avro registry for the clean observable

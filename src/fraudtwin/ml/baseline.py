@@ -113,6 +113,18 @@ def _tracking_metadata(config: BaselineEvaluationConfig) -> dict[str, str | bool
 
 
 def load_baseline_config(path: Path) -> BaselineEvaluationConfig:
+    """Load and validate a baseline-model YAML policy.
+
+    Args:
+        path: YAML file containing model names, thresholds, and tracking options.
+
+    Returns:
+        An immutable :class:`BaselineEvaluationConfig`.
+
+    Raises:
+        FileNotFoundError: If ``path`` does not exist.
+        ValueError: If the YAML root or any option is invalid.
+    """
     import yaml
 
     if not path.is_file():
@@ -239,11 +251,66 @@ def load_predictions(path: Path) -> tuple[PredictionRecord, ...]:
 
 
 def write_predictions(predictions: Iterable[PredictionRecord], path: Path) -> Path:
+    """Write canonical external predictions as a typed Parquet file.
+
+    Args:
+        predictions: Point-in-time scores keyed by exactly one target ID.
+        path: Destination path; parent directories are created as needed.
+
+    Returns:
+        The destination ``path``.
+    """
     rows = [item.model_dump(mode="python") for item in predictions]
     frame = pl.DataFrame(rows, schema=PREDICTION_SCHEMA, orient="row")
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.write_parquet(path)
     return path
+
+
+def load_model_artifact(path: Path) -> dict[str, Any]:
+    """Load and validate a persisted baseline artifact once for reuse."""
+
+    if not path.is_file():
+        raise FileNotFoundError(f"model artifact does not exist: {path}")
+    try:
+        import joblib
+    except ImportError as exc:  # pragma: no cover - optional ML dependency
+        raise RuntimeError("model scoring requires the optional 'ml' dependency") from exc
+    artifact = joblib.load(path)
+    if not isinstance(artifact, dict) or "model" not in artifact:
+        raise ValueError("model artifact must contain a model and preprocessing categories")
+    return artifact
+
+
+def score_loaded_model(
+    artifact: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]
+) -> tuple[float, ...]:
+    """Score rows with an already-loaded baseline artifact."""
+
+    matrix, _ = _matrix(rows, artifact.get("categories"))
+    try:
+        return tuple(float(value) for value in artifact["model"].predict_proba(matrix)[:, 1])
+    except (AttributeError, IndexError, TypeError, ValueError) as exc:
+        raise ValueError("model artifact does not expose a binary predict_proba interface") from exc
+
+
+def score_model_artifact(path: Path, rows: Sequence[Mapping[str, Any]]) -> tuple[float, ...]:
+    """Score feature rows with a persisted FraudTwin baseline artifact.
+
+    Args:
+        path: ``.joblib`` artifact written under an evaluation ``models`` directory.
+        rows: PIT-shaped feature mappings. Missing numeric values use the same
+            deterministic zero policy used during training.
+
+    Returns:
+        Fraud probabilities in input order.
+
+    Raises:
+        FileNotFoundError: If the artifact path is missing.
+        RuntimeError: If joblib is not installed.
+        ValueError: If the artifact does not contain a compatible model.
+    """
+    return score_loaded_model(load_model_artifact(path), rows)
 
 
 def _utc(value: Any) -> datetime:
@@ -672,6 +739,21 @@ def evaluate_predictions(
     model_id: str = "external",
     source_run_dir: Path | None = None,
 ) -> EvaluationResult:
+    """Evaluate external scores against a leakage-safe dataset.
+
+    Args:
+        rows: PIT rows containing split and label columns.
+        predictions: Scores keyed by the row's event, payment, customer, or account ID.
+        config: Threshold and metric policy.
+        model_id: Stable name recorded in metrics and lineage.
+        source_run_dir: Optional run directory used to enrich lineage metadata.
+
+    Returns:
+        Predictions, partition/segment metrics, and a reproducibility manifest.
+
+    Raises:
+        ValueError: If predictions do not resolve one-to-one to PIT rows.
+    """
     if not predictions:
         raise ValueError("at least one prediction is required")
     # Re-validate records at the evaluation boundary so callers using the typed
@@ -780,6 +862,20 @@ def train_baselines(
     *,
     source_run_dir: Path | None = None,
 ) -> EvaluationResult:
+    """Train configured deterministic baselines on train rows only.
+
+    Args:
+        rows: PIT rows with ``train``, ``validation``, and ``test`` splits.
+        config: Model list and evaluation policy.
+        source_run_dir: Optional source run used for lineage metadata.
+
+    Returns:
+        Evaluation results and in-memory model artifacts for optional models.
+
+    Raises:
+        ValueError: If train/validation partitions or both classes are missing.
+        RuntimeError: If an optional model dependency is unavailable.
+    """
     labelled = _labelled(rows)
     train = [row for row in labelled if row.get("split") == "train"]
     validation = [row for row in labelled if row.get("split") == "validation"]
@@ -864,6 +960,20 @@ def train_baselines(
 
 
 def write_evaluation(result: EvaluationResult, output_dir: Path) -> tuple[Path, Path, Path]:
+    """Persist predictions, metrics, model artifacts, and the evaluation manifest.
+
+    Args:
+        result: Output returned by :func:`train_baselines` or
+            :func:`evaluate_predictions`.
+        output_dir: New directory for the immutable evaluation artifacts.
+
+    Returns:
+        Paths to predictions, metrics, and manifest files.
+
+    Raises:
+        FileExistsError: If ``output_dir`` already exists.
+        RuntimeError: If MLflow tracking is requested but not installed.
+    """
     output_dir.mkdir(parents=True, exist_ok=False)
     predictions_path = output_dir / "predictions.parquet"
     metrics_path = output_dir / "metrics.jsonl"
@@ -918,6 +1028,9 @@ __all__ = [
     "load_baseline_config",
     "load_predictions",
     "write_predictions",
+    "score_model_artifact",
+    "load_model_artifact",
+    "score_loaded_model",
     "evaluate_predictions",
     "heuristic_predictions",
     "train_baselines",

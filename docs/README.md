@@ -21,15 +21,27 @@ FraudTwin is a deterministic synthetic payment world for fraud detection, graph 
 - [Stress-Test Fraud Scenarios](tutorials/06-stress-test-fraud-scenarios.ipynb) - replay runs, inspect graphs, increase difficulty, and test counterfactuals.
 - [Build a Simple Fraud Scoring Model](tutorials/07-train-a-simple-fraud-model.ipynb) - score point-in-time features with a transparent formula.
 - [Build a Reproducible Fraud Benchmark](tutorials/08-build-a-reproducible-fraud-benchmark.ipynb) - connect counterfactuals, campaigns, calibration, label observation, scale planning, and evaluation.
+- [From 10k Payments to a Leakage-Safe Fraud Model](tutorials/09-10k-payments-to-fraud-model.ipynb) - train baselines and report the source-payment to ML-row mapping.
+- [Promote and Serve the Model](tutorials/10-stress-drift-and-camouflage.ipynb) - validate a model hand-off with typed HTTP requests and parity checks.
+- [Detect Data, Domain, and Concept Shift](tutorials/11-checkpoint-resume-scale.ipynb) - quantify drift and compare matured-label performance.
+- [Kafka Reliability and Event-Time Correctness](tutorials/12-avro-kafka-stream.ipynb) - inject logical delivery faults and verify recovery.
+- [Data-Quality Incident Response and Replay](tutorials/13-operational-lakehouse-observability.ipynb) - diagnose hostile inputs and repair projections.
+- [Operational Lakehouse and Observability](tutorials/14-lakehouse-observability.ipynb) - connect PostgreSQL, Kafka, Iceberg, and metrics.
 
 ## Guides and concepts
 
 - [Configuration](configuration.md) - control populations, behavior, payment rails, fraud, labels, calibration, scale, and campaign dynamics.
 - [Data and evaluation workflows](workflows.md) - build point-in-time datasets, replay runs, backtest models, and evaluate predictions.
+- [Model lifecycle](model-lifecycle.md) - move from a generated run to tracked artifacts and online scoring.
+- [Production serving](production-serving.md) - run and validate the optional FastAPI reference service.
+- [Drift and shift](drift-and-shift.md) - distinguish data, domain, concept, and performance drift.
+- [Kafka reliability](kafka-reliability.md) - exercise logical-message loss, retries, duplicates, delays, and reordering.
+- [Data-quality incidents](data-quality-incidents.md) - inject faults, replay windows, and repair projections.
 - [Graph and benchmark workflows](graph-and-benchmarks.md) - export observable and oracle graph views and compare stress levels.
 - [Concepts](concepts.md) - understand determinism, lifecycle events, labels, graph provenance, and quality faults.
 - [Troubleshooting](troubleshooting.md) - resolve installation, configuration, optional dependency, graph, and scale issues.
 - [Migration guides](migration.md) - check compatibility boundaries when moving between releases.
+- [Compatibility and support policy](compatibility.md) - understand stable, optional, and experimental surfaces before upgrading.
 - [v2.0.0 release-readiness roadmap](release-readiness.md) - M18 scale gates and deferred platform integrations.
 
 ## Package Reference

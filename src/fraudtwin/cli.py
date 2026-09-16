@@ -28,6 +28,8 @@ from fraudtwin.generation import generate as generate_library
 from fraudtwin.generation import generate_scale as generate_scale_library
 from fraudtwin.generation import resume_generation
 from fraudtwin.graph import GraphDataset, build_graph, validate_graph, write_graph
+from fraudtwin.kafka import publication_records
+from fraudtwin.kafka_chaos import KafkaChaosConfig, simulate_delivery
 from fraudtwin.lakehouse import (
     IcebergLakehouse,
     LakehouseConfigurationError,
@@ -82,6 +84,75 @@ schema_app = typer.Typer(help="Validate bundled Avro event contracts.")
 app.add_typer(schema_app, name="schema")
 lakehouse_app = typer.Typer(help="Manage the optional Iceberg lakehouse.")
 app.add_typer(lakehouse_app, name="lakehouse")
+kafka_app = typer.Typer(help="Exercise deterministic Kafka delivery semantics.")
+app.add_typer(kafka_app, name="kafka")
+
+
+@kafka_app.command("chaos")
+def kafka_chaos_command(
+    run_id: Annotated[str, typer.Option("--run-id", help="Existing generated run identifier.")],
+    boundary: Annotated[
+        Literal["producer", "consumer"],
+        typer.Option(
+            "--boundary", help="Inject faults before producer delivery or after consumer receipt."
+        ),
+    ] = "producer",
+    drop_rate: Annotated[float, typer.Option("--drop-rate", min=0, max=1)] = 0.0,
+    duplicate_rate: Annotated[float, typer.Option("--duplicate-rate", min=0, max=1)] = 0.0,
+    retry_rate: Annotated[float, typer.Option("--retry-rate", min=0, max=1)] = 0.0,
+    delay_seconds: Annotated[int, typer.Option("--delay-seconds", min=0)] = 0,
+    reorder_window: Annotated[int, typer.Option("--reorder-window", min=0)] = 0,
+    partition_count: Annotated[int, typer.Option("--partition-count", min=1)] = 3,
+    partition_skew: Annotated[float, typer.Option("--partition-skew", min=0, max=1)] = 0.0,
+    seed: Annotated[int, typer.Option("--seed", min=0)] = 42,
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", help="Directory containing generated runs.")
+    ] = Path("runs"),
+) -> None:
+    """Simulate deterministic logical Kafka faults and write an audit report."""
+
+    try:
+        run_dir = output_dir / run_id
+        _, behavior, _ = load_generated_run(run_dir)
+        records = publication_records(behavior, run_id)
+        result = simulate_delivery(
+            records,
+            KafkaChaosConfig(
+                seed=seed,
+                boundary=boundary,
+                drop_probability=drop_rate,
+                duplicate_probability=duplicate_rate,
+                retry_probability=retry_rate,
+                max_delay_seconds=delay_seconds,
+                reorder_window=reorder_window,
+                partition_count=partition_count,
+                partition_skew_probability=partition_skew,
+            ),
+        )
+        destination = run_dir / "kafka-chaos"
+        destination.mkdir(parents=True, exist_ok=True)
+        manifest_path = destination / "manifest.json"
+        manifest_path.write_text(
+            json.dumps(result.manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        envelopes_path = destination / "envelopes.jsonl"
+        with envelopes_path.open("w", encoding="utf-8") as handle:
+            for envelope in result.envelopes:
+                serialized = envelope.model_dump(mode="python")
+                serialized["payload"] = envelope.payload.hex()
+                handle.write(json.dumps(serialized, default=str, sort_keys=True) + "\n")
+    except (OSError, RuntimeError, ValueError) as exc:
+        typer.echo(f"Kafka chaos simulation failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Kafka chaos report: {manifest_path}")
+    typer.echo(f"Envelopes: {envelopes_path}")
+    typer.echo(
+        "Counts: "
+        f"sent={result.input_count} emitted={result.emitted_count} "
+        f"dropped={result.dropped_count} retried={result.retried_count} "
+        f"duplicated={result.duplicated_count} late={result.late_count} "
+        f"reordered={result.out_of_order_count} deduplicated={result.deduplicated_count}"
+    )
 
 
 @schema_app.command("validate")

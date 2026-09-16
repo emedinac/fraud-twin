@@ -12,16 +12,18 @@ from typing import Any
 
 from fraudtwin.manifest import RunManifest
 
-_INVALID_FAULTS = frozenset({
-    "negative_amount",
-    "invalid_enum",
-    "invalid_reference",
-    "corrupted_timestamp",
-    "timezone_error",
-    "schema_mismatch",
-    "extreme_value",
-    "encoding_error",
-})
+_INVALID_FAULTS = frozenset(
+    {
+        "negative_amount",
+        "invalid_enum",
+        "invalid_reference",
+        "corrupted_timestamp",
+        "timezone_error",
+        "schema_mismatch",
+        "extreme_value",
+        "encoding_error",
+    }
+)
 
 
 class ObservabilityDependencyError(RuntimeError):
