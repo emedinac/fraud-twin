@@ -5,8 +5,6 @@ turns a requested level and optional normalized overrides into explicit,
 auditable parameters consumed by the existing M6 and M11 generators.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, cast
@@ -287,8 +285,8 @@ def _schema_tables(tables: Mapping[str, tuple[BaseModel, ...]]) -> dict[str, lis
 
 def difficulty_metadata(
     config: SimulationRunConfig,
-    entities: EntityDataset,
-    behavior: BehaviorDataset,
+    entities: "EntityDataset",
+    behavior: "BehaviorDataset",
     run_id: str,
 ) -> dict[str, object]:
     """Build reproducibility and measured-output metadata for an active run."""

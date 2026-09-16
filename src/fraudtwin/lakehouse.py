@@ -599,8 +599,7 @@ def _write_immutable_json(path: Path, payload: Mapping[str, Any]) -> None:
     if path.exists():
         if path.read_text(encoding="utf-8") != serialized:
             raise LakehouseConfigurationError(
-                "immutable lakehouse materialization already exists with different content: "
-                f"{path}"
+                f"immutable lakehouse materialization already exists with different content: {path}"
             )
         return
     path.write_text(serialized, encoding="utf-8")

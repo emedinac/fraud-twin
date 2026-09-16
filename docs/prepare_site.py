@@ -1,7 +1,5 @@
 """Prepare a sphinx-multiversion output tree for GitHub Pages."""
 
-from __future__ import annotations
-
 import json
 import shutil
 import sys

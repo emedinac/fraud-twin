@@ -235,7 +235,12 @@ def _base_values(seed: int) -> dict[str, Any]:
     )
     values["payments"]["daily_target"] = 40
     values["fraud"].update(
-        {"enabled": True, "target_rate": 0.12, "scenario_count": 5, "hard_negative_rate": 1.0}
+        {
+            "enabled": True,
+            "target_rate": 0.12,
+            "scenario_count": 5,
+            "hard_negative_rate": 1.0,
+        }
     )
     values["labels"] = {
         "enabled": True,
@@ -246,7 +251,11 @@ def _base_values(seed: int) -> dict[str, Any]:
         "reopening_rate": 0.05,
     }
     values["dataset"].update(
-        {"enabled": True, "unresolved_labels": "include", "label_delay_seconds": 3_600}
+        {
+            "enabled": True,
+            "unresolved_labels": "include",
+            "label_delay_seconds": 3_600,
+        }
     )
     values["outputs"].update({"parquet": True})
     values["quality"] = {"profile": "clean"}

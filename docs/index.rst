@@ -90,6 +90,11 @@ Documentation
 
    configuration
    workflows
+   model-lifecycle
+   production-serving
+   drift-and-shift
+   kafka-reliability
+   data-quality-incidents
    graph-and-benchmarks
    release-readiness
 
@@ -115,6 +120,7 @@ Documentation
    glossary
    troubleshooting
    migration
+   compatibility
    development
    references
 

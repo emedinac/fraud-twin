@@ -1,7 +1,5 @@
 """Focused Milestone 25 native Kafka publication contracts."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

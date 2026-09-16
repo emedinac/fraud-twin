@@ -59,6 +59,11 @@ def test_public_api_inventory_covers_every_export(tmp_path: Path) -> None:
     }
 
 
+def test_public_api_inventory_reports_invalid_package(tmp_path: Path) -> None:
+    with pytest.raises(ModuleNotFoundError, match="fraudtwin.not_a_module"):
+        api_inventory.write_api_stubs(tmp_path / "generated", "fraudtwin.not_a_module")
+
+
 def test_public_module_inventory_writes_every_module_page(tmp_path: Path) -> None:
     import fraudtwin
 
@@ -77,11 +82,18 @@ def test_public_module_inventory_writes_every_module_page(tmp_path: Path) -> Non
     api_inventory.write_module_stubs(output_dir)
     assert {path.stem for path in output_dir.glob("*.rst")} == set(api_inventory.PUBLIC_MODULES)
 
+    module_page = (output_dir / "fraudtwin.ml.rst").read_text(encoding="utf-8")
+    assert ".. _api-module-fraudtwin-ml:" in module_page
+    assert "**Status:** Stable" in module_page
+    assert ".. autosummary::" in module_page
+    assert "fraudtwin.ml.build_point_in_time_dataset" in module_page
+    assert "Detailed API" in module_page
+
 
 def test_all_tutorials_are_valid_notebook_json() -> None:
     notebooks = sorted(Path("docs/tutorials").glob("*.ipynb"))
 
-    assert len(notebooks) == 8
+    assert len(notebooks) == 14
     for notebook in notebooks:
         document = json.loads(notebook.read_text(encoding="utf-8"))
         assert document["nbformat"] >= 4

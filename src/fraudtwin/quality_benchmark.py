@@ -7,8 +7,6 @@ External implementations can either be loaded through a small adapter
 protocol or provide the same normalized artifact bundle on disk.
 """
 
-from __future__ import annotations
-
 import importlib
 import json
 import math
@@ -65,7 +63,7 @@ class QualityBenchmarkProfile(BaseModel):
     protocol_version: str = "M22-quality-1"
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> QualityBenchmarkProfile:
+    def from_payload(cls, payload: dict[str, Any]) -> "QualityBenchmarkProfile":
         profile = cls.model_validate(payload)
         if profile.scale_size not in SCALE_SIZES:
             raise ValueError(f"unsupported quality benchmark scale: {profile.scale_size}")
@@ -140,6 +138,8 @@ class QualityArtifactBundle(BaseModel):
 
 
 class QualityGeneratorAdapter(Protocol):
+    """Protocol implemented by an external generator benchmark adapter."""
+
     metadata: QualityAdapterMetadata
 
     def generate(self, request: QualityAdapterRequest) -> QualityArtifactBundle: ...
@@ -157,6 +157,8 @@ class QualityMetric(BaseModel):
 
 
 class QualityCandidateReport(BaseModel):
+    """Normalized quality dimensions for one generator candidate."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     candidate_id: str
@@ -172,6 +174,8 @@ class QualityCandidateReport(BaseModel):
 
 
 class QualityBenchmarkResult(BaseModel):
+    """Immutable result and artifact location for a quality benchmark run."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     report_id: str

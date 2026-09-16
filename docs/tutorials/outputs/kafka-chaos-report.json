@@ -1,0 +1,18 @@
+{
+  "manifest_version": "M29-kafka-chaos-1",
+  "seed": 7,
+  "counts": {
+    "sent": 5,
+    "acknowledged": 8,
+    "dropped": 1,
+    "retried": 1,
+    "duplicated": 3,
+    "late": 6,
+    "reordered": 2,
+    "deduplicated": 4
+  },
+  "consumer_visible_loss_rate": 0.2,
+  "consumer_visible_duplicate_rate": 0.5,
+  "input_fingerprint": "6576e3cb568b9c9113bbcfa3d6dcd05f01fed497e051fe28aea9651b03d8ec1f",
+  "output_fingerprint": "6f61a42e555f3d3d5fa8035babfe98cb675ab1acb0cdb44d36424d65813e82f6"
+}

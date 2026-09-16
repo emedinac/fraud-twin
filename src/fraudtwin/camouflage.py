@@ -1,7 +1,5 @@
 """Deterministic Milestone 13 camouflage resolution and transformations."""
 
-from __future__ import annotations
-
 import statistics
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -278,7 +276,7 @@ def _matches_profile(
 
 def _build_relation_support(
     config: SimulationRunConfig,
-    entities: EntityDataset,
+    entities: "EntityDataset",
     records: tuple[FraudRecord, ...],
     legitimate: list[Payment],
     plans_by_record_id: dict[str, CamouflagePlan],
@@ -433,7 +431,7 @@ def _build_relation_support(
 
 def transform_generated_data(
     config: SimulationRunConfig,
-    entities: EntityDataset,
+    entities: "EntityDataset",
     profiles: tuple[BehaviorProfile, ...],
     payments: tuple[Payment, ...],
     events: tuple[PaymentEvent, ...],

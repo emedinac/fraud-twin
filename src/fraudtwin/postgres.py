@@ -5,8 +5,6 @@ generation therefore remains dependency-free, while an enabled PostgreSQL
 output receives the same observable records in one transactional write.
 """
 
-from __future__ import annotations
-
 import hashlib
 import json
 import os
@@ -371,7 +369,13 @@ def persist_scale_records(
                     digest.update(payload.encode())
                     counts[logical_type] = counts.get(logical_type, 0) + 1
                     batch.append(
-                        (run_id, logical_type, logical_id, row.get("partition_id"), payload)
+                        (
+                            run_id,
+                            logical_type,
+                            logical_id,
+                            row.get("partition_id"),
+                            payload,
+                        )
                     )
                     if len(batch) >= batch_size:
                         flush()

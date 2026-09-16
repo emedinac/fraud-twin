@@ -143,12 +143,32 @@ _INTENSITY_MODELS: dict[str, IntensityModel] = {
 
 
 def register_transition_model(name: str, model: TransitionModel) -> None:
+    """Register a campaign phase-transition model by stable name.
+
+    Args:
+        name: Non-empty name referenced by campaign-dynamics configuration.
+        model: Callable protocol implementation that chooses the next phase.
+
+    Raises:
+        ValueError: If ``name`` is empty.
+    """
+
     if not name.strip():
         raise ValueError("transition model name must not be empty")
     _TRANSITION_MODELS[name] = model
 
 
 def register_intensity_model(name: str, model: IntensityModel) -> None:
+    """Register a campaign intensity model by stable name.
+
+    Args:
+        name: Non-empty name referenced by campaign-dynamics configuration.
+        model: Callable protocol implementation that computes event intensity.
+
+    Raises:
+        ValueError: If ``name`` is empty.
+    """
+
     if not name.strip():
         raise ValueError("intensity model name must not be empty")
     _INTENSITY_MODELS[name] = model

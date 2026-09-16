@@ -124,7 +124,7 @@ class AvroContractRegistry:
 
         if self.compatibility != "FULL_TRANSITIVE":
             raise ContractValidationError(
-                "registry compatibility must be FULL_TRANSITIVE, " f"got {self.compatibility!r}"
+                f"registry compatibility must be FULL_TRANSITIVE, got {self.compatibility!r}"
             )
         fingerprints: dict[str, str] = {}
         total_versions = 0

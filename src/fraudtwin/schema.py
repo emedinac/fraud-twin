@@ -1,7 +1,5 @@
 """Small, dependency-free schema evolution helpers for the M8 serializer."""
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 from typing import Any
 

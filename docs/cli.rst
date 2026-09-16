@@ -12,6 +12,7 @@ complete version-specific option list.
    $ fraudtwin ml --help
    $ fraudtwin graph --help
    $ fraudtwin benchmark --help
+   $ fraudtwin kafka chaos --help
 
 Generation and validation
 --------------------------
@@ -38,3 +39,41 @@ Analysis and integrations
 See :doc:`workflows` for complete examples of ``ml build-dataset``,
 ``ml backtest``, ``ml train``, ``ml evaluate``, graph export/validation,
 benchmark runs, and optional PostgreSQL, Kafka, and Iceberg sinks.
+
+Kafka chaos
+-----------
+
+``kafka chaos`` transforms a persisted run into deterministic transport
+envelopes. It models logical delivery behavior, not physical packet loss.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Option
+     - Default
+     - Meaning
+   * - ``--run-id``
+     - required
+     - Generated run to publish.
+   * - ``--boundary``
+     - ``producer``
+     - Inject before producer delivery or after consumer receipt.
+   * - ``--drop-rate`` / ``--duplicate-rate`` / ``--retry-rate``
+     - ``0``
+     - Independent seeded fault probabilities.
+   * - ``--delay-seconds``
+     - ``0``
+     - Maximum deterministic delivery delay.
+   * - ``--reorder-window``
+     - ``0``
+     - Shuffle envelopes in bounded windows to model out-of-order delivery.
+   * - ``--partition-count`` / ``--partition-skew``
+     - ``3`` / ``0``
+     - Partition assignment and probability of concentrating keys on partition 0.
+   * - ``--output-dir``
+     - ``runs``
+     - Parent directory containing the generated run.
+
+The command writes ``kafka-chaos/manifest.json`` and a hex-encoded
+``envelopes.jsonl`` audit stream. See :doc:`kafka-reliability` for topic,
+acknowledgement, watermark, and deduplication guidance.

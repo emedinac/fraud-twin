@@ -5,8 +5,6 @@ files through this small adapter.  Local storage is dependency-free; URI-based
 storage imports fsspec lazily and is therefore optional.
 """
 
-from __future__ import annotations
-
 import os
 import shutil
 from dataclasses import dataclass
@@ -49,7 +47,7 @@ class FsspecScaleStorage:
 
     def publish(self, local_root: Path, destination: str | Path | None = None) -> None:
         try:
-            import fsspec  # type: ignore[import-not-found]
+            import fsspec
         except ImportError as exc:  # pragma: no cover - optional extra
             raise RuntimeError(
                 "fsspec scale storage requires the optional 'scale-storage' dependency"

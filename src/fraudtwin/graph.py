@@ -1,7 +1,5 @@
 """Deterministic graph views over one generated FraudTwin run."""
 
-from __future__ import annotations
-
 import csv
 import hashlib
 from collections import defaultdict
@@ -127,6 +125,8 @@ GRAPH_HYPEREDGE_MEMBERSHIP_SCHEMA: dict[str, Any] = {
 
 
 class GraphNode(BaseModel):
+    """Versioned entity node in an observable or oracle graph view."""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node_id: str
@@ -138,6 +138,8 @@ class GraphNode(BaseModel):
 
 
 class GraphEdge(BaseModel):
+    """Time-bounded relationship with provenance back to source events."""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     edge_id: str

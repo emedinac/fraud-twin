@@ -6,8 +6,6 @@ publishes run-level values, and holds the endpoint briefly so a local
 Prometheus instance can scrape the completed batch job.
 """
 
-from __future__ import annotations
-
 import time
 from collections.abc import Mapping
 from typing import Any

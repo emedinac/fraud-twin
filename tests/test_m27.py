@@ -1,7 +1,5 @@
 """Focused Milestone 27 Prometheus metric contracts."""
 
-from __future__ import annotations
-
 import pytest
 
 from fraudtwin.generation import generate
