@@ -4,6 +4,12 @@ Advanced simulation
 Advanced controls are opt-in and preserve the same deterministic identities and
 source/oracle boundaries as ordinary generation.
 
+.. warning::
+
+   Calibration, campaign dynamics, and scale helpers are experimental in this
+   release. Treat their serialized profiles and manifests as version-specific
+   artifacts and consult the migration notes before upgrading.
+
 Calibration
 -----------
 

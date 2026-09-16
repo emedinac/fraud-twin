@@ -4,6 +4,12 @@ Integrations
 Integration modules are optional adapters. Core generation remains dependency
 free; install the corresponding extra before using a sink or publisher.
 
+.. note::
+
+   These adapters are versioned with the core package, but their third-party
+   services are not. Pin the client extra and validate connectivity in CI
+   before publishing a run.
+
 PostgreSQL
 ----------
 

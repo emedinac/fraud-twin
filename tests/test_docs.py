@@ -9,6 +9,7 @@ from docutils.parsers.rst import DirectiveError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 ConfigModelDirective = importlib.import_module("docs._ext.config_schema").ConfigModelDirective
+prepare_site = importlib.import_module("docs.prepare_site").prepare_site
 
 
 def _directive(model_path: str) -> ConfigModelDirective:
@@ -50,3 +51,17 @@ def test_all_tutorials_are_valid_notebook_json() -> None:
         assert document["nbformat"] >= 4
         assert document["cells"]
         assert document["metadata"]["kernelspec"]["name"] == "python3"
+
+
+def test_versioned_site_preparation_creates_latest_and_switcher(tmp_path: Path) -> None:
+    (tmp_path / "main").mkdir()
+    (tmp_path / "main" / "index.html").write_text("latest", encoding="utf-8")
+    (tmp_path / "v0.32.0").mkdir()
+    (tmp_path / "v0.32.0" / "index.html").write_text("release", encoding="utf-8")
+
+    prepare_site(tmp_path)
+
+    assert (tmp_path / "latest" / "index.html").read_text(encoding="utf-8") == "latest"
+    switcher = json.loads((tmp_path / "version-switcher.json").read_text(encoding="utf-8"))
+    assert [item["version"] for item in switcher] == ["latest", "v0.32.0"]
+    assert "url=latest/" in (tmp_path / "index.html").read_text(encoding="utf-8")
