@@ -4,9 +4,8 @@ from pathlib import Path
 import pytest
 
 fastapi = pytest.importorskip("fastapi")
-from fastapi.testclient import TestClient
-
-from examples.model_service.app import MODEL_FEATURES, create_app
+from examples.model_service.app import MODEL_FEATURES, create_app  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
 
 def test_service_rejects_unknown_features_and_reports_missing_model() -> None:
