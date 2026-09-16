@@ -66,6 +66,7 @@ alphabetized class, exception, function, and constant indexes follow them.
 .. toctree::
    :maxdepth: 2
 
+   api/cookbook
    api/generation
    api/configuration
    api/data-ml

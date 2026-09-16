@@ -1,7 +1,5 @@
 """Leakage-safe rolling backtests over one generated FraudTwin history."""
 
-from __future__ import annotations
-
 import hashlib
 import math
 import re

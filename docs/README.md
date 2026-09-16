@@ -4,6 +4,7 @@ FraudTwin is a deterministic synthetic payment world for fraud detection, graph 
 
 ## Installation
 
+- [Installation and support](installation.md) - install the base package, choose extras, and verify an environment.
 - [Quickstart](quickstart.md) - install FraudTwin and generate your first run.
 - [Python package and CLI](../README.md#quick-start) - choose between the Python API and command-line workflows.
 - Build the documentation with `poetry run sphinx-build -E -W --keep-going -b html docs docs/_build/html`.
@@ -39,8 +40,10 @@ filenames and rendered titles explain what each notebook teaches.
 
 - [Configuration](configuration.md) - control populations, behavior, payment rails, fraud, labels, calibration, scale, and campaign dynamics.
 - [Data and evaluation workflows](workflows.md) - build point-in-time datasets, replay runs, backtest models, and evaluate predictions.
+- [ML evaluation methodology](ml-evaluation.md) - use leakage-safe temporal splits, metrics, promotion criteria, and rollback checks.
 - [Model lifecycle](model-lifecycle.md) - move from a generated run to tracked artifacts and online scoring.
 - [Production serving](production-serving.md) - run and validate the optional FastAPI reference service.
+- [Integration runbooks](integrations.md) - operate Kafka, PostgreSQL, Iceberg, Neo4j, MLflow, serving, and observability.
 - [Drift and shift](drift-and-shift.md) - distinguish data, domain, concept, and performance drift.
 - [Kafka reliability](kafka-reliability.md) - exercise logical-message loss, retries, duplicates, delays, and reordering.
 - [Data-quality incidents](data-quality-incidents.md) - inject faults, replay windows, and repair projections.

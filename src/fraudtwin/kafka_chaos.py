@@ -6,8 +6,6 @@ can be tested with repeatable drops, retries, duplicates, delays, reordering,
 outages, and partition skew.
 """
 
-from __future__ import annotations
-
 import hashlib
 from datetime import UTC, datetime, timedelta
 from random import Random

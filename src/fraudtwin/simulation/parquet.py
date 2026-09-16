@@ -1,7 +1,5 @@
 """Explicitly typed Parquet output for entities, behavior, and payments."""
 
-from __future__ import annotations
-
 import hashlib
 import json
 from collections.abc import Iterable, Mapping

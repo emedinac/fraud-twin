@@ -4,6 +4,7 @@ import json
 import pkgutil
 import re
 import sys
+import tomllib
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -106,6 +107,91 @@ def test_public_module_inventory_writes_every_module_page(tmp_path: Path) -> Non
     assert ".. autosummary::" in module_page
     assert "fraudtwin.ml.build_point_in_time_dataset" in module_page
     assert "Detailed API" in module_page
+
+
+def test_user_manual_covers_the_first_ten_documentation_gaps() -> None:
+    required_pages = (
+        "installation.md",
+        "integrations.md",
+        "ml-evaluation.md",
+        "data-contracts.rst",
+        "configuration.md",
+        "configuration-reference.rst",
+        "api/cookbook.rst",
+        "cli.rst",
+        "production-serving.md",
+        "drift-and-shift.md",
+        "kafka-reliability.md",
+    )
+    for relative in required_pages:
+        assert (Path("docs") / relative).is_file(), relative
+
+    installation = Path("docs/installation.md").read_text(encoding="utf-8")
+    for extra in tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"][
+        "optional-dependencies"
+    ]:
+        assert f"`{extra}`" in installation or f"-E {extra}" in installation, extra
+
+    contracts = Path("docs/data-contracts.rst").read_text(encoding="utf-8")
+    for artifact in (
+        "payments/payments.parquet",
+        "payments/payment_events.parquet",
+        "ledger/ledger_entries.parquet",
+        "ml/dataset.parquet",
+        "contracts/avro/registry.yaml",
+        "kafka-chaos/manifest.json",
+    ):
+        assert artifact in contracts, artifact
+
+    for guide, marker in (
+        ("docs/api/cookbook.rst", "load_data()"),
+        ("docs/cli.rst", "Command map"),
+        ("docs/ml-evaluation.md", "PR-AUC"),
+        ("docs/drift-and-shift.md", "Jensen–Shannon"),
+        ("docs/kafka-reliability.md", "at-least-once"),
+        ("docs/production-serving.md", "authentication"),
+    ):
+        assert marker in Path(guide).read_text(encoding="utf-8"), marker
+
+
+def test_cli_command_map_covers_registered_commands() -> None:
+    from fraudtwin import cli
+
+    page = Path("docs/cli.rst").read_text(encoding="utf-8")
+    root_commands = {
+        command.name or command.callback.__name__.replace("_command", "")
+        for command in cli.app.registered_commands
+        if command.callback is not None
+    }
+    group_commands = {
+        f"{group.name} {command.name}"
+        for group in cli.app.registered_groups
+        for command in group.typer_instance.registered_commands
+        if group.name and command.name
+    }
+    for command in (*root_commands, *group_commands):
+        assert command in page, command
+
+
+def test_python_api_cookbook_examples_compile() -> None:
+    source = Path("docs/api/cookbook.rst").read_text(encoding="utf-8").splitlines()
+    blocks: list[str] = []
+    collecting = False
+    current: list[str] = []
+    for line in source + [""]:
+        if line.strip() == ".. code-block:: python":
+            collecting = True
+            current = []
+            continue
+        if collecting and (line.startswith("   ") or not line.strip()):
+            current.append(line[3:] if line.startswith("   ") else "")
+            continue
+        if collecting:
+            blocks.append("\n".join(current).rstrip())
+            collecting = False
+    assert blocks
+    for index, block in enumerate(blocks):
+        compile(block, f"docs/api/cookbook.rst:{index}", "exec")
 
 
 def test_all_tutorials_are_valid_notebook_json() -> None:

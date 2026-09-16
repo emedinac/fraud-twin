@@ -328,7 +328,7 @@ class ApiModuleIndexDirective(Directive):
             purpose = MODULE_PURPOSES.get(module, f"Public API exported by ``{module}``.")
             lines.extend(
                 [
-                    f"   * - `{module} <modules/{module}.html>`_",
+                    f"   * - :doc:`{module} <modules/{module}>`",
                     f"     - {purpose}",
                     f"     - {MODULE_STATUSES.get(module, 'Stable')}",
                 ]

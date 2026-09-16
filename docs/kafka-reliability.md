@@ -51,3 +51,63 @@ reports input/output fingerprints, attempts, transport IDs, topic/partition
 counts, and deduplicated totals. This simulates Kafka message semantics, not
 physical network packets; use Docker/Linux `tc/netem` separately when testing
 socket-level failures.
+
+## Event-flow semantics
+
+The observable publication path is:
+
+``source run → contract validation → topic/partition assignment → producer acknowledgement → consumer processing → deduplication → event-time projection``
+
+The six observable topics use `payment_id` as the partition key. Ordering is
+guaranteed only within a topic and key; arrival order is not business event
+time. Producers use idempotence and acknowledgements, but process restarts can
+still produce at-least-once delivery. Consumers must deduplicate by stable
+`event_id` (or the documented business identity for a subject) before applying
+side effects.
+
+| Concern | FraudTwin guidance |
+| --- | --- |
+| Offsets | Commit only after validation and idempotent projection |
+| Retries | Preserve event identity and increment transport attempt metadata |
+| Dead-letter records | Retain the original payload, error, topic, partition, and offset |
+| Event time | Use `event_time` for windows and `ingested_at` for lag |
+| Watermarks | Advance only according to the chosen lateness policy |
+| Schema changes | Validate reader defaults and full-transitive compatibility before send |
+| Replay | Reprocess a bounded source interval without rewriting source truth |
+
+## Reliability report
+
+Every chaos or broker-backed exercise should report the following counts in one
+table:
+
+| Counter | Definition |
+| --- | --- |
+| Sent | Input logical records offered to the boundary |
+| Acknowledged | Records accepted by the producer boundary |
+| Dropped/lost | Records intentionally not delivered |
+| Retried | Additional attempts for the same logical record |
+| Duplicated | Additional delivered envelopes for an identity |
+| Late | Delivered after the configured event-time lateness policy |
+| Reordered | Records whose delivery order differs from source order |
+| Deduplicated | Duplicate envelopes removed before projection |
+| Lag | Processing or delivery time minus event time |
+
+Always include input/output fingerprints and topic/partition counts. A lower
+duplicate rate after deduplication is not evidence that the producer was
+exactly-once; it only shows that the consumer projection was idempotent.
+
+## MLOps checklist
+
+- verify topic and schema versions before deployment;
+- set explicit acknowledgements, idempotence, retry, and timeout policies;
+- monitor consumer lag, rebalance frequency, duplicate rate, invalid records,
+  late-event rate, and dead-letter volume;
+- test an outage with drop, delay, and buffer-and-flush behavior;
+- replay a bounded interval and reconcile stable event IDs;
+- document the watermark and acceptable lateness policy;
+- keep broker credentials and registry credentials outside configuration files;
+- test schema evolution before registering a producer or consumer revision.
+
+Researchers can run the same logic with `simulate_delivery` and no broker;
+the offline result is suitable for deterministic tests and teaching, but it is
+not a substitute for socket-level failure testing or broker capacity testing.

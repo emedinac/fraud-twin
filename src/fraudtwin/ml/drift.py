@@ -7,8 +7,6 @@ fingerprints, making an alert reproducible instead of an opaque dashboard
 number.
 """
 
-from __future__ import annotations
-
 import math
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence

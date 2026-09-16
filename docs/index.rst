@@ -90,6 +90,7 @@ Documentation
    :caption: Getting started
 
    quickstart
+   installation
    tutorials
 
 .. toctree::
@@ -98,8 +99,10 @@ Documentation
 
    configuration
    workflows
+   ml-evaluation
    model-lifecycle
    production-serving
+   integrations
    drift-and-shift
    kafka-reliability
    data-quality-incidents

@@ -1,7 +1,5 @@
 """Deterministic, opt-in M11 scenario generation over existing entities."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import UTC, timedelta
 from typing import TYPE_CHECKING

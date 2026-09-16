@@ -284,3 +284,89 @@ Validate before every significant run:
 ```bash
 poetry run fraudtwin config validate path/to/config.yaml
 ```
+
+## Task-oriented recipes
+
+The generated [configuration parameter reference](configuration-reference.rst)
+lists every field. These recipes show the smallest useful combinations for
+common users.
+
+### Minimal first run
+
+Use this for installation checks and learning the output layout:
+
+```yaml
+simulation: {seed: 42, start: 2026-01-01T00:00:00Z, duration_days: 1, speed: batch}
+population: {customers: 10, institutions: 3, accounts: 15, cards: 12, merchants: 3, devices: 12, pix_keys: 8}
+payments: {daily_target: 100, rails: {CARD: 0.55, PIX: 0.30, ACCOUNT_TRANSFER: 0.15}}
+```
+
+```console
+fraudtwin config validate configs/minimal.yaml
+fraudtwin generate configs/minimal.yaml --output-dir runs/minimal
+```
+
+### Fraud and delayed labels
+
+Enable fraud and observation separately when studying detection and label
+maturity. Keep `fraud.enabled` true while varying `labels` or
+`fraud_workflow`; changing the label policy should not silently change source
+payment identity.
+
+```yaml
+fraud: {enabled: true, target_rate: 0.05, scenario_count: 3, hard_negative_rate: 1.0}
+labels: {enabled: true, investigation_rate: 0.70, confirmation_delay: lognormal}
+dataset: {enabled: true, unresolved_labels: retain}
+```
+
+### Graph, benchmark, and calibration runs
+
+Enable `graph` when the experiment needs relationship provenance; use
+`benchmark`/`stress` to compare difficulty or camouflage; use `calibration`
+only when a reference table and its fingerprint are available. Record the
+resolved configuration alongside every comparison.
+
+```yaml
+graph: {enabled: true, view: observable, as_of: 2026-01-02T00:00:00Z}
+benchmark: {difficulty: 5}
+stress: {camouflage: 0.4, feature_camouflage: 0.4, relation_camouflage: 0.2}
+```
+
+### Scale and quality runs
+
+Use `scale.profile: dev` for a laptop and increase `target_payments` only after
+checking disk and memory. Apply `quality.profile: realistic` or `hostile` to a
+copy of a clean configuration so the pristine source remains available for
+reconciliation.
+
+```yaml
+scale: {profile: dev, target_payments: 1000, shard_count: 4, chunk_size: 1000}
+quality: {profile: realistic, late_event_probability: 0.05, duplicate_event_probability: 0.02}
+```
+
+### Integration outputs
+
+Keep `outputs.parquet: true` when enabling PostgreSQL, Kafka, or Iceberg. The
+Parquet run is the deterministic audit source; external sinks are projections
+that can be retried or rebuilt.
+
+## Cross-field constraints
+
+Generated field tables cannot express every relationship. Validate these rules
+before running a large job:
+
+| Relationship | Rule |
+| --- | --- |
+| Population | Accounts, cards, devices, and payment volume must have enough parent entities |
+| Payment rails | Rail weights must be non-negative and sum to `1.0` |
+| Simulation time | Start and duration define the source window; timestamps must be timezone-aware |
+| Fraud | `fraud.enabled` is required before scenario or hard-negative controls have an effect |
+| Labels | Label observation requires a workflow/delay policy; unresolved labels are not mature labels |
+| Dataset | A PIT dataset needs a source run and feature/label availability policy |
+| Graph | Graph controls require graph-enabled source data and a valid temporal cutoff |
+| Scale | Checkpoint, shard, and chunk settings must be positive and use a stable mapping |
+| Quality | Fault profiles should be applied to a copy when source reconciliation is required |
+| Integrations | An enabled sink requires its extra, credentials, and a healthy external service |
+
+When validation succeeds, save the resolved YAML and manifest together. When it
+fails, fix the first reported field rather than disabling strict validation.

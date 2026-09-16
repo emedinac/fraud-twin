@@ -7,8 +7,6 @@ the remaining measurements follow the same validity, structure, uniqueness,
 and referential-integrity ideas as an SDMetrics diagnostic report.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 

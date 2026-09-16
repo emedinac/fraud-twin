@@ -5,8 +5,6 @@ helpers model data-quality schema faults, while this module validates the
 clean observable contracts that a future M25 producer will publish.
 """
 
-from __future__ import annotations
-
 import hashlib
 import re
 from collections.abc import Mapping, Sequence

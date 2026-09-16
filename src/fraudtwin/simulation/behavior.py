@@ -1,8 +1,5 @@
 """Customer behavior profiles and their generated payment dataset."""
 
-from __future__ import annotations
-
-# ruff: noqa: E501
 from dataclasses import dataclass, field, replace
 from random import Random
 from typing import TYPE_CHECKING, Literal

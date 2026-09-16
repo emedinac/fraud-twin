@@ -5,8 +5,6 @@ It produces append-only sidecar data and never mutates the source models or the
 ordinary M1--M13 output tables.
 """
 
-from __future__ import annotations
-
 import hashlib
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass

@@ -5,8 +5,6 @@ generation remain usable without the optional ML stack, while a trained run is
 fully described by local, content-addressed artifacts.
 """
 
-from __future__ import annotations
-
 import hashlib
 import importlib.metadata
 import io
