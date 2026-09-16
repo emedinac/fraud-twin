@@ -791,13 +791,41 @@ class QualityFaultInjector:
     def _align_ledger_timestamps(
         ledger_entries: tuple[LedgerEntry, ...], events: tuple[PaymentEvent, ...]
     ) -> tuple[LedgerEntry, ...]:
+        """Align ledger posting order and running balances with delivery order.
+
+        An out-of-order fault changes event processing timestamps.  Reusing the
+        old ``balance_after`` values after that change makes an otherwise valid
+        ledger fail reconciliation when entries are sorted by ``posted_at``.
+        """
+
+        if not ledger_entries:
+            return ()
         processed_by_id = {event.event_id: event.processed_at for event in events}
-        return tuple(
+        aligned = tuple(
             entry.model_copy(update={"posted_at": processed_by_id[entry.event_id]})
             if entry.event_id in processed_by_id
             else entry
             for entry in ledger_entries
         )
+        opening: dict[str, float] = {}
+        for entry in sorted(
+            ledger_entries,
+            key=lambda item: (item.posted_at, item.event_id, item.account_id, item.entry_type),
+        ):
+            if entry.account_id not in opening:
+                delta = entry.amount if entry.entry_type == "CREDIT" else -entry.amount
+                opening[entry.account_id] = round(entry.balance_after - delta, 2)
+        balances = dict(opening)
+        reconciled: list[LedgerEntry] = []
+        for entry in sorted(
+            aligned,
+            key=lambda item: (item.posted_at, item.event_id, item.account_id, item.entry_type),
+        ):
+            delta = entry.amount if entry.entry_type == "CREDIT" else -entry.amount
+            balance_after = round(balances[entry.account_id] + delta, 2)
+            balances[entry.account_id] = balance_after
+            reconciled.append(entry.model_copy(update={"balance_after": balance_after}))
+        return tuple(reconciled)
 
     @staticmethod
     def _align_workflow_timestamps(

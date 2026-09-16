@@ -82,6 +82,12 @@ def test_m15_is_deterministic_and_validates_all_dynamic_lifecycles() -> None:
     assert any(
         item.mutation_type == "CROSS_RAIL" for item in first.campaign_dynamics.topology_mutations
     )
+    assert any(
+        item.mutation_type == "RING_SPLIT" for item in first.campaign_dynamics.topology_mutations
+    )
+    assert any(
+        item.mutation_type == "RING_MERGE" for item in first.campaign_dynamics.topology_mutations
+    )
     snapshots = first.campaign_dynamics.snapshots
     assert snapshots and all(snapshot.active_device_ids for snapshot in snapshots)
     rotations = [

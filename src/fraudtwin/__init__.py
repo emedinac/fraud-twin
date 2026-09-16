@@ -5,6 +5,7 @@ from fraudtwin.benchmark import (
     list_public_packs,
     load_public_pack,
     run_public_benchmark,
+    verify_public_benchmark,
 )
 from fraudtwin.calibration import (
     CalibrationMetric,
@@ -305,4 +306,5 @@ __all__ = [
     "list_public_packs",
     "load_public_pack",
     "run_public_benchmark",
+    "verify_public_benchmark",
 ]

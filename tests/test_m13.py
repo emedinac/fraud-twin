@@ -79,4 +79,26 @@ def test_neutral_m13_keeps_manifest_shape_and_configuration_hash() -> None:
 def test_m13_fixture_validates() -> None:
     config = load_config(Path("configs/benchmarks/m13-camouflage-v1.yaml"))
     assert resolve_camouflage(config).enabled
-    assert config.stress.families["fraud"].features["amount"] == pytest.approx(0.9)
+    assert config.stress.families == {}
+
+
+def test_m13_fixture_global_strength_changes_generated_summaries() -> None:
+    base = load_config(Path("configs/benchmarks/m13-camouflage-v1.yaml"))
+    low = base.model_copy(
+        update={
+            "stress": base.stress.model_copy(
+                update={"camouflage": 0.0, "feature_camouflage": 0.0, "relation_camouflage": 0.0}
+            )
+        }
+    )
+    high = base.model_copy(
+        update={
+            "stress": base.stress.model_copy(
+                update={"camouflage": 1.0, "feature_camouflage": 1.0, "relation_camouflage": 1.0}
+            )
+        }
+    )
+    low_behavior = BehaviorGenerator(low, EntityGenerator(low).generate()).generate()
+    high_behavior = BehaviorGenerator(high, EntityGenerator(high).generate()).generate()
+    assert low_behavior.camouflage_metadata == {}
+    assert high_behavior.camouflage_metadata["measurable_summaries"] != {}

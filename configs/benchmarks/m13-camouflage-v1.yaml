@@ -68,13 +68,3 @@ stress:
     profile_dimensions: [spending_level, country, merchant_category, typical_payment_hour, trusted_device]
     minimum_size: 3
     fallback: same_rail
-  families:
-    fraud:
-      feature_camouflage: 0.90
-      features: {amount: 0.90, timing: 0.80, merchant: 0.90, device: 0.90, geography: 0.80, frequency: 0.80}
-      relations: {transferred_to: 0.60, transacted_with: 0.60, shares_device: 0.40, shares_ip: 0.40}
-    graph:
-      feature_camouflage: 0.75
-      relation_camouflage: 0.85
-      features: {amount: 0.80, timing: 0.80, merchant: 0.80, device: 0.70, geography: 0.70, frequency: 0.80}
-      relations: {transferred_to: 0.85, transacted_with: 0.85, shares_device: 0.70, shares_ip: 0.70}
