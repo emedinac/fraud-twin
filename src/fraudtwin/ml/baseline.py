@@ -277,7 +277,7 @@ def load_model_artifact(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"model artifact does not exist: {path}")
     try:
-        import joblib
+        import joblib  # type: ignore[import-untyped]
     except ImportError as exc:  # pragma: no cover - optional ML dependency
         raise RuntimeError("model scoring requires the optional 'ml' dependency") from exc
     artifact = joblib.load(path)
@@ -941,7 +941,7 @@ def train_baselines(
                 },
             }
             try:
-                import joblib  # type: ignore[import-untyped]
+                import joblib
 
                 artifact = io.BytesIO()
                 joblib.dump({"model": model, "categories": categories}, artifact)

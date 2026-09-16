@@ -47,7 +47,7 @@ class FsspecScaleStorage:
 
     def publish(self, local_root: Path, destination: str | Path | None = None) -> None:
         try:
-            import fsspec  # type: ignore[import-not-found]
+            import fsspec  # type: ignore[import-untyped]
         except ImportError as exc:  # pragma: no cover - optional extra
             raise RuntimeError(
                 "fsspec scale storage requires the optional 'scale-storage' dependency"
