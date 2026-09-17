@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import hashlib
 import json
 import shutil
@@ -239,7 +237,11 @@ def test_full_transitive_compatibility_accepts_defaulted_addition_and_rejects_br
     original = (root / "payment-event/1.0.0.avsc").read_text(encoding="utf-8")
     parsed = json.loads(original)
     parsed["fields"].append(
-        {"name": "producer_region", "type": ["null", "string"], "default": None}
+        {
+            "name": "producer_region",
+            "type": ["null", "string"],
+            "default": None,
+        }
     )
     _add_version(root, metadata, "payment-event", "1.1.0", json.dumps(parsed))
     assert load_contract_registry(root).validate().versions == 7

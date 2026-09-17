@@ -3,16 +3,21 @@
 Build explainable graph views and use the same temporal provenance in a graph
 database or a PyTorch Geometric experiment.
 
-| Tutorials | Time | Extras | Output |
+| IDs | Time | Extras | Output |
 | --- | --- | --- | --- |
 | 16 | 30–45 min | base; Neo4j optional | graph tables, Cypher, fingerprint |
 | 17 | 30–45 min | `graph` optional | temporal features and evaluation |
 
+Tutorial 16 includes the optional `!pip install neo4j` cell, a local Neo4j
+startup command, connectivity check, and a small Cypher query. The offline
+graph export and Polars investigation remain the default path. Tutorial 17
+uses the existing `graph` extra; no external service is required.
+
 ```{toctree}
 :maxdepth: 1
 
-16-neo4j-graph-fraud.ipynb
-17-pyg-graph-model.ipynb
+neo4j-graph-fraud.ipynb
+pyg-graph-model.ipynb
 ```
 
 **Related:** [graph and benchmark workflows](../graph-and-benchmarks.md).

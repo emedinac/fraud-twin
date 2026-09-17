@@ -77,3 +77,89 @@ envelopes. It models logical delivery behavior, not physical packet loss.
 The command writes ``kafka-chaos/manifest.json`` and a hex-encoded
 ``envelopes.jsonl`` audit stream. See :doc:`kafka-reliability` for topic,
 acknowledgement, watermark, and deduplication guidance.
+
+Command map
+-----------
+
+The CLI is grouped by the workflow it performs. Every command supports
+``--help``; the installed package is authoritative for the exact option list
+and defaults.
+
+.. list-table:: Supported command groups
+   :header-rows: 1
+
+   * - Group
+     - Commands
+     - Typical output
+   * - Configuration
+     - ``config validate``
+     - Validation diagnostics; non-zero exit on invalid YAML
+   * - Generation
+     - ``generate``, ``resume``, ``replay``, ``validate-ledger``, ``report``
+     - Run directory, checkpoint, replay, or manifest report
+   * - ML
+     - ``ml build-dataset``, ``ml train``, ``ml evaluate``, ``ml backtest``
+     - PIT dataset, predictions, metrics, and evaluation manifest
+   * - Graph
+     - ``graph export``, ``graph validate``
+     - Nodes/edges, Cypher, and validation report
+   * - Benchmarks
+     - ``quality-benchmark``, ``scale-benchmark``, ``benchmark run``, ``benchmark describe``, ``benchmark verify``
+     - Benchmark artifacts and fingerprints
+   * - Domain extensions
+     - ``calibrate``, ``counterfactual generate``, ``campaign evolve``
+     - Versioned sidecars and profile manifests
+   * - Services
+     - ``db migrate``, ``db status``, ``lakehouse init``, ``lakehouse ingest-run``, ``lakehouse consume``, ``lakehouse verify``, ``lakehouse maintenance``
+     - External projections and health/reconciliation reports
+   * - Contracts and transport
+     - ``schema validate``, ``kafka chaos``
+     - Avro registry report or transport-fault manifest
+
+Common option policy
+--------------------
+
+| Option family | Meaning | Safe retry behavior |
+| --- | --- | --- |
+| ``--config`` | Validated YAML source | Reuse only with the same configuration fingerprint |
+| ``--run-id`` | Existing persisted source run | Read-only commands can be repeated |
+| ``--output-dir`` | Destination for artifacts | Use a new temporary directory or an idempotent run directory |
+| ``--from``/``--to``/``--as-of`` | Half-open event-time or cutoff window | Repeatable when source run is unchanged |
+| ``--seed`` | Explicit deterministic seed | Persist it in the manifest |
+| ``--workers``/``--checkpoint-dir`` | Scale scheduling and resume state | Never edit a checkpoint by hand |
+| integration environment variables | Service endpoint/credentials | Keep secrets out of YAML and manifests |
+
+Exit behavior
+-------------
+
+Exit code ``0`` means the requested operation completed and its verification
+checks passed. Invalid configuration, missing files, incompatible schemas, or
+unhealthy optional services return a non-zero exit code and an actionable
+message. Commands do not silently replace an existing run with a different
+configuration. Inspect the manifest and fingerprint before retrying.
+
+Examples by audience
+--------------------
+
+.. code-block:: console
+
+   # New user: validate and generate a bounded run
+   $ fraudtwin config validate configs/minimal.yaml
+   $ fraudtwin generate configs/minimal.yaml --output-dir runs/quickstart
+
+   # Data scientist: create a point-in-time dataset and backtest
+   $ fraudtwin ml build-dataset configs/minimal.yaml --run-id RUN-... --output-dir runs
+   $ fraudtwin ml backtest configs/minimal.yaml --run-id RUN-... --output-dir runs
+
+   # MLOps engineer: inspect an integration before publishing
+   $ fraudtwin db status
+   $ fraudtwin schema validate
+   $ fraudtwin kafka chaos --run-id RUN-... --boundary consumer --output-dir runs
+
+   # Researcher: verify a public benchmark identity
+   $ fraudtwin benchmark describe FT-B04-CAMOUFLAGE@1.0.0
+   $ fraudtwin benchmark verify runs/benchmarks/BM-...
+
+The documentation tests compare the registered Typer command names with this
+command map. Add a command to this page and its workflow guide in the same
+change as the implementation.

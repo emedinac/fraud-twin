@@ -5,6 +5,48 @@ import shutil
 import sys
 from pathlib import Path
 
+TUTORIAL_ALIASES = {
+    "tutorials/28-calibration-reference-data.html": (
+        "tutorials/calibration-and-counterfactuals.html"
+    ),
+    "tutorials/29-counterfactual-fraud-experiments.html": (
+        "tutorials/calibration-and-counterfactuals.html"
+    ),
+    "tutorials/30-campaign-dynamics-fraud-rings.html": (
+        "tutorials/campaign-graph-investigation.html"
+    ),
+    "tutorials/31-external-predictions-backtesting.html": (
+        "tutorials/ml-shift-and-backtesting.html"
+    ),
+    "tutorials/32-observable-oracle-investigation.html": (
+        "tutorials/campaign-graph-investigation.html"
+    ),
+    "tutorials/33-scale-resource-benchmarking.html": (
+        "tutorials/scale-reconciliation-and-reproducibility.html"
+    ),
+    "tutorials/34-multi-rail-payment-reconciliation.html": (
+        "tutorials/scale-reconciliation-and-reproducibility.html"
+    ),
+    "tutorials/35-reproducible-experiment-packaging.html": (
+        "tutorials/scale-reconciliation-and-reproducibility.html"
+    ),
+}
+
+
+def _write_redirect(path: Path, target: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    relative_target = target.removeprefix("tutorials/")
+    path.write_text(
+        f'<!doctype html><meta http-equiv="refresh" content="0; url=../{relative_target}">'
+        f'<link rel="canonical" href="../{relative_target}">\n',
+        encoding="utf-8",
+    )
+
+
+def _write_tutorial_aliases(output: Path) -> None:
+    for alias, target in TUTORIAL_ALIASES.items():
+        _write_redirect(output / alias, target)
+
 
 def prepare_site(root: Path) -> None:
     root = root.resolve()
@@ -20,6 +62,7 @@ def prepare_site(root: Path) -> None:
     if latest.exists():
         shutil.rmtree(latest)
     shutil.copytree(main_output, latest)
+    _write_tutorial_aliases(latest)
     versions = [
         {
             "name": "latest",
@@ -30,6 +73,7 @@ def prepare_site(root: Path) -> None:
     for path in candidates:
         if path.name in {"main", "dev"}:
             continue
+        _write_tutorial_aliases(path)
         versions.append(
             {
                 "name": path.name,

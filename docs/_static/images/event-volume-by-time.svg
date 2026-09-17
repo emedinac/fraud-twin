@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420">
+<title>Lifecycle event volume by four-hour window</title>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="78.0" y="30.0" font-family="sans-serif" font-size="19" text-anchor="start" fill="#243447">Lifecycle event volume by four-hour window</text>
+<line x1="78" y1="54" x2="78" y2="348" stroke="#52606d"/>
+<line x1="78" y1="348" x2="736" y2="348" stroke="#52606d"/>
+<text x="407.0" y="402.0" font-family="sans-serif" font-size="13" text-anchor="middle" fill="#243447">UTC time window</text>
+<text x="18" y="201.0" font-family="sans-serif" font-size="13" text-anchor="middle" transform="rotate(-90 18 201.0)" fill="#243447">lifecycle events</text>
+<line x1="78" y1="348.0" x2="736" y2="348.0" stroke="#e6edf3" stroke-width="1"/>
+<line x1="73" y1="348.0" x2="78" y2="348.0" stroke="#52606d"/>
+<text x="68.0" y="352.0" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">0</text>
+<line x1="78" y1="274.5" x2="736" y2="274.5" stroke="#e6edf3" stroke-width="1"/>
+<line x1="73" y1="274.5" x2="78" y2="274.5" stroke="#52606d"/>
+<text x="68.0" y="278.5" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">273</text>
+<line x1="78" y1="201.0" x2="736" y2="201.0" stroke="#e6edf3" stroke-width="1"/>
+<line x1="73" y1="201.0" x2="78" y2="201.0" stroke="#52606d"/>
+<text x="68.0" y="205.0" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">545</text>
+<line x1="78" y1="127.5" x2="736" y2="127.5" stroke="#e6edf3" stroke-width="1"/>
+<line x1="73" y1="127.5" x2="78" y2="127.5" stroke="#52606d"/>
+<text x="68.0" y="131.5" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">818</text>
+<line x1="78" y1="54.0" x2="736" y2="54.0" stroke="#e6edf3" stroke-width="1"/>
+<line x1="73" y1="54.0" x2="78" y2="54.0" stroke="#52606d"/>
+<text x="68.0" y="58.0" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">1090</text>
+<line x1="132.8" y1="348" x2="132.8" y2="353" stroke="#52606d"/>
+<text x="132.8" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">00–04</text>
+<line x1="242.5" y1="348" x2="242.5" y2="353" stroke="#52606d"/>
+<text x="242.5" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">04–08</text>
+<line x1="352.2" y1="348" x2="352.2" y2="353" stroke="#52606d"/>
+<text x="352.2" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">08–12</text>
+<line x1="461.8" y1="348" x2="461.8" y2="353" stroke="#52606d"/>
+<text x="461.8" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">12–16</text>
+<line x1="571.5" y1="348" x2="571.5" y2="353" stroke="#52606d"/>
+<text x="571.5" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">16–20</text>
+<line x1="681.2" y1="348" x2="681.2" y2="353" stroke="#52606d"/>
+<text x="681.2" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">20–24</text>
+<rect x="96.6" y="277.6" width="72.4" height="70.4" fill="#0b7285" rx="3"/>
+<text x="132.8" y="271.6" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">261</text>
+<rect x="206.3" y="158.4" width="72.4" height="189.6" fill="#0b7285" rx="3"/>
+<text x="242.5" y="152.4" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">703</text>
+<rect x="316.0" y="109.6" width="72.4" height="238.4" fill="#0b7285" rx="3"/>
+<text x="352.2" y="103.6" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">884</text>
+<rect x="425.6" y="115.8" width="72.4" height="232.2" fill="#0b7285" rx="3"/>
+<text x="461.8" y="109.8" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">861</text>
+<rect x="535.3" y="92.3" width="72.4" height="255.7" fill="#0b7285" rx="3"/>
+<text x="571.5" y="86.3" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">948</text>
+<rect x="645.0" y="119.0" width="72.4" height="229.0" fill="#0b7285" rx="3"/>
+<text x="681.2" y="113.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">849</text>
+</svg>

@@ -31,13 +31,21 @@ Choose your path
 .. grid:: 2
    :gutter: 3
 
+   .. grid-item-card:: Visualize the payment world
+      :link: tutorials/visualization
+      :link-type: doc
+      :class-card: sd-border-0
+
+      Start by plotting temporal behavior, distributions, fraud scenarios, and
+      ML-ready features before choosing a modeling workflow.
+
    .. grid-item-card:: Generate and inspect
       :link: quickstart
       :link-type: doc
       :class-card: sd-border-0
 
-      Start with a small deterministic payment world and inspect the generated
-      entities, payments, lifecycle events, ledger, and manifest.
+      Generate a small deterministic payment world and inspect its entities,
+      payments, lifecycle events, ledger, and manifest.
 
    .. grid-item-card:: Build an ML dataset
       :link: workflows
@@ -63,6 +71,30 @@ Choose your path
       Find signatures, parameters, return objects, source links, optional
       dependencies, and configuration schemas in the reference manual.
 
+Choose your role
+----------------
+
+.. grid:: 3
+   :gutter: 2
+
+   .. grid-item-card:: New users
+      :link: audiences/new-users
+      :link-type: doc
+
+      Install FraudTwin, generate a run, and learn the core concepts offline.
+
+   .. grid-item-card:: Data and ML
+      :link: audiences/data-ml
+      :link-type: doc
+
+      Build point-in-time data, evaluate models, and analyze drift.
+
+   .. grid-item-card:: Engineering and MLOps
+      :link: audiences/engineering-mlops
+      :link-type: doc
+
+      Connect serving, tracking, Kafka, databases, and observability safely.
+
 How a run becomes an experiment
 -------------------------------
 
@@ -82,7 +114,9 @@ Documentation
    :caption: Getting started
 
    quickstart
+   installation
    tutorials
+   audiences
 
 .. toctree::
    :maxdepth: 2
@@ -90,8 +124,10 @@ Documentation
 
    configuration
    workflows
+   ml-evaluation
    model-lifecycle
    production-serving
+   integrations
    drift-and-shift
    kafka-reliability
    data-quality-incidents

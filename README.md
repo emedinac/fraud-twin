@@ -37,7 +37,9 @@ visible instead of silently rewarding them.
 
 ## Quick start
 
-Requirements: Python 3.12+ and Poetry 2.x.
+Requirements: Python 3.12+ and Poetry 2.x. See the [installation and support
+matrix](docs/installation.md) for PyPI installs, optional extras, and resource
+expectations.
 
 ```bash
 git clone https://github.com/emedinac/fraud-twin.git
@@ -112,6 +114,7 @@ notebook directory:
 
 | Path | What you will build |
 | --- | --- |
+| [Visualization and exploration](docs/tutorials/visualization.md) | Temporal behavior, fraud scenarios, distributions, correlation, and embeddings. |
 | [Getting started](docs/tutorials/getting-started.md) | A first run, configuration changes, payment lifecycles, and delayed labels. |
 | [Core workflows](docs/tutorials/core-workflows.md) | Point-in-time data, fraud stress tests, and reproducible benchmarks. |
 | [Production ML and reliability](docs/tutorials/production-ml.md) | Model training, serving, promotion, rollback, and segmented drift analysis. |
@@ -124,6 +127,9 @@ contains rendered notebooks, guides, troubleshooting, compatibility notes, and
 the [Python API reference](https://emedinac.github.io/fraud-twin/latest/api.html).
 The API reference lists supported public classes and functions with signatures,
 parameters, return types, exceptions, and source links.
+
+For a complete workflow, see the [ML evaluation methodology](docs/ml-evaluation.md)
+and the [integration runbooks](docs/integrations.md).
 
 ## What is modeled
 

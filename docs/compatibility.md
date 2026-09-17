@@ -6,7 +6,7 @@ benchmark must be replayed exactly.
 
 | Surface | Compatibility rule | Status |
 | --- | --- | --- |
-| `fraudtwin.__all__` | Supported public names are reviewed for backward compatibility; removals are announced in the changelog. | Stable |
+| Supported public API exports | Public names are reviewed for backward compatibility; removals are announced in the changelog. | Stable |
 | Configuration YAML | Validate with the matching package version. Unknown fields fail validation instead of being ignored. | Stable |
 | Parquet/JSON/Avro contracts | Schema versions and manifest fingerprints identify the producer and contract. Read with the corresponding contract version. | Stable |
 | Public benchmark packs | Packs declare generator compatibility ranges and frozen fingerprints. A mismatch is an error, not a warning. | Versioned |

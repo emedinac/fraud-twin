@@ -4,9 +4,9 @@ FraudTwin treats generated output identity and public schemas as compatibility
 boundaries. Upgrade notes belong here when a release changes a public API,
 configuration field, output contract, benchmark pack, or reproducibility rule.
 
-## 0.32.0
+## 0.34.0
 
-The current documentation and API reference describe the 0.32.0 package. Use
+The current documentation and API reference describe the 0.34.0 package. Use
 the version selector to compare examples against another release and consult
 the changelog for feature-level notes.
 
