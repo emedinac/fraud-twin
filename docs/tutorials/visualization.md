@@ -44,7 +44,8 @@ of causality. It uses the bounded seed-2501 analysis path.*
 ```
 *Figure: a compact t-SNE illustration coloured by fraud truth. The notebook
 computes the embedding with scikit-learn; the axes are arbitrary embedding
-coordinates and should not be compared across separate t-SNE fits.*
+coordinates and should not be compared across separate t-SNE fits. The static
+illustration contains 120 deterministic points.*
 
 ```{image} ../_static/images/scenario-difficulty-comparison.svg
 :alt: Scenario difficulty comparison

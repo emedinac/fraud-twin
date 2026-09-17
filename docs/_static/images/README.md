@@ -7,6 +7,7 @@ histogram-like distributions, heatmaps, and scatter plots with units and axes.
 
 The generator is deterministic (seed `2501`, 1,000 logical payments) and writes
 only this directory. The ML visualisation notebook uses scikit-learn PCA and
-t-SNE when the optional `ml` extra is installed; static documentation builds do
-not require a plotting dependency. Each guide names the source workflow and
-explains the synthetic-data limitation.
+t-SNE when the optional `ml` extra is installed; the static illustration uses
+120 deterministic points so cluster density is visible. Static documentation
+builds do not require a plotting dependency. Each guide names the source
+workflow and explains the synthetic-data limitation.

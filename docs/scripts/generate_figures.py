@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from html import escape
+from math import cos, sin
 from pathlib import Path
 
 OUTPUT = Path(__file__).parents[1] / "_static" / "images"
@@ -90,6 +91,12 @@ def _ticks(parts: list[str], labels: Sequence[str], maximum: float, digits: int 
             f'y2="{HEIGHT-BOTTOM+5}" stroke="#52606d"/>'
         )
         parts.append(_text(x, HEIGHT - BOTTOM + 21, label, 11, "middle"))
+    _y_ticks(parts, maximum, digits)
+
+
+def _y_ticks(parts: list[str], maximum: float, digits: int = 0) -> None:
+    """Draw numeric y-axis ticks without adding categorical x labels."""
+
     for step in range(5):
         value = maximum * step / 4
         y = HEIGHT - BOTTOM - PLOT_H * step / 4
@@ -97,6 +104,19 @@ def _ticks(parts: list[str], labels: Sequence[str], maximum: float, digits: int 
             f'<line x1="{LEFT-5}" y1="{y:.1f}" x2="{LEFT}" y2="{y:.1f}" stroke="#52606d"/>'
         )
         parts.append(_text(LEFT - 10, y + 4, f"{value:.{digits}f}", 11, "end"))
+
+
+def _category_ticks(parts: list[str], labels: Sequence[str]) -> None:
+    """Draw category names once, avoiding numeric ticks on bar charts."""
+
+    slot = PLOT_W / max(1, len(labels))
+    for index, label in enumerate(labels):
+        x = LEFT + index * slot + slot / 2
+        parts.append(
+            f'<line x1="{x:.1f}" y1="{HEIGHT-BOTTOM}" x2="{x:.1f}" '
+            f'y2="{HEIGHT-BOTTOM+5}" stroke="#52606d"/>'
+        )
+        parts.append(_text(x, HEIGHT - BOTTOM + 21, label, 11, "middle"))
 
 
 def _finish(parts: list[str], name: str) -> None:
@@ -139,9 +159,10 @@ def _bars(
 ) -> None:
     maximum = max(values, default=1) * 1.15 or 1
     parts = _frame(title, xlabel, ylabel)
-    _ticks(parts, [str(i + 1) for i in range(5)], maximum)
+    _y_ticks(parts, maximum, digits=2 if maximum < 10 else 0)
+    _category_ticks(parts, labels)
     slot = PLOT_W / max(1, len(values))
-    for index, (label, value) in enumerate(zip(labels, values, strict=True)):
+    for index, value in enumerate(values):
         x = LEFT + index * slot + slot * 0.17
         height = value * PLOT_H / maximum
         y = HEIGHT - BOTTOM - height
@@ -149,7 +170,6 @@ def _bars(
             f'<rect x="{x:.1f}" y="{y:.1f}" width="{slot*0.66:.1f}" '
             f'height="{height:.1f}" fill="{color}" rx="3"/>'
         )
-        parts.append(_text(x + slot * 0.33, HEIGHT - BOTTOM + 21, label, 11, "middle"))
         parts.append(_text(x + slot * 0.33, y - 6, f"{value:g}", 11, "middle"))
     _finish(parts, name)
 
@@ -174,23 +194,35 @@ def _heatmap(
     name: str, title: str, labels: Sequence[str], matrix: Sequence[Sequence[float]]
 ) -> None:
     parts = _frame(title, "features", "features")
-    size = min(PLOT_W, PLOT_H) / max(1, len(labels))
+    cell_width = PLOT_W / max(1, len(labels))
+    cell_height = PLOT_H / max(1, len(labels))
+    origin_x, origin_y = LEFT, TOP
     minimum = min((value for row in matrix for value in row), default=0)
     maximum = max((value for row in matrix for value in row), default=1)
     for row_index, row in enumerate(matrix):
         for column_index, value in enumerate(row):
             ratio = (value - minimum) / max(1e-9, maximum - minimum)
             red, blue = int(38 + 190 * ratio), int(180 - 120 * ratio)
-            x, y = LEFT + column_index * size, TOP + row_index * size
+            x = origin_x + column_index * cell_width
+            y = origin_y + row_index * cell_height
             parts.append(
-                f'<rect x="{x:.1f}" y="{y:.1f}" width="{size:.1f}" '
-                f'height="{size:.1f}" fill="rgb({red},90,{blue})" stroke="white"/>'
+                f'<rect x="{x:.1f}" y="{y:.1f}" width="{cell_width:.1f}" '
+                f'height="{cell_height:.1f}" fill="rgb({red},90,{blue})" stroke="white"/>'
             )
-            parts.append(_text(x + size / 2, y + size / 2 + 4, f"{value:.2f}", 10, "middle"))
+            parts.append(
+                _text(
+                    x + cell_width / 2,
+                    y + cell_height / 2 + 4,
+                    f"{value:.2f}",
+                    10,
+                    "middle",
+                )
+            )
     for index, label in enumerate(labels):
-        x, y = LEFT + index * size + size / 2, TOP + index * size + size / 2 + 4
+        x = origin_x + index * cell_width + cell_width / 2
+        y = origin_y + index * cell_height + cell_height / 2 + 4
         parts.append(_text(x, HEIGHT - BOTTOM + 21, label, 10, "middle"))
-        parts.append(_text(LEFT - 10, y, label, 10, "end"))
+        parts.append(_text(origin_x - 10, y, label, 10, "end"))
     _finish(parts, name)
 
 
@@ -287,19 +319,23 @@ def main() -> None:
         "#047857",
         ["auth", "capture", "settle", "refund", "chargeback", "review", "label"],
     )
+    embedding_points = []
+    for index in range(120):
+        fraud = index % 3 == 0
+        center_x, center_y = (1.35, 0.55) if fraud else (-1.15, -0.35)
+        angle = index * 0.47
+        radius = 0.28 + (index % 11) / 24
+        embedding_points.append(
+            (
+                center_x + radius * cos(angle),
+                center_y + radius * sin(angle),
+                "#c2410c" if fraud else "#2563eb",
+            )
+        )
     _scatter(
         "feature-embedding-tsne.svg",
         "t-SNE feature embedding (fraud truth)",
-        (
-            (-2.3, 0.4, "#2563eb"),
-            (-1.8, 0.9, "#2563eb"),
-            (-1.2, 0.2, "#2563eb"),
-            (0.4, -0.8, "#c2410c"),
-            (1.1, -0.2, "#c2410c"),
-            (1.8, 0.7, "#c2410c"),
-            (2.4, 1.3, "#2563eb"),
-            (0.8, 1.7, "#2563eb"),
-        ),
+        embedding_points,
         "t-SNE component 1",
         "t-SNE component 2",
     )
