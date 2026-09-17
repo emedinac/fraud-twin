@@ -7,7 +7,19 @@ histogram-like distributions, heatmaps, and scatter plots with units and axes.
 
 The generator is deterministic (seed `2501`, 1,000 logical payments) and writes
 only this directory. The ML visualisation notebook uses scikit-learn PCA and
-t-SNE when the optional `ml` extra is installed; the static illustration uses
-120 deterministic points so cluster density is visible. Static documentation
-builds do not require a plotting dependency. Each guide names the source
-workflow and explains the synthetic-data limitation.
+t-SNE when the optional `ml` extra is installed; the figure generator uses
+the same deterministic scikit-learn path when available and keeps a base-only
+fallback. It contains 120 points so cluster density is visible. Static
+documentation builds do not require a plotting dependency. The scenario figure
+reports
+confirmed fraud records by the stable F01–F05 mechanism IDs from the bounded
+camouflage benchmark; difficulty and camouflage are manifest-level controls,
+not per-record “easy/hard” labels. The lifecycle timeline uses a bounded
+two-minute log-scaled seconds axis so sub-second and early events remain
+visible. Each guide
+names the source workflow and explains the synthetic-data limitation. The
+payment amount-over-time scatter uses payment-rail colors and the t-SNE figure
+contains a fraud/non-fraud legend; both are exploratory views, not model
+quality evidence. The reconciliation figure uses a zoomed match-rate axis and
+prints exact unmatched counts, so small integrity failures remain visible and
+actionable without hiding the source denominator.

@@ -22,6 +22,30 @@ illustrate expected shapes, not real-world fraud prevalence.
 `docs/scripts/generate_figures.py`. Use the curve to inspect temporal shape,
 not to infer real-world volume.*
 
+```{image} ../_static/images/transaction-lifecycle-timeline.svg
+:alt: Representative transaction lifecycles over elapsed time
+```
+*Figure: five representative payment lifecycles. Each row is one logical
+payment; markers show rail-specific initiation, authorization, capture,
+settlement, refunds, and rejects relative to initiation. This is a qualitative
+temporal view. The x-axis uses a log scale in seconds and is bounded at 120
+seconds (two minutes), so early events do not collapse at zero. The wider left
+margin keeps payment IDs readable. It is not a service latency SLO; label
+maturity is shown separately.*
+
+```{image} ../_static/images/event-volume-by-time.svg
+:alt: Lifecycle event volume by four-hour time window
+```
+*Figure: the quantity distribution of lifecycle events across UTC windows. The
+notebook computes the same aggregation from generated event timestamps.*
+
+```{image} ../_static/images/payment-amount-over-time.svg
+:alt: Payment amounts over the run timeline
+```
+*Figure: each point is a bounded generated payment sampled across the ten-day
+run; color separates payment rails. This exposes time clustering and amount
+outliers without pretending that the synthetic schedule is production traffic.*
+
 ```{image} ../_static/images/label-maturity-timeline.svg
 :alt: Label maturity over time
 ```
@@ -31,7 +55,8 @@ not to infer real-world volume.*
 :alt: Amount and frequency distribution
 ```
 *Figure: amount/frequency shape for exploratory analysis; source tutorial is
-the ML-ready distributions notebook.*
+the ML-ready distributions notebook. Bars are amount ranges, not individual
+transactions.*
 
 ```{image} ../_static/images/feature-correlation-heatmap.svg
 :alt: Feature correlation heatmap
@@ -42,20 +67,24 @@ of causality. It uses the bounded seed-2501 analysis path.*
 ```{image} ../_static/images/feature-embedding-tsne.svg
 :alt: t-SNE feature embedding
 ```
-*Figure: a compact t-SNE illustration coloured by fraud truth. The notebook
-computes the embedding with scikit-learn; the axes are arbitrary embedding
-coordinates and should not be compared across separate t-SNE fits. The static
-illustration contains 120 deterministic points.*
+*Figure: a deterministic t-SNE embedding coloured by fraud truth. The figure
+generator and notebook use scikit-learn when the optional `ml` extra is
+available; the base-only fallback uses the same feature matrix's first two
+dimensions. The axes are arbitrary embedding coordinates and should not be
+compared across separate t-SNE fits. It contains 120 points.*
 
 ```{image} ../_static/images/scenario-difficulty-comparison.svg
-:alt: Scenario difficulty comparison
+:alt: Confirmed fraud records by scenario mechanism
 ```
-*Figure: deterministic scenario comparison; difficulty is a benchmark control,
-not a claim about production prevalence.*
+*Figure: confirmed (`fraud_truth=True`) records by the stable F01–F05 scenario
+mechanism IDs in the bounded camouflage benchmark. These are generated case
+counts—not difficulty scores. Difficulty and camouflage are run-level controls,
+so they must be read from the manifest and compared across separate runs; they
+are not categories called “easy” or “hard” on each record.*
 
 | ID | Focus | Time | Extras | Output |
 | --- | --- | --- | --- | --- |
-| 25 | Time, space, amounts, and lifecycle events | 20–30 min | base; plotting optional | tables, SVG plot, fingerprint |
+| 25 | Time, space, amounts, and lifecycle events | 20–30 min | base; plotting optional | timelines, time-window bars, tables, fingerprint |
 | 26 | Scenarios, difficulty, camouflage, and benchmarks | 20–30 min | base | comparison tables and manifest |
 | 27 | Distributions, correlation, leakage, PCA, and t-SNE | 25–40 min | `ml` + plotting optional | feature report, embeddings, split checks |
 

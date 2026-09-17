@@ -4,47 +4,61 @@
 <text x="78.0" y="30.0" font-family="sans-serif" font-size="19" text-anchor="start" fill="#243447">Payment amount distribution</text>
 <line x1="78" y1="54" x2="78" y2="348" stroke="#52606d"/>
 <line x1="78" y1="348" x2="736" y2="348" stroke="#52606d"/>
-<text x="407.0" y="402.0" font-family="sans-serif" font-size="13" text-anchor="middle" fill="#243447">amount bin</text>
+<text x="407.0" y="402.0" font-family="sans-serif" font-size="13" text-anchor="middle" fill="#243447">amount range</text>
 <text x="18" y="201.0" font-family="sans-serif" font-size="13" text-anchor="middle" transform="rotate(-90 18 201.0)" fill="#243447">payments</text>
-<line x1="78.0" y1="348" x2="78.0" y2="353" stroke="#52606d"/>
-<text x="78.0" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">0</text>
-<line x1="151.1" y1="348" x2="151.1" y2="353" stroke="#52606d"/>
-<text x="151.1" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">1</text>
-<line x1="224.2" y1="348" x2="224.2" y2="353" stroke="#52606d"/>
-<text x="224.2" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">2</text>
-<line x1="297.3" y1="348" x2="297.3" y2="353" stroke="#52606d"/>
-<text x="297.3" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">3</text>
-<line x1="370.4" y1="348" x2="370.4" y2="353" stroke="#52606d"/>
-<text x="370.4" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">4</text>
-<line x1="443.6" y1="348" x2="443.6" y2="353" stroke="#52606d"/>
-<text x="443.6" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">5</text>
-<line x1="516.7" y1="348" x2="516.7" y2="353" stroke="#52606d"/>
-<text x="516.7" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">6</text>
-<line x1="589.8" y1="348" x2="589.8" y2="353" stroke="#52606d"/>
-<text x="589.8" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">7</text>
-<line x1="662.9" y1="348" x2="662.9" y2="353" stroke="#52606d"/>
-<text x="662.9" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">8</text>
-<line x1="736.0" y1="348" x2="736.0" y2="353" stroke="#52606d"/>
-<text x="736.0" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">9</text>
+<line x1="78" y1="348.0" x2="736" y2="348.0" stroke="#e6edf3" stroke-width="1"/>
 <line x1="73" y1="348.0" x2="78" y2="348.0" stroke="#52606d"/>
 <text x="68.0" y="352.0" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">0</text>
+<line x1="78" y1="274.5" x2="736" y2="274.5" stroke="#e6edf3" stroke-width="1"/>
 <line x1="73" y1="274.5" x2="78" y2="274.5" stroke="#52606d"/>
-<text x="68.0" y="278.5" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">74</text>
+<text x="68.0" y="278.5" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">71</text>
+<line x1="78" y1="201.0" x2="736" y2="201.0" stroke="#e6edf3" stroke-width="1"/>
 <line x1="73" y1="201.0" x2="78" y2="201.0" stroke="#52606d"/>
-<text x="68.0" y="205.0" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">147</text>
+<text x="68.0" y="205.0" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">143</text>
+<line x1="78" y1="127.5" x2="736" y2="127.5" stroke="#e6edf3" stroke-width="1"/>
 <line x1="73" y1="127.5" x2="78" y2="127.5" stroke="#52606d"/>
-<text x="68.0" y="131.5" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">221</text>
+<text x="68.0" y="131.5" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">214</text>
+<line x1="78" y1="54.0" x2="736" y2="54.0" stroke="#e6edf3" stroke-width="1"/>
 <line x1="73" y1="54.0" x2="78" y2="54.0" stroke="#52606d"/>
-<text x="68.0" y="58.0" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">295</text>
-<circle cx="78.0" cy="340.0" r="4" fill="#2563eb"/>
-<circle cx="151.1" cy="307.1" r="4" fill="#2563eb"/>
-<circle cx="224.2" cy="222.2" r="4" fill="#2563eb"/>
-<circle cx="297.3" cy="140.4" r="4" fill="#2563eb"/>
-<circle cx="370.4" cy="85.5" r="4" fill="#2563eb"/>
-<circle cx="443.6" cy="162.4" r="4" fill="#2563eb"/>
-<circle cx="516.7" cy="255.2" r="4" fill="#2563eb"/>
-<circle cx="589.8" cy="306.1" r="4" fill="#2563eb"/>
-<circle cx="662.9" cy="327.0" r="4" fill="#2563eb"/>
-<circle cx="736.0" cy="336.0" r="4" fill="#2563eb"/>
-<polyline points="78.0,340.0 151.1,307.1 224.2,222.2 297.3,140.4 370.4,85.5 443.6,162.4 516.7,255.2 589.8,306.1 662.9,327.0 736.0,336.0" fill="none" stroke="#2563eb" stroke-width="3"/>
+<text x="68.0" y="58.0" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">285</text>
+<line x1="110.9" y1="348" x2="110.9" y2="353" stroke="#52606d"/>
+<text x="110.9" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">&lt;5</text>
+<line x1="176.7" y1="348" x2="176.7" y2="353" stroke="#52606d"/>
+<text x="176.7" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">5–10</text>
+<line x1="242.5" y1="348" x2="242.5" y2="353" stroke="#52606d"/>
+<text x="242.5" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">10–20</text>
+<line x1="308.3" y1="348" x2="308.3" y2="353" stroke="#52606d"/>
+<text x="308.3" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">20–50</text>
+<line x1="374.1" y1="348" x2="374.1" y2="353" stroke="#52606d"/>
+<text x="374.1" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">50–100</text>
+<line x1="439.9" y1="348" x2="439.9" y2="353" stroke="#52606d"/>
+<text x="439.9" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">100–250</text>
+<line x1="505.7" y1="348" x2="505.7" y2="353" stroke="#52606d"/>
+<text x="505.7" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">250–500</text>
+<line x1="571.5" y1="348" x2="571.5" y2="353" stroke="#52606d"/>
+<text x="571.5" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">500–1k</text>
+<line x1="637.3" y1="348" x2="637.3" y2="353" stroke="#52606d"/>
+<text x="637.3" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">1k–2.5k</text>
+<line x1="703.1" y1="348" x2="703.1" y2="353" stroke="#52606d"/>
+<text x="703.1" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">&gt;2.5k</text>
+<rect x="89.2" y="94.4" width="43.4" height="253.6" fill="#2563eb" rx="3"/>
+<text x="110.9" y="88.4" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">246</text>
+<rect x="155.0" y="134.6" width="43.4" height="213.4" fill="#2563eb" rx="3"/>
+<text x="176.7" y="128.6" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">207</text>
+<rect x="220.8" y="127.4" width="43.4" height="220.6" fill="#2563eb" rx="3"/>
+<text x="242.5" y="121.4" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">214</text>
+<rect x="286.6" y="92.3" width="43.4" height="255.7" fill="#2563eb" rx="3"/>
+<text x="308.3" y="86.3" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">248</text>
+<rect x="352.4" y="276.9" width="43.4" height="71.1" fill="#2563eb" rx="3"/>
+<text x="374.1" y="270.9" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">69</text>
+<rect x="418.2" y="332.5" width="43.4" height="15.5" fill="#2563eb" rx="3"/>
+<text x="439.9" y="326.5" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">15</text>
+<rect x="484.0" y="347.0" width="43.4" height="1.0" fill="#2563eb" rx="3"/>
+<text x="505.7" y="341.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">1</text>
+<rect x="549.8" y="348.0" width="43.4" height="0.0" fill="#2563eb" rx="3"/>
+<text x="571.5" y="342.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">0</text>
+<rect x="615.6" y="348.0" width="43.4" height="0.0" fill="#2563eb" rx="3"/>
+<text x="637.3" y="342.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">0</text>
+<rect x="681.4" y="348.0" width="43.4" height="0.0" fill="#2563eb" rx="3"/>
+<text x="703.1" y="342.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">0</text>
 </svg>

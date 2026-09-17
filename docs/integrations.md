@@ -33,11 +33,13 @@ The reconciliation figure shows the compact evidence produced by the offline
 lakehouse and database paths before a service is available.
 
 ```{image} _static/images/reconciliation-summary.svg
-:alt: Reconciliation summary for payments, ledger rows, and recovered records
+:alt: Unmatched IDs by projection in a reconciliation check
 :class: evidence-figure
 ```
-*Figure: compact payment/ledger reconciliation evidence from the offline
-integration path, generated with seed 42.*
+*Figure: reconciliation evidence from the offline integration path, generated
+with seed 42. The match-rate axis is intentionally zoomed to 99.5–100%; exact
+unmatched counts are printed below each bar. The graph projection has two IDs
+requiring review while the other projections pass.*
 
 1. Install the matching extra.
 2. Start the documented service profile.
