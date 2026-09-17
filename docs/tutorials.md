@@ -4,10 +4,9 @@ The tutorials are rendered from the checked-in Jupyter notebooks. Saved
 outputs are shown when included, and every page includes a download link so
 you can run it locally.
 
-Numeric IDs are stable compatibility identifiers, not a prescribed reading
-order. The category order below is the recommended learning path; notebook
-filenames and titles stay descriptive, while IDs remain in metadata and
-category tables for stable references.
+Historical numeric routes are compatibility redirects, not a prescribed
+reading order. Notebook filenames and titles are descriptive; use the category
+pages as the recommended learning path.
 
 Every tutorial follows the same contract: start with a concrete goal, state
 the prerequisites, produce a named run or artifact, and finish with a quick
@@ -16,8 +15,11 @@ description tells you what to look for before you open it.
 
 ## Learning paths
 
-Choose a path first; each category page contains the notebooks with stable
-numeric IDs, descriptive names, and direct download links.
+Choose a path first; each category page contains descriptive notebooks and
+direct download links. Older numeric bookmarks continue to resolve.
+
+If you are unsure where to begin, use [Choose your role](audiences) to map
+your job to a category, workflow guide, and expected artifact.
 
 ```{toctree}
 :caption: Tutorial categories
@@ -30,6 +32,7 @@ tutorials/production-ml
 tutorials/graph-analytics
 tutorials/streaming-reliability
 tutorials/operations
+tutorials/advanced-experiments
 ```
 
 ## Categories at a glance

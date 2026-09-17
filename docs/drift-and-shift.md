@@ -20,6 +20,12 @@ for metric in report.alerts:
     print(metric.field, metric.method, metric.comparison_value)
 ```
 
+```{image} _static/images/drift-by-segment.svg
+:alt: Segmented drift evidence
+```
+*Figure: deterministic segment alert summary from the drift workflow (seed 42;
+bounded synthetic windows).*
+
 Interpret the metrics by asking which distribution changed:
 
 | Question | Meaning | Typical response |
@@ -87,3 +93,4 @@ reproducible response is:
 4. evaluate mature labels with the unchanged threshold policy;
 5. choose investigation, recalibration, retraining, or no action;
 6. record the decision and next review window.
+# Drift and shift operations

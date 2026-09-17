@@ -35,6 +35,16 @@ evaluation manifest.
 
 ## Metrics and decisions
 
+The threshold trade-off figure is generated deterministically by the tutorial
+workflow and should be read alongside the metric table.
+
+```{image} _static/images/model-threshold-tradeoff.svg
+:alt: Precision and recall trade-off across fraud scoring thresholds
+:class: evidence-figure
+```
+*Figure: threshold evidence from a bounded deterministic model exercise; use
+the accompanying metrics and manifest for decisions.*
+
 | Metric | Use | Caveat |
 | --- | --- | --- |
 | PR-AUC | Ranking under class imbalance | Depends on prevalence |

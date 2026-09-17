@@ -4,6 +4,16 @@ Graph campaigns add relationships to the same payment and event identities alrea
 
 ## Export graph views
 
+This compact visual is generated from the graph tutorial's observable/oracle
+comparison and keeps benchmark evidence separate from latent truth.
+
+```{image} _static/images/graph-fraud-summary.svg
+:alt: Observable and oracle graph node and edge counts
+:class: evidence-figure
+```
+*Figure: observable versus oracle graph evidence from a bounded graph fixture;
+source workflow: the observable/oracle investigation tutorial.*
+
 Enable a `graph.scenarios` list in a new run, or use the versioned graph fixture:
 
 ```bash

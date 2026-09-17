@@ -29,6 +29,16 @@ remain the responsibility of the service vendor. See the official manuals for
 
 ## Common operating sequence
 
+The reconciliation figure shows the compact evidence produced by the offline
+lakehouse and database paths before a service is available.
+
+```{image} _static/images/reconciliation-summary.svg
+:alt: Reconciliation summary for payments, ledger rows, and recovered records
+:class: evidence-figure
+```
+*Figure: compact payment/ledger reconciliation evidence from the offline
+integration path, generated with seed 42.*
+
 1. Install the matching extra.
 2. Start the documented service profile.
 3. Export credentials and endpoints through environment variables.

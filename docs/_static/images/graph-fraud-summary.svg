@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420">
+<title>Observable versus oracle graph</title>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="78.0" y="30.0" font-family="sans-serif" font-size="19" text-anchor="start" fill="#243447">Observable versus oracle graph</text>
+<line x1="78" y1="54" x2="78" y2="348" stroke="#52606d"/>
+<line x1="78" y1="348" x2="736" y2="348" stroke="#52606d"/>
+<text x="407.0" y="402.0" font-family="sans-serif" font-size="13" text-anchor="middle" fill="#243447">graph view</text>
+<text x="18" y="201.0" font-family="sans-serif" font-size="13" text-anchor="middle" transform="rotate(-90 18 201.0)" fill="#243447">nodes or edges</text>
+<line x1="78.0" y1="348" x2="78.0" y2="353" stroke="#52606d"/>
+<text x="78.0" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">1</text>
+<line x1="242.5" y1="348" x2="242.5" y2="353" stroke="#52606d"/>
+<text x="242.5" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">2</text>
+<line x1="407.0" y1="348" x2="407.0" y2="353" stroke="#52606d"/>
+<text x="407.0" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">3</text>
+<line x1="571.5" y1="348" x2="571.5" y2="353" stroke="#52606d"/>
+<text x="571.5" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">4</text>
+<line x1="736.0" y1="348" x2="736.0" y2="353" stroke="#52606d"/>
+<text x="736.0" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">5</text>
+<line x1="73" y1="348.0" x2="78" y2="348.0" stroke="#52606d"/>
+<text x="68.0" y="352.0" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">0</text>
+<line x1="73" y1="274.5" x2="78" y2="274.5" stroke="#52606d"/>
+<text x="68.0" y="278.5" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">802</text>
+<line x1="73" y1="201.0" x2="78" y2="201.0" stroke="#52606d"/>
+<text x="68.0" y="205.0" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">1604</text>
+<line x1="73" y1="127.5" x2="78" y2="127.5" stroke="#52606d"/>
+<text x="68.0" y="131.5" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">2406</text>
+<line x1="73" y1="54.0" x2="78" y2="54.0" stroke="#52606d"/>
+<text x="68.0" y="58.0" font-family="sans-serif" font-size="11" text-anchor="end" fill="#243447">3208</text>
+<rect x="106.0" y="263.7" width="108.6" height="84.3" fill="#be123c" rx="3"/>
+<text x="160.2" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">obs-N</text>
+<text x="160.2" y="257.7" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">920</text>
+<rect x="270.5" y="234.4" width="108.6" height="113.6" fill="#be123c" rx="3"/>
+<text x="324.8" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">oracle-N</text>
+<text x="324.8" y="228.4" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">1240</text>
+<rect x="435.0" y="175.7" width="108.6" height="172.3" fill="#be123c" rx="3"/>
+<text x="489.3" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">obs-E</text>
+<text x="489.3" y="169.7" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">1880</text>
+<rect x="599.5" y="92.3" width="108.6" height="255.7" fill="#be123c" rx="3"/>
+<text x="653.8" y="369.0" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">oracle-E</text>
+<text x="653.8" y="86.3" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#243447">2790</text>
+</svg>

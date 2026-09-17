@@ -197,7 +197,8 @@ def test_python_api_cookbook_examples_compile() -> None:
 def test_all_tutorials_are_valid_notebook_json() -> None:
     notebooks = sorted(Path("docs/tutorials").glob("*.ipynb"))
 
-    assert len(notebooks) == 27
+    assert len(notebooks) == 31
+    assert not [path.name for path in notebooks if re.match(r"^\d", path.name)]
     for notebook in notebooks:
         document = json.loads(notebook.read_text(encoding="utf-8"))
         assert document["nbformat"] >= 4
@@ -209,13 +210,27 @@ def test_tutorials_have_marked_offline_code_cells() -> None:
     """Prevent instructional notebooks from regressing to empty scaffolds."""
 
     tutorial_ids: list[int] = []
+    advanced_slugs = {
+        "calibration-counterfactuals",
+        "campaign-graph-investigation",
+        "ml-shift-backtesting",
+        "scale-reconciliation-reproducibility",
+    }
     for notebook in sorted(Path("docs/tutorials").glob("*.ipynb")):
         document = json.loads(notebook.read_text(encoding="utf-8"))
         tutorial_meta = document["metadata"].get("fraudtwin", {})
         tutorial_id = tutorial_meta.get("tutorial_id")
-        assert isinstance(tutorial_id, int)
-        tutorial_ids.append(tutorial_id)
+        if tutorial_id is not None:
+            assert isinstance(tutorial_id, int)
+            tutorial_ids.append(tutorial_id)
+        else:
+            assert tutorial_meta.get("tutorial_slug") in advanced_slugs
         assert tutorial_meta.get("minimum_offline_code_cells", 0) >= 10
+        if tutorial_id is None:
+            assert tutorial_meta.get("expected_source_size")
+            assert isinstance(tutorial_meta.get("required_extras"), list)
+            assert tutorial_meta.get("artifacts")
+            assert tutorial_meta.get("offline_supported") is True
         code_cells = [cell for cell in document["cells"] if cell.get("cell_type") == "code"]
         assert code_cells, notebook.name
         for cell in code_cells:
@@ -298,7 +313,15 @@ def test_integration_tutorials_have_guarded_client_smoke_cells() -> None:
             notebook_source = "\n".join(
                 "".join(cell.get("source", [])) for cell in document["cells"]
             )
-            assert startup_markers[filename] in notebook_source, filename
+            marker = startup_markers[filename]
+            accepted = (
+                marker,
+                marker.replace(
+                    " --profile lakehouse up",
+                    " --profile lakehouse --profile observability up",
+                ),
+            )
+            assert any(item in notebook_source for item in accepted), filename
         for cell in service_cells:
             metadata = cell["metadata"]["fraudtwin"]
             assert metadata.get("integration"), filename
@@ -315,6 +338,7 @@ def test_every_tutorial_belongs_to_exactly_one_category() -> None:
         "graph-analytics.md",
         "streaming-reliability.md",
         "operations.md",
+        "advanced-experiments.md",
     )
     memberships = [
         notebook
@@ -325,6 +349,42 @@ def test_every_tutorial_belongs_to_exactly_one_category() -> None:
     ]
     assert set(memberships) == notebooks
     assert len(memberships) == len(notebooks)
+
+
+def test_audience_pages_and_documentation_images_are_discoverable() -> None:
+    audience_pages = sorted((Path("docs") / "audiences").glob("*.md"))
+    assert {page.stem for page in audience_pages} == {
+        "new-users",
+        "data-ml",
+        "fraud-risk",
+        "engineering-mlops",
+        "researchers-governance",
+    }
+    index = Path("docs/audiences.md").read_text(encoding="utf-8")
+    for page in audience_pages:
+        assert page.stem in index
+        content = page.read_text(encoding="utf-8")
+        assert "Start with" in content
+        assert "offline" in content.lower()
+
+    images = sorted((Path("docs/_static/images")).glob("*.svg"))
+    assert len(images) >= 10
+    for image in images:
+        assert image.stat().st_size < 100_000
+        content = image.read_text(encoding="utf-8")
+        assert "<title>" in content
+        assert 'font-size="13"' in content or 'font-size="19"' in content
+
+    for page in (
+        Path("docs/tutorials/visualization.md"),
+        Path("docs/drift-and-shift.md"),
+        Path("docs/kafka-reliability.md"),
+        Path("docs/ml-evaluation.md"),
+        Path("docs/integrations.md"),
+        Path("docs/graph-and-benchmarks.md"),
+    ):
+        for reference in re.findall(r"_static/images/([^\s)`]+)", page.read_text(encoding="utf-8")):
+            assert (Path("docs/_static/images") / reference).is_file(), reference
 
 
 def test_representative_offline_tutorial_cells_execute() -> None:
@@ -358,3 +418,7 @@ def test_versioned_site_preparation_creates_latest_and_switcher(tmp_path: Path) 
     api_redirect = (tmp_path / "api.html").read_text(encoding="utf-8")
     assert "url=latest/api.html" in api_redirect
     assert "latest/api.html" in api_redirect
+    alias = (tmp_path / "latest/tutorials/28-calibration-reference-data.html").read_text(
+        encoding="utf-8"
+    )
+    assert "calibration-and-counterfactuals.html" in alias

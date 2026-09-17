@@ -19,12 +19,16 @@ The published sidebar groups these notebooks into seven learning paths:
 [Graph analytics](tutorials/graph-analytics.md),
 [Streaming and Kafka reliability](tutorials/streaming-reliability.md), and
 [Operations and incident response](tutorials/operations.md).
+[Advanced experiments](tutorials/advanced-experiments.md) extends the framework
+with calibration, counterfactuals, campaign dynamics, backtesting, evidence
+boundaries, scale, reconciliation, and experiment packaging.
 
 Start with a category page instead of a flat notebook list. Each page explains
 the expected input size, optional extras, service requirements, generated
 artifacts, and the next recommended step.
 
-The numeric IDs are stable compatibility identifiers, not a required sequence.
+Tutorial filenames are descriptive. Historical numeric routes remain redirects
+for readers with old bookmarks; use the category pages as the recommended path.
 Follow the category order for the recommended learning path; descriptive
 filenames and rendered titles explain what each notebook teaches.
 
@@ -35,6 +39,15 @@ filenames and rendered titles explain what each notebook teaches.
 - [Graph analytics](tutorials/graph-analytics.md) - IDs 16 and 17 for Neo4j and PyTorch Geometric.
 - [Streaming and Kafka reliability](tutorials/streaming-reliability.md) - IDs 12, 20, and 21 for delivery faults and Avro evolution.
 - [Operations and incident response](tutorials/operations.md) - IDs 13–15 and 22–24 for repair, scale, persistence, and observability.
+- [Advanced experiments](tutorials/advanced-experiments.md) - four combined workflows for calibration/interventions, graph investigations, ML shift/backtesting, and scale/reproducibility.
+
+## Choose your role
+
+- [New users](audiences/new-users.md)
+- [Data and ML practitioners](audiences/data-ml.md)
+- [Fraud and risk practitioners](audiences/fraud-risk.md)
+- [Engineering and MLOps](audiences/engineering-mlops.md)
+- [Researchers and governance reviewers](audiences/researchers-governance.md)
 
 ## Guides and concepts
 
