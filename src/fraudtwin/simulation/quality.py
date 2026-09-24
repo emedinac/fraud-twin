@@ -1,9 +1,9 @@
 """Deterministic M8 data-quality faults applied to generated records.
 
-The quality layer intentionally sits after the M1-M7 domain generators. This
+The quality layer intentionally sits after the domain generators. This
 keeps business generation and corruption concerns separate, and lets the
 clean profile return the same generated business records and event order as
-the earlier milestones.
+the clean generation path.
 """
 
 import base64

@@ -22,17 +22,15 @@ integration work.
 
 ## Tutorials
 
-The published sidebar groups these notebooks into seven learning paths:
+The published sidebar groups these notebooks into eight tutorial categories:
 [Visualization and exploration](tutorials/visualization.md),
 [Getting started](tutorials/getting-started.md),
 [Core workflows](tutorials/core-workflows.md),
 [Production ML and reliability](tutorials/production-ml.md),
 [Graph analytics](tutorials/graph-analytics.md),
-[Streaming and Kafka reliability](tutorials/streaming-reliability.md), and
-[Operations and incident response](tutorials/operations.md).
-[Advanced experiments](tutorials/advanced-experiments.md) extends the framework
-with calibration, counterfactuals, campaign dynamics, backtesting, evidence
-boundaries, scale, reconciliation, and experiment packaging.
+[Streaming and Kafka reliability](tutorials/streaming-reliability.md),
+[Operations and incident response](tutorials/operations.md), and
+[Advanced experiments](tutorials/advanced-experiments.md).
 
 Start with a category page instead of a flat notebook list. Each page explains
 the expected input size, optional extras, service requirements, generated
@@ -43,13 +41,13 @@ for readers with old bookmarks; use the category pages as the recommended path.
 Follow the category order for the recommended learning path; descriptive
 filenames and rendered titles explain what each notebook teaches.
 
-- [Visualization and exploration](tutorials/visualization.md) - IDs 25–27 for temporal, spatial, distribution, scenario, and feature analysis.
-- [Getting started](tutorials/getting-started.md) - IDs 1–4, from installation to delayed labels.
-- [Core workflows](tutorials/core-workflows.md) - IDs 5, 6, and 8 for PIT datasets and benchmarks.
-- [Production ML and reliability](tutorials/production-ml.md) - IDs 7, 9–11, 18, and 19 for model lifecycle and drift.
-- [Graph analytics](tutorials/graph-analytics.md) - IDs 16 and 17 for Neo4j and PyTorch Geometric.
-- [Streaming and Kafka reliability](tutorials/streaming-reliability.md) - IDs 12, 20, and 21 for delivery faults and Avro evolution.
-- [Operations and incident response](tutorials/operations.md) - IDs 13–15 and 22–24 for repair, scale, persistence, and observability.
+- [Visualization and exploration](tutorials/visualization.md) - temporal, spatial, distribution, scenario, and feature analysis.
+- [Getting started](tutorials/getting-started.md) - installation through delayed labels.
+- [Core workflows](tutorials/core-workflows.md) - point-in-time datasets and benchmarks.
+- [Production ML and reliability](tutorials/production-ml.md) - model lifecycle and drift.
+- [Graph analytics](tutorials/graph-analytics.md) - Neo4j and PyTorch Geometric.
+- [Streaming and Kafka reliability](tutorials/streaming-reliability.md) - delivery faults and Avro evolution.
+- [Operations and incident response](tutorials/operations.md) - repair, scale, persistence, and observability.
 - [Advanced experiments](tutorials/advanced-experiments.md) - four combined workflows for calibration/interventions, graph investigations, ML shift/backtesting, and scale/reproducibility.
 
 Tutorials remain a separate, notebook-first learning surface. They are linked

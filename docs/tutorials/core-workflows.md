@@ -4,10 +4,11 @@ This path turns events into analysis-ready data and reproducible experiments.
 Use it for point-in-time feature construction, fraud stress testing, model
 baselines, calibration, campaigns, and benchmark comparisons.
 
-| IDs | Time | Extras | Output |
+| Tutorial | Time | Extras | Output |
 | --- | --- | --- | --- |
-| 5–6 | 45–60 min | base; `ml`/`graph` optional | PIT dataset and scenario comparisons |
-| 8 | 30–45 min | `ml` optional | benchmark metrics and manifest |
+| From Events to a Trustworthy ML Dataset | 15–20 min | base | PIT dataset, quality diagnostics, and delayed-label tables |
+| Investigate and Stress-Test Fraud Scenarios | 20–30 min | base; plotting optional | replay, graph, scenario, camouflage, and counterfactual comparisons |
+| Build a Reproducible Fraud Benchmark | 20–30 min | base | benchmark metrics, model comparison, and reproducibility manifest |
 
 ## Tutorials
 

@@ -17,7 +17,7 @@ poetry install
 poetry run fraudtwin config validate configs/minimal.yaml
 ```
 
-Generated runs belong in a temporary directory or an ignored output path. Do not commit generated data, credentials, or local environment files.
+Generated runs belong in the ignored `./runs` directory. Do not commit generated data, credentials, or local environment files.
 
 ## Quality gate
 
@@ -59,12 +59,15 @@ Use the narrowest test while iterating, then run the full suite:
 For a generated-run smoke test:
 
 ```bash
-poetry run fraudtwin config validate configs/minimal.yaml
-poetry run fraudtwin generate configs/minimal.yaml \
-  --output-dir /tmp/fraudtwin-dev
+CONFIG=configs/minimal.yaml
+RUN_ID=RUN-...
+RUNS_DIR=./runs
+
+poetry run fraudtwin config validate "$CONFIG"
+poetry run fraudtwin generate "$CONFIG" --output-dir "$RUNS_DIR"
 poetry run fraudtwin validate-ledger \
-  --run-id <run-id> \
-  --output-dir /tmp/fraudtwin-dev
+  --run-id "$RUN_ID" \
+  --output-dir "$RUNS_DIR"
 ```
 
 Scale tests must use at most 1,000 logical events per fixture. Validate scale behavior with small deterministic runs and simulated interruption/resume; do not execute the billion profile in the test suite.

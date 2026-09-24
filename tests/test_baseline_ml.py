@@ -1,4 +1,4 @@
-"""Focused Milestone 19 baseline and prediction-adapter tests."""
+"""Focused baseline and prediction-adapter tests."""
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -12,6 +12,7 @@ from fraudtwin.ml import (
     PredictionRecord,
     evaluate_predictions,
     load_baseline_config,
+    train_baselines,
     write_evaluation,
     write_predictions,
 )
@@ -110,3 +111,16 @@ def test_baseline_config_is_strict() -> None:
     assert config.models == ("logistic_regression", "lightgbm", "xgboost", "catboost")
     with pytest.raises(ValidationError):
         BaselineEvaluationConfig.model_validate({"models": ["unknown"]})
+
+
+def test_logistic_baseline_scales_features_before_fitting(recwarn: pytest.WarningsRecorder) -> None:
+    pytest.importorskip("sklearn")
+    from sklearn.exceptions import ConvergenceWarning  # type: ignore[import-untyped]
+
+    rows = _rows()
+    config = BaselineEvaluationConfig(models=("logistic_regression",))
+    result = train_baselines(rows, config)
+
+    assert not any(item.category is ConvergenceWarning for item in recwarn)
+    assert result.model_artifacts
+    assert "logistic_regression" in result.model_artifacts

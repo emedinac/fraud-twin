@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 
 def test_service_rejects_unknown_features_and_reports_missing_model() -> None:
-    client = TestClient(create_app(Path("/tmp/does-not-exist.joblib")))
+    client = TestClient(create_app(Path("runs/does-not-exist.joblib")))
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "starting"

@@ -1,8 +1,8 @@
-"""Deterministic Milestone 14 counterfactual generation.
+"""Deterministic counterfactual generation.
 
-The M14 engine deliberately operates on a pristine legitimate payment stream.
+The engine deliberately operates on a pristine legitimate payment stream.
 It produces append-only sidecar data and never mutates the source models or the
-ordinary M1--M13 output tables.
+ordinary output tables.
 """
 
 import hashlib

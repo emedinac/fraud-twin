@@ -3,15 +3,16 @@
 Build explainable graph views and use the same temporal provenance in a graph
 database or a PyTorch Geometric experiment.
 
-| IDs | Time | Extras | Output |
-| --- | --- | --- | --- |
-| 16 | 30–45 min | base; Neo4j optional | graph tables, Cypher, fingerprint |
-| 17 | 30–45 min | `graph` optional | temporal features and evaluation |
+| Time | Extras | Output |
+| --- | --- | --- |
+| 30–45 min | base; Neo4j optional | graph tables, Cypher, fingerprint |
+| 30–45 min | `graph` optional | temporal features and evaluation |
 
-Tutorial 16 includes the optional `!pip install neo4j` cell, a local Neo4j
-startup command, connectivity check, and a small Cypher query. The offline
-graph export and Polars investigation remain the default path. Tutorial 17
-uses the existing `graph` extra; no external service is required.
+The temporal graph notebook includes the optional `!pip install neo4j` cell, a
+local Neo4j startup command, connectivity check, and a small Cypher query. The
+offline graph export and Polars investigation remain the default path. The
+PyTorch Geometric notebook uses the existing `graph` extra; no external
+service is required.
 
 ## Tutorials
 

@@ -49,8 +49,11 @@ Use a bounded profile locally, keep the checkpoint directory intact, and resume
 from its manifest:
 
 ```console
-fraudtwin generate configs/scale-1b.yaml --workers 16 --checkpoint-dir .fraudtwin/run
-fraudtwin resume .fraudtwin/run
+CONFIG=configs/scale-1b.yaml
+CHECKPOINT_DIR=./runs/scale-checkpoint
+
+fraudtwin generate "$CONFIG" --workers 16 --checkpoint-dir "$CHECKPOINT_DIR"
+fraudtwin resume "$CHECKPOINT_DIR"
 ```
 
 Resume validates the resolved configuration and seed tree. Do not edit a

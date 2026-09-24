@@ -1,4 +1,4 @@
-"""Deterministic, opt-in Milestone 15 campaign evolution."""
+"""Deterministic, opt-in campaign evolution."""
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta

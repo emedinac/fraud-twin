@@ -1,4 +1,4 @@
-"""Focused Milestone 12 difficulty-engine contracts."""
+"""Focused fraud-difficulty engine contract tests."""
 
 import json
 from functools import cache

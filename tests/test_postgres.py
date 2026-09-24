@@ -1,4 +1,4 @@
-"""Focused Milestone 23 PostgreSQL operational-mode tests."""
+"""Focused PostgreSQL operational-mode tests."""
 
 import json
 import os

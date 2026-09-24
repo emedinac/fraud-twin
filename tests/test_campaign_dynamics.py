@@ -1,4 +1,4 @@
-"""Focused Milestone 15 campaign-dynamics contracts."""
+"""Focused campaign-dynamics contract tests."""
 
 from pathlib import Path
 

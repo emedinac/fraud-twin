@@ -80,8 +80,11 @@ scale:
 Run and resume a scale profile with:
 
 ```bash
-fraudtwin generate configs/scale-1b.yaml --workers 16 --checkpoint-dir .fraudtwin/run-1b
-fraudtwin resume .fraudtwin/run-1b
+CONFIG=configs/scale-1b.yaml
+CHECKPOINT_DIR=./runs/scale-1b-checkpoint
+
+fraudtwin generate "$CONFIG" --workers 16 --checkpoint-dir "$CHECKPOINT_DIR"
+fraudtwin resume "$CHECKPOINT_DIR"
 ```
 
 The billion profile is a published benchmark target for suitable documented
@@ -176,7 +179,7 @@ workflow is available for legitimate-only source runs:
 fraudtwin counterfactual generate \
   --config configs/benchmarks/m14-counterfactual-v1.yaml \
   --source-run-id RUN-... \
-  --output-dir /tmp/fraudtwin-run
+  --output-dir ./runs
 ```
 
 Rail conversion is reported as inapplicable when changing rails would require

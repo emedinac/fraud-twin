@@ -1,1 +1,1 @@
-"""Bundled immutable Milestone 22 quality benchmark profiles."""
+"""Bundled immutable quality benchmark profiles."""

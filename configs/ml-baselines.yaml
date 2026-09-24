@@ -1,4 +1,4 @@
-# Deterministic Milestone 19 baseline evaluation defaults.
+# Deterministic baseline evaluation defaults.
 models:
   - logistic_regression
   - lightgbm

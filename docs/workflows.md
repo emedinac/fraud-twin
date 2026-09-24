@@ -13,9 +13,13 @@ FraudTwin separates generation from analysis. Generate a source run once, then b
 The dataset builder creates historical features and labels using only data that was available at each row’s `prediction_time`:
 
 ```bash
-poetry run fraudtwin ml build-dataset configs/minimal.yaml \
-  --run-id <run-id> \
-  --output-dir runs
+CONFIG=configs/minimal.yaml
+RUN_ID=RUN-...
+RUNS_DIR=./runs
+
+poetry run fraudtwin ml build-dataset "$CONFIG" \
+  --run-id "$RUN_ID" \
+  --output-dir "$RUNS_DIR"
 ```
 
 Source events and ledger entries are filtered by source availability. Labels are filtered by `label_available_at` and the configured label delay. Use `--label-delay-aware` when unresolved labels should be excluded rather than retained for inspection.
@@ -35,8 +39,11 @@ stored configuration and seed tree, reuses valid completed chunks, and
 regenerates incomplete work deterministically:
 
 ```bash
-poetry run fraudtwin generate configs/scale-1b.yaml --workers 16 --checkpoint-dir .fraudtwin/run-1b
-poetry run fraudtwin resume .fraudtwin/run-1b
+CONFIG=configs/scale-1b.yaml
+CHECKPOINT_DIR=./runs/scale-1b-checkpoint
+
+poetry run fraudtwin generate "$CONFIG" --workers 16 --checkpoint-dir "$CHECKPOINT_DIR"
+poetry run fraudtwin resume "$CHECKPOINT_DIR"
 ```
 
 The `billion` profile is a hardware-dependent benchmark target and is not part of unit, smoke, or CI validation.
@@ -51,11 +58,14 @@ partition-aware and resume-safe.
 Replay is read-only. It selects records from an existing run over a half-open interval and preserves their source identities and timestamps:
 
 ```bash
-poetry run fraudtwin replay --run-id <run-id> \
+RUN_ID=RUN-...
+RUNS_DIR=./runs
+
+poetry run fraudtwin replay --run-id "$RUN_ID" \
   --from 2026-01-01T00:00:00Z \
   --to 2026-01-02T00:00:00Z \
   --order event_time_order \
-  --output-dir runs
+  --output-dir "$RUNS_DIR"
 ```
 
 Use `original_delivery` when the question is about ingestion and processing order rather than business event time. Replay adds sequence metadata without rewriting the source records.
@@ -65,10 +75,14 @@ Use `original_delivery` when the question is about ingestion and processing orde
 Backtests use fixed or expanding training windows and explicit validation, test, stress, and label-maturity boundaries:
 
 ```bash
-poetry run fraudtwin ml backtest configs/minimal.yaml \
-  --run-id <run-id> \
+CONFIG=configs/minimal.yaml
+RUN_ID=RUN-...
+RUNS_DIR=./runs
+
+poetry run fraudtwin ml backtest "$CONFIG" \
+  --run-id "$RUN_ID" \
   --benchmark-pack configs/benchmarks/m10-minimal-v1.yaml \
-  --output-dir runs
+  --output-dir "$RUNS_DIR"
 ```
 
 Windows are chronological and non-overlapping. A benchmark pack freezes its own label-maturity gap, regime policy, seed/configuration identity, and metric definition so later comparisons remain meaningful.
@@ -92,15 +106,19 @@ The baseline workflow trains Logistic Regression, LightGBM, XGBoost, and CatBoos
 
 ```bash
 poetry install -E ml
-poetry run fraudtwin ml train runs/<run-id>/ml/dataset.parquet \
+RUN_ID=RUN-...
+DATASET=./runs/$RUN_ID/ml/dataset.parquet
+EVALUATIONS_DIR=./runs/ml-evaluations
+
+poetry run fraudtwin ml train "$DATASET" \
   --config configs/ml-baselines.yaml \
-  --output-dir runs/ml-evaluations
+  --output-dir "$EVALUATIONS_DIR"
 ```
 
 External models can submit strict Parquet or JSONL records containing one event/payment/customer/account ID, a prediction timestamp, a fraud score, and an optional predicted class:
 
 ```bash
-poetry run fraudtwin ml evaluate runs/<run-id>/ml/dataset.parquet predictions.jsonl
+poetry run fraudtwin ml evaluate "$DATASET" predictions.jsonl
 ```
 
 The evaluator reports ranking, threshold, calibration, monetary, detection-delay, and segment metrics. It resolves labels and features at each prediction timestamp and records an immutable evaluation manifest. MLflow is used when a tracking URI is configured; otherwise local artifacts are sufficient.
@@ -160,7 +178,9 @@ injecting drops, retries, duplicates, delays, reordering, partition skew, and
 outage behavior. It models delivery semantics—not raw TCP packet loss:
 
 ```bash
-fraudtwin kafka chaos --run-id <run-id> --boundary producer \
+RUN_ID=RUN-...
+
+fraudtwin kafka chaos --run-id "$RUN_ID" --boundary producer \
   --drop-rate 0.02 --duplicate-rate 0.03 --retry-rate 0.05 \
   --delay-seconds 30 --reorder-window 100 --output-dir runs
 ```

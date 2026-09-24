@@ -1,4 +1,4 @@
-"""Domain records used by the optional Milestone 11 graph layer."""
+"""Domain records used by the optional graph layer."""
 
 from datetime import datetime
 from typing import Literal

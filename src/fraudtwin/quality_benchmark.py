@@ -1,4 +1,4 @@
-"""Generator quality benchmarking for Milestone 22.
+"""Generator quality benchmarking.
 
 The quality benchmark is deliberately separate from the M20 model benchmark.
 It evaluates the generator and its artifacts, while keeping correctness,

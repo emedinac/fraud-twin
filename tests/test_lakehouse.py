@@ -1,4 +1,4 @@
-"""Focused Milestone 26 lakehouse boundary and determinism tests."""
+"""Focused lakehouse boundary and determinism tests."""
 
 import json
 from dataclasses import replace

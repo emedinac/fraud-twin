@@ -1,4 +1,4 @@
-"""Small, explainable ground-truth records for Milestone 6 scenarios."""
+"""Small, explainable ground-truth records for fraud scenarios."""
 
 from datetime import datetime
 from typing import Literal

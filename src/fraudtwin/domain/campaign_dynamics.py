@@ -1,4 +1,4 @@
-"""Immutable domain records for Milestone 15 campaign evolution."""
+"""Immutable domain records for campaign evolution."""
 
 from datetime import datetime
 from typing import Literal

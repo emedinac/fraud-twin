@@ -1,4 +1,4 @@
-"""Bundled Avro contracts for observable operational events (Milestone 24)."""
+"""Bundled Avro contracts for observable operational events."""
 
 from fraudtwin.contracts.registry import (
     AvroContractRegistry,

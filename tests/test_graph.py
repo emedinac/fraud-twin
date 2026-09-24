@@ -1,4 +1,4 @@
-"""Focused Milestone 11 graph contracts."""
+"""Focused graph contract tests."""
 
 from pathlib import Path
 

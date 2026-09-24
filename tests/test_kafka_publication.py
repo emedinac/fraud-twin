@@ -1,4 +1,4 @@
-"""Focused Milestone 25 native Kafka publication contracts."""
+"""Focused native Kafka publication contract tests."""
 
 from pathlib import Path
 

@@ -1,4 +1,4 @@
-"""Deterministic baseline models and prediction evaluation for Milestone 19.
+"""Deterministic baseline models and prediction evaluation.
 
 The module intentionally keeps model dependencies lazy.  Dataset construction and
 generation remain usable without the optional ML stack, while a trained run is
@@ -75,6 +75,7 @@ FEATURE_VERSION = "M19-observable-allowlist-1"
 PREPROCESSING_METADATA = {
     "missing_values": "numeric=0; categorical=__UNKNOWN__",
     "categorical_encoding": "deterministic one-hot vocabulary fit on train rows",
+    "logistic_regression_scaling": "StandardScaler fit on train matrix before lbfgs",
     "resampling": "none",
 }
 
@@ -533,8 +534,13 @@ def _lazy_model(name: str, seed: int) -> Any:
     try:
         if name == "logistic_regression":
             from sklearn.linear_model import LogisticRegression  # type: ignore[import-untyped]
+            from sklearn.pipeline import make_pipeline  # type: ignore[import-untyped]
+            from sklearn.preprocessing import StandardScaler  # type: ignore[import-untyped]
 
-            return LogisticRegression(max_iter=500, class_weight="balanced", random_state=seed)
+            return make_pipeline(
+                StandardScaler(),
+                LogisticRegression(max_iter=500, class_weight="balanced", random_state=seed),
+            )
         if name == "lightgbm":
             from lightgbm import LGBMClassifier  # type: ignore[import-not-found]
 

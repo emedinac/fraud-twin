@@ -1,6 +1,6 @@
 {
   "claim_scope": "laptop-dev-only",
-  "command": "fraudtwin scale-benchmark configs/scale-dev.yaml --output-dir /tmp/fraudtwin-evidence-run --checkpoint-dir /tmp/fraudtwin-evidence-checkpoint --evidence-dir benchmarks/evidence",
+  "command": "fraudtwin scale-benchmark configs/scale-dev.yaml --output-dir ./runs/evidence-dev --checkpoint-dir ./runs/evidence-dev-checkpoint --evidence-dir benchmarks/evidence",
   "configuration_hash": "74d79c06b059231b3b45338b65cf6dcec810dab32cb937f67cf0503ea25d98c4",
   "elapsed_seconds": 1.5916389240010176,
   "git_revision": "ab147ea8c0a518578b022180b13f688131b97253",
@@ -55,7 +55,7 @@
   },
   "recorded_at_epoch": 1790247496.8854513,
   "resume": {
-    "checkpoint": "/tmp/fraudtwin-evidence-checkpoint/checkpoint.json",
+    "checkpoint": "./runs/evidence-dev-checkpoint/checkpoint.json",
     "completed": true
   },
   "seed": 42,

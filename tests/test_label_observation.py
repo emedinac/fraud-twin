@@ -1,4 +1,4 @@
-"""Focused Milestone 17 label-observation tests."""
+"""Focused label-observation tests."""
 
 from datetime import timedelta
 from pathlib import Path

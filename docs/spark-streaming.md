@@ -16,12 +16,16 @@ of local generation.
 
 ```console
 poetry install -E lakehouse
-poetry run fraudtwin generate configs/scale-dev.yaml --output-dir /tmp/fraudtwin-spark
+RUNS_DIR=./runs
+SPARK_OUTPUT_DIR=./runs/spark-output
+SPARK_CHECKPOINT_DIR=./runs/spark-checkpoint
+
+poetry run fraudtwin generate configs/scale-dev.yaml --output-dir "$RUNS_DIR"
 spark-submit examples/spark-streaming/spark_streaming.py \
   --source parquet \
-  --input /tmp/fraudtwin-spark/RUN-*/payments/payment_events.parquet \
-  --output /tmp/fraudtwin-spark-output \
-  --checkpoint /tmp/fraudtwin-spark-checkpoint
+  --input "$RUNS_DIR"/RUN-*/payments/payment_events.parquet \
+  --output "$SPARK_OUTPUT_DIR" \
+  --checkpoint "$SPARK_CHECKPOINT_DIR"
 ```
 
 The application writes `silver_events`, `late_events`,
@@ -36,8 +40,8 @@ Start the documented streaming profile and publish a clean run, then use:
 ```console
 spark-submit examples/spark-streaming/spark_streaming.py \
   --source kafka --input localhost:9092 \
-  --output /tmp/fraudtwin-spark-output \
-  --checkpoint /tmp/fraudtwin-spark-checkpoint
+  --output ./runs/spark-output \
+  --checkpoint ./runs/spark-checkpoint
 ```
 
 Kafka records must carry the bundled PaymentEvent contract fingerprint. Invalid or

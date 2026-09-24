@@ -11,6 +11,8 @@
 [![Parquet](https://img.shields.io/badge/output-Apache%20Parquet-50ABF1?logo=apacheparquet&logoColor=white)](https://parquet.apache.org/docs/)
 [![Pydantic](https://img.shields.io/badge/config-Pydantic%202-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 
+Documentation: [main site](https://emedinac.github.io/fraud-twin/)
+
 > A deterministic payment world for building, breaking, and validating fraud systems.
 
 FraudTwin is a Python framework for generating realistic financial behavior and
@@ -51,8 +53,11 @@ cd fraud-twin
 poetry install
 
 # Validate and generate the minimal local run.
-poetry run fraudtwin config validate configs/minimal.yaml
-poetry run fraudtwin generate configs/minimal.yaml --output-dir /tmp/fraudtwin-run
+CONFIG=configs/minimal.yaml
+RUNS_DIR=./runs
+
+poetry run fraudtwin config validate "$CONFIG"
+poetry run fraudtwin generate "$CONFIG" --output-dir "$RUNS_DIR"
 ```
 
 The command prints an immutable run ID and writes a manifest plus Parquet
@@ -81,7 +86,7 @@ print(data.run_id, dataset.shape)
 run = fraudtwin.generate(
     config,
     write=True,
-    output_dir=Path("/tmp/fraudtwin-run"),
+    output_dir=Path("runs"),
 )
 loaded = run.load_data()
 print(run.run_id, len(loaded.behavior.payments), run.manifest_path)

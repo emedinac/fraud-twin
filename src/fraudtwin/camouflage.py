@@ -1,4 +1,4 @@
-"""Deterministic Milestone 13 camouflage resolution and transformations."""
+"""Deterministic camouflage resolution and transformations."""
 
 import statistics
 from collections import defaultdict

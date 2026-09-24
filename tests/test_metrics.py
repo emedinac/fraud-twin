@@ -1,4 +1,4 @@
-"""Focused Milestone 27 Prometheus metric contracts."""
+"""Focused Prometheus metric contract tests."""
 
 import pytest
 
