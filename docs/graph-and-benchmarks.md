@@ -131,12 +131,12 @@ metrics, calibration identity, descriptors, and logical content fingerprints
 are frozen in the installed package:
 
 ```bash
-fraudtwin benchmark run FT-B04-CAMOUFLAGE@1.0
-fraudtwin benchmark describe FT-B04-CAMOUFLAGE@1.0.0
+fraudtwin benchmark run FT-B04-CAMOUFLAGE@0.34.0
+fraudtwin benchmark describe FT-B04-CAMOUFLAGE@0.34.0
 fraudtwin benchmark verify runs/benchmarks/BM-<id>
 ```
 
-The shorthand `@1.0` is accepted only when it resolves to one patch version.
+The shorthand `@0.34` is accepted only when it resolves to one patch version.
 Pack runs reject incompatible FraudTwin versions, altered definitions, and
 logical output drift. `benchmark verify` checks an existing artifact without
 rerunning it. Released definitions are never edited or removed; a

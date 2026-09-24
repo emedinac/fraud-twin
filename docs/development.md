@@ -48,13 +48,13 @@ Use the narrowest test while iterating, then run the full suite:
 | Workflow cases and labels | `poetry run pytest tests/test_cases.py` |
 | Data quality | `poetry run pytest tests/test_quality.py` |
 | Point-in-time datasets | `poetry run pytest tests/test_dataset.py` |
-| Replay and backtesting | `poetry run pytest tests/test_m10.py` |
-| Baseline ML and prediction adapter | `poetry run pytest tests/test_m19.py` |
+| Replay and backtesting | `poetry run pytest tests/test_backtesting.py` |
+| Baseline ML and prediction adapter | `poetry run pytest tests/test_baseline_ml.py` |
 | Graph exports | `poetry run pytest tests/test_graph.py` |
-| Difficulty | `poetry run pytest tests/test_m12.py` |
-| Camouflage | `poetry run pytest tests/test_m13.py` |
-| Campaign dynamics | `poetry run pytest tests/test_m15.py` |
-| Observability | `poetry run pytest tests/test_m27.py` |
+| Difficulty | `poetry run pytest tests/test_difficulty.py` |
+| Camouflage | `poetry run pytest tests/test_camouflage.py` |
+| Campaign dynamics | `poetry run pytest tests/test_campaign_dynamics.py` |
+| Observability | `poetry run pytest tests/test_metrics.py` |
 
 For a generated-run smoke test:
 

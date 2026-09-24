@@ -117,7 +117,7 @@ def test_observed_amount_overlap_is_reported_for_difficulty_runs() -> None:
     )
 
 
-def test_m12_cli_writes_difficulty_metadata_to_temporary_run(tmp_path: Path) -> None:
+def test_difficulty_cli_writes_difficulty_metadata_to_temporary_run(tmp_path: Path) -> None:
     config_path = tmp_path / "m12.yaml"
     config_path.write_text(
         Path("configs/benchmarks/m12-difficulty-v1.yaml").read_text(encoding="utf-8"),

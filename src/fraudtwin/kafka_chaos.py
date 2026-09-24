@@ -6,8 +6,6 @@ can be tested with repeatable drops, retries, duplicates, delays, reordering,
 outages, and partition skew.
 """
 
-from __future__ import annotations
-
 import hashlib
 from datetime import UTC, datetime, timedelta
 from random import Random
@@ -31,7 +29,7 @@ class KafkaChaosOutage(BaseModel):
     delay_seconds: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
-    def interval_must_be_ordered(self) -> KafkaChaosOutage:
+    def interval_must_be_ordered(self) -> "KafkaChaosOutage":
         if self.from_time.tzinfo is None or self.to_time.tzinfo is None:
             raise ValueError("Kafka chaos outage timestamps must be timezone-aware")
         if self.to_time <= self.from_time:

@@ -1,7 +1,5 @@
 """Native Kafka publication for the clean observable M24 event contracts."""
 
-from __future__ import annotations
-
 import importlib
 import json
 import os
@@ -271,7 +269,7 @@ def _dependencies() -> tuple[Any, Any]:
 
 def publisher_from_environment(
     *, registry: AvroContractRegistry | None = None, config: KafkaConfig | None = None
-) -> KafkaPublisher:
+) -> "KafkaPublisher":
     """Build a publisher from environment-only connection settings."""
 
     settings = config or KafkaConfig()

@@ -5,8 +5,6 @@ backfill and a small Kafka consumer adapter at the integration boundary.  All
 Iceberg and Kafka imports are lazy so normal installs remain dependency-free.
 """
 
-from __future__ import annotations
-
 import base64
 import hashlib
 import importlib
@@ -94,7 +92,7 @@ class LakehouseEnvironment:
     catalog_name: str = "fraudtwin"
 
     @classmethod
-    def from_environment(cls, config: LakehouseConfig | None = None) -> LakehouseEnvironment:
+    def from_environment(cls, config: LakehouseConfig | None = None) -> "LakehouseEnvironment":
         settings = config or LakehouseConfig()
         catalog_uri = os.environ.get("FRAUDTWIN_ICEBERG_CATALOG_URI")
         warehouse = os.environ.get("FRAUDTWIN_ICEBERG_WAREHOUSE")

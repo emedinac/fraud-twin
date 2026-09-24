@@ -13,7 +13,7 @@ bounded test, runnable command, and inspectable artifact exist together.
 | --- | --- | --- |
 | Deterministic local generation | `fraudtwin generate configs/minimal.yaml` | Run manifest, Parquet tables, fingerprints, ledger checks |
 | Point-in-time ML data | `fraudtwin ml build-dataset` | Dataset manifest and leakage tests |
-| Fraud stress benchmarks | `fraudtwin benchmark run FT-B04-CAMOUFLAGE@1.0` | Pack manifest, descriptors, model metrics |
+| Fraud stress benchmarks | `fraudtwin benchmark run FT-B04-CAMOUFLAGE@0.34.0` | Pack manifest, descriptors, model metrics |
 | Kafka contracts/publication | `fraudtwin schema validate` and streaming Compose profile | Avro fingerprints, topic publication, chaos report |
 | PostgreSQL operational mirror | `fraudtwin db migrate` plus clean generation | Relational reconciliation and idempotent run checks |
 | Iceberg materialization | `fraudtwin lakehouse ingest-run` | Bronze/Silver/Gold manifest and snapshots |

@@ -30,6 +30,8 @@ def _drop_inactive_metadata(data: dict[str, object]) -> dict[str, object]:
     for field in ("output_fingerprint", "schema_fingerprint", "file_checksums"):
         if not data.get(field):
             data.pop(field, None)
+    if not data.get("extensions"):
+        data.pop("extensions", None)
     return data
 
 
@@ -234,38 +236,31 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         outputs = resolved.get("outputs")
         if isinstance(outputs, dict):
             outputs.pop("iceberg", None)
-    # Discovery is local-only and has no effect when no extension package is
-    # installed.  Capturing the registry snapshot makes extension-enabled
-    # runs auditable without changing the default run identity.
-    try:
+    discovered_extensions: list[dict[str, str]] = []
+    if config.extensions.enabled:
         from fraudtwin.extensions import discover_extensions
 
         discovered_extensions = discover_extensions().manifest()
-        if config.extensions.enabled:
-            selected = set(config.extensions.selected)
-            discovered_extensions = [
-                item for item in discovered_extensions if item["extension_id"] in selected
-            ]
-            discovered_ids = {item["extension_id"] for item in discovered_extensions}
-            missing = sorted(selected - discovered_ids)
-            if missing:
-                raise ValueError("configured extensions are not installed: " + ", ".join(missing))
-            extension_configuration_hash = sha256_json(config.extensions.model_dump(mode="json"))
-            discovered_extensions = [
-                {
-                    **item,
-                    "configuration_hash": extension_configuration_hash,
-                    "order": str(index),
-                }
-                for index, item in enumerate(
-                    sorted(discovered_extensions, key=lambda value: value["extension_id"]),
-                    start=1,
-                )
-            ]
-        else:
-            discovered_extensions = []
-    except (ImportError, TypeError):
-        discovered_extensions = []
+        selected = set(config.extensions.selected)
+        discovered_extensions = [
+            item for item in discovered_extensions if item["extension_id"] in selected
+        ]
+        discovered_ids = {item["extension_id"] for item in discovered_extensions}
+        missing = sorted(selected - discovered_ids)
+        if missing:
+            raise ValueError("configured extensions are not installed: " + ", ".join(missing))
+        extension_configuration_hash = sha256_json(config.extensions.model_dump(mode="json"))
+        discovered_extensions = [
+            {
+                **item,
+                "configuration_hash": extension_configuration_hash,
+                "order": str(index),
+            }
+            for index, item in enumerate(
+                sorted(discovered_extensions, key=lambda value: value["extension_id"]),
+                start=1,
+            )
+        ]
     return RunManifest(
         run_id=f"RUN-{run_hash}",
         generator_version=__version__,

@@ -41,7 +41,8 @@ spark-submit examples/spark-streaming/spark_streaming.py \
 ```
 
 Kafka records must carry the bundled PaymentEvent contract fingerprint. Invalid or
-unknown contract fingerprints are ignored rather than projected.
+unknown contract fingerprints and malformed Avro payloads are ignored rather
+than projected.
 
 ## Time and failure semantics
 

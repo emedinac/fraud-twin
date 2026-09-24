@@ -6,8 +6,6 @@ the visualisation tutorials (seed 2501, 1,000 logical payments). They show
 workflow shape, not real-world fraud prevalence.
 """
 
-from __future__ import annotations
-
 from collections.abc import Sequence
 from html import escape
 from math import log1p
@@ -148,9 +146,9 @@ def _frame(title: str, xlabel: str, ylabel: str, left: float = LEFT) -> list[str
         f"<title>{escape(title)}</title>",
         '<rect width="100%" height="100%" fill="#ffffff"/>',
         _text(left, 30, title, 19),
-        f'<line x1="{left}" y1="{TOP}" x2="{left}" y2="{HEIGHT-BOTTOM}" stroke="#52606d"/>',
-        f'<line x1="{left}" y1="{HEIGHT-BOTTOM}" x2="{WIDTH-RIGHT}" '
-        f'y2="{HEIGHT-BOTTOM}" stroke="#52606d"/>',
+        f'<line x1="{left}" y1="{TOP}" x2="{left}" y2="{HEIGHT - BOTTOM}" stroke="#52606d"/>',
+        f'<line x1="{left}" y1="{HEIGHT - BOTTOM}" x2="{WIDTH - RIGHT}" '
+        f'y2="{HEIGHT - BOTTOM}" stroke="#52606d"/>',
         _text((left + WIDTH - RIGHT) / 2, HEIGHT - 18, xlabel, 13, "middle"),
         f'<text x="18" y="{mid:.1f}" font-family="sans-serif" font-size="13" text-anchor="middle" '
         f'transform="rotate(-90 18 {mid:.1f})" fill="#243447">{escape(ylabel)}</text>',
@@ -161,12 +159,12 @@ def _ticks(parts: list[str], labels: Sequence[str], maximum: float, digits: int 
     for index, label in enumerate(labels):
         x = LEFT + index * PLOT_W / max(1, len(labels) - 1)
         parts.append(
-            f'<line x1="{x:.1f}" y1="{TOP}" x2="{x:.1f}" y2="{HEIGHT-BOTTOM}" '
+            f'<line x1="{x:.1f}" y1="{TOP}" x2="{x:.1f}" y2="{HEIGHT - BOTTOM}" '
             'stroke="#f0f4f8" stroke-width="1"/>'
         )
         parts.append(
-            f'<line x1="{x:.1f}" y1="{HEIGHT-BOTTOM}" x2="{x:.1f}" '
-            f'y2="{HEIGHT-BOTTOM+5}" stroke="#52606d"/>'
+            f'<line x1="{x:.1f}" y1="{HEIGHT - BOTTOM}" x2="{x:.1f}" '
+            f'y2="{HEIGHT - BOTTOM + 5}" stroke="#52606d"/>'
         )
         parts.append(_text(x, HEIGHT - BOTTOM + 21, label, 11, "middle"))
     _y_ticks(parts, maximum, digits)
@@ -179,11 +177,11 @@ def _y_ticks(parts: list[str], maximum: float, digits: int = 0) -> None:
         value = maximum * step / 4
         y = HEIGHT - BOTTOM - PLOT_H * step / 4
         parts.append(
-            f'<line x1="{LEFT}" y1="{y:.1f}" x2="{WIDTH-RIGHT}" y2="{y:.1f}" '
+            f'<line x1="{LEFT}" y1="{y:.1f}" x2="{WIDTH - RIGHT}" y2="{y:.1f}" '
             'stroke="#e6edf3" stroke-width="1"/>'
         )
         parts.append(
-            f'<line x1="{LEFT-5}" y1="{y:.1f}" x2="{LEFT}" y2="{y:.1f}" stroke="#52606d"/>'
+            f'<line x1="{LEFT - 5}" y1="{y:.1f}" x2="{LEFT}" y2="{y:.1f}" stroke="#52606d"/>'
         )
         parts.append(_text(LEFT - 10, y + 4, f"{value:.{digits}f}", 11, "end"))
 
@@ -195,8 +193,8 @@ def _category_ticks(parts: list[str], labels: Sequence[str]) -> None:
     for index, label in enumerate(labels):
         x = LEFT + index * slot + slot / 2
         parts.append(
-            f'<line x1="{x:.1f}" y1="{HEIGHT-BOTTOM}" x2="{x:.1f}" '
-            f'y2="{HEIGHT-BOTTOM+5}" stroke="#52606d"/>'
+            f'<line x1="{x:.1f}" y1="{HEIGHT - BOTTOM}" x2="{x:.1f}" '
+            f'y2="{HEIGHT - BOTTOM + 5}" stroke="#52606d"/>'
         )
         parts.append(_text(x, HEIGHT - BOTTOM + 21, label, 11, "middle"))
 
@@ -224,7 +222,7 @@ def _line(
         y = HEIGHT - BOTTOM - value * PLOT_H / maximum
         points.append(f"{x:.1f},{y:.1f}")
     baseline = HEIGHT - BOTTOM
-    area_points = f"{LEFT},{baseline} {' '.join(points)} {WIDTH-RIGHT},{baseline}"
+    area_points = f"{LEFT},{baseline} {' '.join(points)} {WIDTH - RIGHT},{baseline}"
     parts.append(f'<polygon points="{area_points}" fill="{color}" opacity="0.10"/>')
     parts.append(
         f'<polyline points="{" ".join(points)}" fill="none" stroke="{color}" stroke-width="3"/>'
@@ -261,7 +259,7 @@ def _bars(
         height = value * PLOT_H / maximum
         y = HEIGHT - BOTTOM - height
         parts.append(
-            f'<rect x="{x:.1f}" y="{y:.1f}" width="{slot*0.66:.1f}" '
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{slot * 0.66:.1f}" '
             f'height="{height:.1f}" fill="{color}" rx="3"/>'
         )
         parts.append(_text(x + slot * 0.33, y - 6, f"{value:g}", 11, "middle"))
@@ -285,9 +283,9 @@ def _reconciliation_figure(
         '<rect width="100%" height="100%" fill="#ffffff"/>',
         _text(36, 34, f"Projection reconciliation (source IDs n={source_count:,})", 19),
         _text(36, 58, "Zoomed match-rate view; annotations show exact unmatched IDs.", 12),
-        f'<line x1="{left}" y1="{top}" x2="{left}" y2="{HEIGHT-bottom}" ' 'stroke="#52606d"/>',
-        f'<line x1="{left}" y1="{HEIGHT-bottom}" x2="{WIDTH-right}" '
-        f'y2="{HEIGHT-bottom}" stroke="#52606d"/>',
+        f'<line x1="{left}" y1="{top}" x2="{left}" y2="{HEIGHT - bottom}" stroke="#52606d"/>',
+        f'<line x1="{left}" y1="{HEIGHT - bottom}" x2="{WIDTH - right}" '
+        f'y2="{HEIGHT - bottom}" stroke="#52606d"/>',
         _text((left + WIDTH - right) / 2, HEIGHT - 18, "projection", 13, "middle"),
         f'<text x="18" y="{(top + HEIGHT - bottom) / 2:.1f}" font-family="sans-serif" '
         f'font-size="13" text-anchor="middle" '
@@ -298,7 +296,7 @@ def _reconciliation_figure(
         value = minimum + (maximum - minimum) * step / 5
         y = HEIGHT - bottom - plot_height * (value - minimum) / (maximum - minimum)
         parts.append(
-            f'<line x1="{left-5}" y1="{y:.1f}" x2="{left}" y2="{y:.1f}" stroke="#52606d"/>'
+            f'<line x1="{left - 5}" y1="{y:.1f}" x2="{left}" y2="{y:.1f}" stroke="#52606d"/>'
         )
         parts.append(_text(left - 10, y + 4, f"{value:.1f}", 11, "end"))
     slot = plot_width / max(1, len(rows))
@@ -309,7 +307,7 @@ def _reconciliation_figure(
         y = HEIGHT - bottom - height
         color = "#15803d" if unmatched == 0 else "#c2410c"
         parts.append(
-            f'<rect x="{x:.1f}" y="{y:.1f}" width="{slot*0.66:.1f}" '
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{slot * 0.66:.1f}" '
             f'height="{height:.1f}" fill="{color}" rx="3"/>'
         )
         parts.append(_text(x + slot * 0.33, y - 7, f"{rate:.1f}%", 11, "middle"))
@@ -350,12 +348,12 @@ def _scatter(
         x = LEFT + PLOT_W * ratio
         y = HEIGHT - BOTTOM - PLOT_H * ratio
         parts.append(
-            f'<line x1="{x:.1f}" y1="{HEIGHT-BOTTOM}" x2="{x:.1f}" '
-            f'y2="{HEIGHT-BOTTOM+5}" stroke="#52606d"/>'
+            f'<line x1="{x:.1f}" y1="{HEIGHT - BOTTOM}" x2="{x:.1f}" '
+            f'y2="{HEIGHT - BOTTOM + 5}" stroke="#52606d"/>'
         )
         parts.append(_text(x, HEIGHT - BOTTOM + 21, f"{x_value:.2g}", 11, "middle"))
         parts.append(
-            f'<line x1="{LEFT-5}" y1="{y:.1f}" x2="{LEFT}" y2="{y:.1f}" stroke="#52606d"/>'
+            f'<line x1="{LEFT - 5}" y1="{y:.1f}" x2="{LEFT}" y2="{y:.1f}" stroke="#52606d"/>'
         )
         parts.append(_text(LEFT - 10, y + 4, f"{y_value:.2g}", 11, "end"))
     for x_value, y_value, color in points:
@@ -365,7 +363,7 @@ def _scatter(
     legend_x = WIDTH - RIGHT - 220
     for index, (label, color) in enumerate(legend):
         x = legend_x + index * 76
-        parts.append(f'<circle cx="{x:.1f}" cy="{TOP-15:.1f}" r="4" fill="{color}"/>')
+        parts.append(f'<circle cx="{x:.1f}" cy="{TOP - 15:.1f}" r="4" fill="{color}"/>')
         parts.append(_text(x + 7, TOP - 11, label, 10))
     _finish(parts, name)
 
@@ -391,8 +389,8 @@ def _timeline(
     for tick in (0, 1, 5, 15, 30, 60, 120):
         x = left + log1p(tick) / log_span * plot_width
         parts.append(
-            f'<line x1="{x:.1f}" y1="{HEIGHT-BOTTOM}" x2="{x:.1f}" '
-            f'y2="{HEIGHT-BOTTOM+5}" stroke="#52606d"/>'
+            f'<line x1="{x:.1f}" y1="{HEIGHT - BOTTOM}" x2="{x:.1f}" '
+            f'y2="{HEIGHT - BOTTOM + 5}" stroke="#52606d"/>'
         )
         parts.append(_text(x, HEIGHT - BOTTOM + 21, str(tick), 11, "middle"))
     palette = {
@@ -429,10 +427,15 @@ def _timeline(
             parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="5" fill="{color}"/>')
     legend_x = WIDTH - RIGHT - 200
     for index, (label, color) in enumerate(
-        (("INIT", "#2563eb"), ("AUTH", "#0b7285"), ("SETTLE", "#15803d"), ("REFUND", "#c2410c"))
+        (
+            ("INIT", "#2563eb"),
+            ("AUTH", "#0b7285"),
+            ("SETTLE", "#15803d"),
+            ("REFUND", "#c2410c"),
+        )
     ):
         x = legend_x + index * 50
-        parts.append(f'<circle cx="{x:.1f}" cy="{TOP-15:.1f}" r="4" fill="{color}"/>')
+        parts.append(f'<circle cx="{x:.1f}" cy="{TOP - 15:.1f}" r="4" fill="{color}"/>')
         parts.append(_text(x + 7, TOP - 11, label, 10))
     _finish(parts, name)
 

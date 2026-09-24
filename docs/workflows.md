@@ -77,8 +77,8 @@ For the immutable public benchmark packs, use the separate public-pack
 commands:
 
 ```bash
-fraudtwin benchmark run FT-B04-CAMOUFLAGE@1.0
-fraudtwin benchmark describe FT-B04-CAMOUFLAGE@1.0.0
+fraudtwin benchmark run FT-B04-CAMOUFLAGE@0.34.0
+fraudtwin benchmark describe FT-B04-CAMOUFLAGE@0.34.0
 fraudtwin benchmark verify runs/benchmarks/BM-<id>
 ```
 
@@ -180,6 +180,10 @@ Registry service or Kafka.
 
 The v1 record names and parsing-canonical fingerprints are recorded in
 `contracts/avro/registry.yaml`:
+
+The `1.0.0` values in this table are Avro contract versions, not FraudTwin
+package releases. The package and public benchmark-pack release are `0.34.0`;
+contract versions remain independently versioned for compatibility.
 
 | Subject | Avro record | Version | Canonical SHA-256 |
 | --- | --- | --- | --- |

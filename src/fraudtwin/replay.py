@@ -15,7 +15,7 @@ from fraudtwin.reproducibility import as_utc, sha256_json
 from fraudtwin.scale import iter_partition_table
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
-from fraudtwin.simulation.parquet import (
+from fraudtwin.simulation.parquet import (  # type: ignore[attr-defined]
     BEHAVIOR_SCHEMAS,
     ENTITY_SCHEMAS,
     write_behavior_parquet,

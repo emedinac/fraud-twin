@@ -6,8 +6,6 @@ deduplication and a watermark, and writes local projections suitable for a
 laptop smoke test.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import time
@@ -62,6 +60,31 @@ def _spark_session(app_name: str) -> Any:
     return SparkSession.builder.appName(app_name).getOrCreate()
 
 
+def _decode_kafka_events(source: Any, functions: Any, from_avro: Any) -> Any:
+    """Filter contract fingerprints before permissively decoding Kafka values."""
+
+    header_map = functions.map_from_entries(
+        functions.expr(
+            "transform(headers, h -> struct(cast(h.key as string), cast(h.value as string)))"
+        )
+    )
+    accepted = source.withColumn("header_map", header_map).filter(
+        functions.col("header_map")["fraudtwin-contract-fingerprint"]
+        == functions.lit(_contract_fingerprint())
+    )
+    # Confluent framing is one magic byte plus a four-byte schema ID.  PERMISSIVE
+    # mode turns incompatible payloads into null instead of terminating the query.
+    decoded = accepted.withColumn(
+        "event",
+        from_avro(
+            functions.expr("substring(value, 6, length(value))"),
+            _contract_schema(),
+            {"mode": "PERMISSIVE"},
+        ),
+    )
+    return decoded.filter(functions.col("event").isNotNull()).select("event.*")
+
+
 def _payment_events(spark: Any, args: argparse.Namespace) -> Any:
     from pyspark.sql import functions as F
 
@@ -91,16 +114,7 @@ def _payment_events(spark: Any, args: argparse.Namespace) -> Any:
         .option("failOnDataLoss", "false")
         .load()
     )
-    header_map = F.map_from_entries(
-        F.expr("transform(headers, h -> struct(cast(h.key as string), cast(h.value as string)))")
-    )
-    # Confluent framing is one magic byte plus a four-byte schema ID.
-    decoded = source.withColumn("header_map", header_map).withColumn(
-        "event", from_avro(F.expr("substring(value, 6, length(value))"), _contract_schema())
-    )
-    return decoded.filter(
-        F.col("header_map")["fraudtwin-contract-fingerprint"] == F.lit(_contract_fingerprint())
-    ).select("event.*")
+    return _decode_kafka_events(source, F, from_avro)
 
 
 def _normalized(events: Any) -> Any:

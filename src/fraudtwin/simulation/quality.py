@@ -6,8 +6,6 @@ clean profile return the same generated business records and event order as
 the earlier milestones.
 """
 
-from __future__ import annotations
-
 import base64
 import json
 from collections.abc import Callable
@@ -161,7 +159,7 @@ class QualityFaultInjector:
         self.config = config
         self.quality = config.quality
 
-    def apply(self, dataset: BehaviorDataset) -> BehaviorDataset:
+    def apply(self, dataset: "BehaviorDataset") -> "BehaviorDataset":
         """Return a quality-mutated dataset and measured fault metadata."""
 
         # This order is part of the reproducibility contract: field faults,
@@ -829,7 +827,7 @@ class QualityFaultInjector:
 
     @staticmethod
     def _align_workflow_timestamps(
-        dataset: BehaviorDataset,
+        dataset: "BehaviorDataset",
         events: tuple[PaymentEvent, ...],
         alerts: tuple[FraudAlert, ...],
         cases: tuple[FraudCase, ...],

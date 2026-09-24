@@ -1,7 +1,5 @@
 """Customer behavior profiles and their generated payment dataset."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field, replace
 from random import Random
 from typing import TYPE_CHECKING, Literal
@@ -91,7 +89,7 @@ class BehaviorDataset:
         default_factory=dict, repr=False
     )
     counterfactual: CounterfactualDataset | None = field(default=None, repr=False)
-    campaign_dynamics: DynamicCampaignDataset | None = field(default=None, repr=False)
+    campaign_dynamics: "DynamicCampaignDataset | None" = field(default=None, repr=False)
 
     def tables(self) -> dict[str, tuple[BaseModel, ...]]:
         """Return all behavior tables in their stable export order."""

@@ -7,8 +7,6 @@ implementations explicitly, while package distributions can expose the same
 implementations through the ``fraudtwin.extensions`` entry-point group.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from importlib.metadata import EntryPoint, entry_points

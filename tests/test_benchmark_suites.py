@@ -18,7 +18,7 @@ from fraudtwin.benchmark import (
 from fraudtwin.ml import PredictionRecord, heuristic_predictions
 
 
-def test_m20_suite_composition_is_strict_and_deterministic() -> None:
+def test_benchmark_suite_composition_is_strict_and_deterministic() -> None:
     for suite in ("baseline", "temporal", "boundary", "camouflage", "observability"):
         first = build_suite_config(suite, difficulty=7, seed=42)
         second = build_suite_config(suite, difficulty=7, seed=42)
@@ -32,21 +32,21 @@ def test_m20_suite_composition_is_strict_and_deterministic() -> None:
     assert graph.stress.active
 
 
-def test_m20_calibrated_suites_require_a_profile(tmp_path: Path) -> None:
+def test_benchmark_calibrated_suites_require_a_profile(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="requires an existing calibration profile"):
         build_suite_config("calibrated", difficulty=7, seed=42)
     with pytest.raises(ValueError, match="require --calibration-profile"):
         run_benchmark(BenchmarkRequest(suite="mixed", output_dir=tmp_path / "missing-profile"))
 
 
-def test_m20_companion_reuses_calibration_profile(tmp_path: Path) -> None:
+def test_benchmark_companion_reuses_calibration_profile(tmp_path: Path) -> None:
     profile = tmp_path / "profile.yaml"
     profile.write_text("profile_version: test\n")
     request = BenchmarkRequest(suite="calibrated", calibration_profile=profile)
     assert _profile_for_suite(request, "baseline") == profile
 
 
-def test_m20_baseline_emits_reproducible_artifacts(tmp_path: Path) -> None:
+def test_benchmark_baseline_emits_reproducible_artifacts(tmp_path: Path) -> None:
     first = run_benchmark(
         BenchmarkRequest(suite="baseline", difficulty=1, seed=42, output_dir=tmp_path / "first")
     )
@@ -79,7 +79,7 @@ class _FrameworkRunner:
         return heuristic_predictions(rows)
 
 
-def test_m20_framework_neutral_runner_is_evaluated(
+def test_benchmark_framework_neutral_runner_is_evaluated(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     module = ModuleType("m20_runner_fixture")

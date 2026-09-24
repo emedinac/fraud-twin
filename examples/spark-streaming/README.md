@@ -34,7 +34,8 @@ spark-submit examples/spark-streaming/spark_streaming.py \
 For Kafka, start the documented streaming Compose profile, publish a clean
 run, and pass the broker address with `--source kafka --input localhost:9092`.
 Kafka input requires the Spark Avro and Kafka connector packages available in
-the pinned Spark runtime. Iceberg output requires the configured local catalog.
+the pinned Spark runtime. Unknown contract fingerprints and malformed Avro
+payloads are ignored. Iceberg output requires the configured local catalog.
 
 The report records source mode, watermark, query progress, and elapsed time.
 The example intentionally makes no throughput or production-readiness claim;
