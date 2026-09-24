@@ -24,8 +24,12 @@ fraud scenario mix before training.
 ## 2. Build leakage-safe data
 
 ```console
-fraudtwin ml build-dataset configs/benchmarks/m13-camouflage-v1.yaml \
-  --run-id <run-id> --output-dir runs
+CONFIG=configs/benchmarks/m13-camouflage-v1.yaml
+RUN_ID=RUN-...
+RUNS_DIR=./runs
+
+fraudtwin ml build-dataset "$CONFIG" \
+  --run-id "$RUN_ID" --output-dir "$RUNS_DIR"
 ```
 
 Inspect `prediction_time`, `source_available_at`, `feature_available_at`, and
@@ -35,8 +39,11 @@ unresolved label must not silently become a negative label.
 ## 3. Train and choose a model
 
 ```console
-fraudtwin ml train runs/<run-id>/ml/dataset.parquet \
-  --config configs/ml-baselines.yaml --output-dir runs/evaluations
+DATASET=./runs/$RUN_ID/ml/dataset.parquet
+EVALUATIONS_DIR=./runs/evaluations
+
+fraudtwin ml train "$DATASET" \
+  --config configs/ml-baselines.yaml --output-dir "$EVALUATIONS_DIR"
 ```
 
 Compare a deterministic heuristic with Logistic Regression, LightGBM, XGBoost,

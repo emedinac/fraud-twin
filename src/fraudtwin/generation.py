@@ -123,6 +123,27 @@ class GeneratedRun:
         return GeneratedData(manifest=manifest, entities=entities, behavior=behavior)
 
 
+def _apply_generation_overrides(
+    config: SimulationRunConfig, *, seed: int | None, workers: int | None
+) -> SimulationRunConfig:
+    """Apply optional API overrides and validate the resulting configuration once."""
+
+    if workers is not None:
+        if workers < 1:
+            raise ValueError("workers must be positive")
+        if not config.scale.enabled:
+            raise ValueError("workers requires an enabled scale profile")
+    if seed is None and workers is None:
+        return config
+
+    values = config.model_dump(mode="python")
+    if seed is not None:
+        values["simulation"]["seed"] = seed
+    if workers is not None:
+        values["scale"]["worker_count"] = workers
+    return SimulationRunConfig.model_validate(values)
+
+
 def _resolve_config(
     config: str | Path | SimulationRunConfig | None,
     profile_override: Path | None = None,
@@ -399,6 +420,33 @@ def _label_observation_metadata(
     return metadata
 
 
+def _logical_row(table_name: str, row: BaseModel, ordinal: int) -> dict[str, object]:
+    """Add the stable routing fields shared by both scale record iterators."""
+
+    values = row.model_dump(mode="json")
+    source_id = next(
+        (str(value) for key, value in values.items() if key.endswith("_id") and value),
+        f"row-{ordinal:08d}",
+    )
+    owner_id = next(
+        (
+            str(values[key])
+            for key in ("payer_account_id", "account_id", "customer_id")
+            if values.get(key)
+        ),
+        source_id,
+    )
+    # Keep canonical row fields in the partition artifact.  The additive
+    # logical metadata lets readers route and filter rows without a global ID index.
+    return {
+        **values,
+        "logical_id": f"{table_name}:{source_id}",
+        "logical_type": table_name,
+        "source_id": source_id,
+        "partition_key": owner_id,
+    }
+
+
 def _scale_records(
     entities: EntityDataset, behavior: BehaviorDataset
 ) -> Iterator[dict[str, object]]:
@@ -407,38 +455,17 @@ def _scale_records(
     ordinal = 0
     for table_name, table_rows in {**entities.all_tables(), **behavior.tables()}.items():
         for row in table_rows:
-            values = row.model_dump(mode="json")
-            source_id = next(
-                (str(value) for key, value in values.items() if key.endswith("_id") and value),
-                f"row-{ordinal:08d}",
-            )
-            owner_id = next(
-                (
-                    str(values[key])
-                    for key in ("payer_account_id", "account_id", "customer_id")
-                    if values.get(key)
-                ),
-                source_id,
-            )
-            # Keep the canonical row fields in the partition artifact.  The
-            # logical metadata is additive and lets the mixed scale reader
-            # route/filter rows without retaining a global ID index.
-            yield {
-                **values,
-                "logical_id": f"{table_name}:{source_id}",
-                "logical_type": table_name,
-                "source_id": source_id,
-                "partition_key": owner_id,
-            }
+            logical = _logical_row(table_name, row, ordinal)
+            yield logical
             ordinal += 1
             # Cross-account transfers are owned by the payer shard.  Emit a
             # deterministic payee-side reconciliation marker so downstream
             # consumers can close the cross-shard balance without a global
             # account map.
-            payer = values.get("payer_account_id")
-            payee = values.get("payee_account_id")
-            if payer and payee and payer != payee and values.get("payment_id"):
-                payment_id = str(values["payment_id"])
+            payer = logical.get("payer_account_id")
+            payee = logical.get("payee_account_id")
+            if payer and payee and payer != payee and logical.get("payment_id"):
+                payment_id = str(logical["payment_id"])
                 yield {
                     "logical_id": f"transfer_reconciliation:{payment_id}",
                     "logical_type": "transfer_reconciliation",
@@ -446,7 +473,7 @@ def _scale_records(
                     "payment_id": payment_id,
                     "payer_account_id": str(payer),
                     "payee_account_id": str(payee),
-                    "amount": values.get("amount"),
+                    "amount": logical.get("amount"),
                     "partition_key": str(payee),
                     "reconciliation": "PAYEE_SIDE",
                 }
@@ -473,26 +500,7 @@ def iter_scale_records(
 
     def logical_rows(table_name: str, rows: Iterable[BaseModel]) -> Iterator[dict[str, object]]:
         for ordinal, row in enumerate(rows):
-            values = row.model_dump(mode="json")
-            source_id = next(
-                (str(value) for key, value in values.items() if key.endswith("_id") and value),
-                f"row-{ordinal:08d}",
-            )
-            owner_id = next(
-                (
-                    str(values[key])
-                    for key in ("payer_account_id", "account_id", "customer_id")
-                    if values.get(key)
-                ),
-                source_id,
-            )
-            yield {
-                **values,
-                "logical_id": f"{table_name}:{source_id}",
-                "logical_type": table_name,
-                "source_id": source_id,
-                "partition_key": owner_id,
-            }
+            yield _logical_row(table_name, row, ordinal)
 
     for table_name, rows in {**entities.all_tables(), "behavior_profiles": profiles}.items():
         yield from logical_rows(table_name, rows)
@@ -728,19 +736,9 @@ def generate(
     """
 
     profile_path = Path(profile) if isinstance(profile, str | Path) else None
-    resolved_config = _resolve_config(config, profile_path)
-    if seed is not None:
-        values = resolved_config.model_dump(mode="python")
-        values["simulation"]["seed"] = seed
-        resolved_config = SimulationRunConfig.model_validate(values)
-    if workers is not None:
-        if workers < 1:
-            raise ValueError("workers must be positive")
-        if not resolved_config.scale.enabled:
-            raise ValueError("workers requires an enabled scale profile")
-        values = resolved_config.model_dump(mode="python")
-        values["scale"]["worker_count"] = workers
-        resolved_config = SimulationRunConfig.model_validate(values)
+    resolved_config = _apply_generation_overrides(
+        _resolve_config(config, profile_path), seed=seed, workers=workers
+    )
     supplied_profile = (
         load_calibration_profile(profile_path)
         if profile_path is not None

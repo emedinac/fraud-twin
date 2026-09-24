@@ -35,10 +35,18 @@ def _drop_inactive_metadata(data: dict[str, object]) -> dict[str, object]:
     return data
 
 
-class RunManifest(BaseModel):
-    """Metadata required to reproduce and audit a generated run."""
+class _ManifestWithOptionalMetadata(BaseModel):
+    """Base for manifests that omit inactive optional methodology sections."""
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_serializer(mode="wrap")
+    def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
+        return _drop_inactive_metadata(handler(self))
+
+
+class RunManifest(_ManifestWithOptionalMetadata):
+    """Metadata required to reproduce and audit a generated run."""
 
     run_id: str
     generator_version: str
@@ -75,15 +83,9 @@ class RunManifest(BaseModel):
     lakehouse: dict[str, object] | None = None
     extensions: list[dict[str, str]] = Field(default_factory=list)
 
-    @model_serializer(mode="wrap")
-    def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
-        return _drop_inactive_metadata(handler(self))
 
-
-class GraphManifest(BaseModel):
+class GraphManifest(_ManifestWithOptionalMetadata):
     """Lineage and fingerprints for one immutable M11 graph export."""
-
-    model_config = ConfigDict(extra="forbid")
 
     graph_id: str
     graph_version: str
@@ -105,15 +107,9 @@ class GraphManifest(BaseModel):
     camouflage: dict[str, object] | None = None
     counterfactual: dict[str, object] | None = None
 
-    @model_serializer(mode="wrap")
-    def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
-        return _drop_inactive_metadata(handler(self))
 
-
-class DatasetManifest(BaseModel):
+class DatasetManifest(_ManifestWithOptionalMetadata):
     """Deterministic lineage and reproducibility metadata for an M9 dataset."""
-
-    model_config = ConfigDict(extra="forbid")
 
     dataset_id: str
     dataset_version: str
@@ -138,10 +134,6 @@ class DatasetManifest(BaseModel):
     difficulty: dict[str, object] | None = None
     camouflage: dict[str, object] | None = None
     counterfactual: dict[str, object] | None = None
-
-    @model_serializer(mode="wrap")
-    def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
-        return _drop_inactive_metadata(handler(self))
 
 
 class ReplayManifest(BaseModel):

@@ -48,7 +48,7 @@ listed twice on this page.
 :link: tutorials/visualization
 :link-type: doc
 
-**IDs 25–27 · 60–90 min · base + optional notebook packages · offline**
+**60–90 min · base + optional notebook packages · offline**
 
 Plot payment timing, distributions, fraud scenarios, difficulty, and ML-ready
 features before choosing a modeling or production workflow.
@@ -58,7 +58,7 @@ features before choosing a modeling or production workflow.
 :link: tutorials/getting-started
 :link-type: doc
 
-**IDs 1–4 · 60–90 min · base install · offline**
+**60–90 min · base install · offline**
 
 Generate a world, configure it, inspect lifecycle events, and understand fraud
 truth versus delayed labels. Produces manifests, tables, and ledger checks.
@@ -68,7 +68,7 @@ truth versus delayed labels. Produces manifests, tables, and ledger checks.
 :link: tutorials/core-workflows
 :link-type: doc
 
-**IDs 5, 6, 8 · 90–120 min · base + optional ML/graph · offline**
+**60–90 min · base; plotting optional · offline**
 
 Build point-in-time datasets, stress scenarios, and reproducible benchmarks at
 1k–10k source payments.
@@ -78,7 +78,7 @@ Build point-in-time datasets, stress scenarios, and reproducible benchmarks at
 :link: tutorials/production-ml
 :link-type: doc
 
-**IDs 7, 9–11, 18–19 · 2–3 h · ML/serving/MLflow optional**
+**2–3 h · ML/serving/MLflow optional**
 
 Train and evaluate models, validate serving hand-offs, promote artifacts, and
 measure segmented drift. Docker services enhance but do not block offline work.
@@ -88,7 +88,7 @@ measure segmented drift. Docker services enhance but do not block offline work.
 :link: tutorials/graph-analytics
 :link-type: doc
 
-**IDs 16–17 · 60–90 min · graph + ML extras · Neo4j optional**
+**60–90 min · graph + ML extras · Neo4j optional**
 
 Export provenance-rich graphs, investigate fraud with Cypher, and build temporal
 PyTorch Geometric features with an evaluation split.
@@ -98,7 +98,7 @@ PyTorch Geometric features with an evaluation split.
 :link: tutorials/streaming-reliability
 :link-type: doc
 
-**IDs 12, 20–21 · 60–90 min · Kafka extra; Docker optional**
+**60–90 min · Kafka extra; Docker optional**
 
 Exercise logical loss, retries, duplicates, delays, reordering, outages, and
 Avro compatibility without simulating physical network packets.
@@ -108,10 +108,20 @@ Avro compatibility without simulating physical network packets.
 :link: tutorials/operations
 :link-type: doc
 
-**IDs 13–15, 22–24 · 2–3 h · service extras + Docker optional**
+**2–3 h · service extras + Docker optional**
 
 Repair damaged projections, resume scale runs, reconcile PostgreSQL, and verify
 Iceberg snapshots and observability SLOs.
+```
+
+```{grid-item-card} Advanced experiments
+:link: tutorials/advanced-experiments
+:link-type: doc
+
+**2–3 h · optional ML/graph/scale extras · offline**
+
+Combine calibration, counterfactuals, campaign dynamics, temporal backtesting,
+and scale reconciliation into reproducible evidence packages.
 ```
 ````
 

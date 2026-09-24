@@ -30,7 +30,9 @@ payment lifecycle, label-observation, graph, and schema validators.
 Replay is read-only and preserves source identity:
 
 ```console
-fraudtwin replay --run-id <run-id> \
+RUN_ID=RUN-...
+
+fraudtwin replay --run-id "$RUN_ID" \
   --from 2026-01-01T10:00:00Z --to 2026-01-01T11:00:00Z \
   --order original_delivery --output-dir runs/replay
 ```

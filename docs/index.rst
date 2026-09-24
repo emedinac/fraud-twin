@@ -23,7 +23,7 @@ Install and run
 
    $ poetry install
    $ poetry run fraudtwin config validate configs/minimal.yaml
-   $ poetry run fraudtwin generate configs/minimal.yaml --output-dir /tmp/fraudtwin-run
+   $ poetry run fraudtwin generate configs/minimal.yaml --output-dir ./runs
 
 Start here
 ----------

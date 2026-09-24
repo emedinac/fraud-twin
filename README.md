@@ -11,6 +11,8 @@
 [![Parquet](https://img.shields.io/badge/output-Apache%20Parquet-50ABF1?logo=apacheparquet&logoColor=white)](https://parquet.apache.org/docs/)
 [![Pydantic](https://img.shields.io/badge/config-Pydantic%202-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 
+Documentation: [main site](https://emedinac.github.io/fraud-twin/)
+
 > A deterministic payment world for building, breaking, and validating fraud systems.
 
 FraudTwin is a Python framework for generating realistic financial behavior and

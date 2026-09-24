@@ -85,13 +85,17 @@ poetry install -E ml -E mlflow
 Run a bounded generation before starting a long experiment:
 
 ```console
-poetry run fraudtwin config validate configs/minimal.yaml
-poetry run fraudtwin generate configs/minimal.yaml --output-dir /tmp/fraudtwin-smoke
-poetry run fraudtwin validate-ledger --run-id /tmp/fraudtwin-smoke
+CONFIG=configs/minimal.yaml
+RUN_ID=RUN-...
+RUNS_DIR=./runs
+
+poetry run fraudtwin config validate "$CONFIG"
+poetry run fraudtwin generate "$CONFIG" --output-dir "$RUNS_DIR"
+poetry run fraudtwin validate-ledger --run-id "$RUN_ID" --output-dir "$RUNS_DIR"
 ```
 
 The smoke run should produce a manifest, Parquet artifacts, and a stable
-fingerprint. Use a temporary directory for this check so it cannot overwrite a
+fingerprint. Use the ignored local run directory for this check so it cannot overwrite a
 benchmark fixture.
 
 ## Resource expectations

@@ -82,11 +82,11 @@ counts—not difficulty scores. Difficulty and camouflage are run-level controls
 so they must be read from the manifest and compared across separate runs; they
 are not categories called “easy” or “hard” on each record.*
 
-| ID | Focus | Time | Extras | Output |
-| --- | --- | --- | --- | --- |
-| 25 | Time, space, amounts, and lifecycle events | 20–30 min | base; plotting optional | timelines, time-window bars, tables, fingerprint |
-| 26 | Scenarios, difficulty, camouflage, and benchmarks | 20–30 min | base | comparison tables and manifest |
-| 27 | Distributions, correlation, leakage, PCA, and t-SNE | 25–40 min | `ml` + plotting optional | feature report, embeddings, split checks |
+| Focus | Time | Extras | Output |
+| --- | --- | --- | --- |
+| Time, space, amounts, and lifecycle events | 20–30 min | base; plotting optional | timelines, time-window bars, tables, fingerprint |
+| Scenarios, difficulty, camouflage, and benchmarks | 20–30 min | base | comparison tables and manifest |
+| Distributions, correlation, leakage, PCA, and t-SNE | 25–40 min | `ml` + plotting optional | feature report, embeddings, split checks |
 
 ## Tutorials
 

@@ -28,14 +28,35 @@ poetry run fraudtwin config validate configs/minimal.yaml
 poetry run fraudtwin generate configs/minimal.yaml
 ```
 
-The command prints a run ID and the output location. To keep generated files outside the repository, choose an output directory explicitly:
+The command prints a run ID and the output location. To keep generated files in
+the ignored local run area, choose an output directory explicitly:
 
 ```bash
-poetry run fraudtwin generate configs/minimal.yaml \
-  --output-dir /tmp/fraudtwin-run
+RUNS_DIR=./runs
+
+poetry run fraudtwin generate configs/minimal.yaml --output-dir "$RUNS_DIR"
 ```
 
 The minimal configuration creates 10 customers, 10 behavior profiles, 100 target payments, and the lifecycle events those payments require. Fraud is off by default, which makes the first run a clean baseline.
+
+## Use the Python API
+
+The same run can be generated in memory from Python:
+
+```python
+from pathlib import Path
+
+import fraudtwin
+from fraudtwin.config import load_config
+
+config = load_config(Path("configs/minimal.yaml"))
+data = fraudtwin.generate(config)
+
+print(data.run_id, len(data.behavior.payments))
+```
+
+Use the CLI when you want the standard Parquet and manifest layout. Use the
+Python API when you want typed records directly in a notebook or application.
 
 ## What a run contains
 
@@ -61,11 +82,11 @@ The manifest records the seed, configuration, schemas, counts, fingerprints, and
 Use a benchmark fixture when you want a complete, repeatable example:
 
 ```bash
-poetry run fraudtwin config validate \
-  configs/benchmarks/m12-difficulty-v1.yaml
-poetry run fraudtwin generate \
-  configs/benchmarks/m12-difficulty-v1.yaml \
-  --output-dir /tmp/fraudtwin-m12
+CONFIG=configs/benchmarks/m12-difficulty-v1.yaml
+RUNS_DIR=./runs
+
+poetry run fraudtwin config validate "$CONFIG"
+poetry run fraudtwin generate "$CONFIG" --output-dir "$RUNS_DIR"
 ```
 
 For a smaller custom run, set `fraud.enabled: true` in a copied YAML file. The generator supports F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack, with configurable hard negatives and workflow projections.

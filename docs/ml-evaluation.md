@@ -17,8 +17,12 @@ Build the dataset from a persisted run and use `prediction_time` as the
 information boundary:
 
 ```console
-poetry run fraudtwin ml build-dataset configs/minimal.yaml \
-  --run-id <run-id> --output-dir runs
+CONFIG=configs/minimal.yaml
+RUN_ID=RUN-...
+RUNS_DIR=./runs
+
+poetry run fraudtwin ml build-dataset "$CONFIG" \
+  --run-id "$RUN_ID" --output-dir "$RUNS_DIR"
 ```
 
 For each row, features, labels, corrections, and workflow events must satisfy
@@ -75,10 +79,14 @@ evaluation manifest:
 
 ```console
 poetry install -E ml -E mlflow
-poetry run fraudtwin ml train runs/<run-id>/ml/dataset.parquet \
-  --config configs/ml-baselines.yaml --output-dir runs/evaluations
-poetry run fraudtwin ml evaluate runs/<run-id>/ml/dataset.parquet \
-  runs/evaluations/predictions.jsonl
+RUN_ID=RUN-...
+DATASET=./runs/$RUN_ID/ml/dataset.parquet
+EVALUATIONS_DIR=./runs/evaluations
+
+poetry run fraudtwin ml train "$DATASET" \
+  --config configs/ml-baselines.yaml --output-dir "$EVALUATIONS_DIR"
+poetry run fraudtwin ml evaluate "$DATASET" \
+  "$EVALUATIONS_DIR/predictions.jsonl"
 ```
 
 MLflow is optional. Without a tracking URI, local JSON/Parquet manifests remain

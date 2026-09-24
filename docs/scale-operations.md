@@ -10,10 +10,13 @@ boundary described in [Verified capabilities](verified-capabilities.md).
 Scale generation is opt-in. Use the `dev` profile for laptop validation:
 
 ```console
+RUNS_DIR=./runs
+CHECKPOINT_DIR=./runs/scale-checkpoint
+
 poetry run fraudtwin generate configs/scale-dev.yaml \
-  --output-dir /tmp/fraudtwin-scale \
-  --checkpoint-dir /tmp/fraudtwin-scale-checkpoint
-poetry run fraudtwin resume /tmp/fraudtwin-scale-checkpoint
+  --output-dir "$RUNS_DIR" \
+  --checkpoint-dir "$CHECKPOINT_DIR"
+poetry run fraudtwin resume "$CHECKPOINT_DIR"
 ```
 
 The checkpoint records the resolved plan, seed tree, completed chunks,

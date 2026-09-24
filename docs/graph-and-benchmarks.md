@@ -24,12 +24,15 @@ source workflow: the observable/oracle investigation tutorial.*
 Enable a `graph.scenarios` list in a new run, or use the versioned graph fixture:
 
 ```bash
-poetry run fraudtwin generate \
-  configs/benchmarks/m11-graph-v2.yaml \
-  --output-dir /tmp/fraudtwin-graph
+CONFIG=configs/benchmarks/m11-graph-v2.yaml
+RUN_ID=RUN-...
+RUNS_DIR=./runs
+GRAPH_DIR=./runs/graphs
+
+poetry run fraudtwin generate "$CONFIG" --output-dir "$RUNS_DIR"
 poetry run fraudtwin graph export \
-  --run-id <run-id> \
-  --output-dir /tmp/fraudtwin-graph \
+  --run-id "$RUN_ID" \
+  --output-dir "$GRAPH_DIR" \
   --format parquet,neo4j \
   --json
 ```
@@ -40,8 +43,8 @@ Validate both graph structure and provenance when working with a fixture:
 
 ```bash
 poetry run fraudtwin graph validate \
-  --run-id <run-id> \
-  --output-dir /tmp/fraudtwin-graph
+  --run-id "$RUN_ID" \
+  --output-dir "$RUNS_DIR"
 ```
 
 ## Difficulty benchmarks
@@ -49,9 +52,10 @@ poetry run fraudtwin graph validate \
 Difficulty levels run from obvious to subtle. They adjust measurable controls such as fraud/legitimate overlap, behavioral deviation, hard-negative noise, prevalence, temporal irregularity, and graph structural subtlety while keeping the scenario objective and topology intact.
 
 ```bash
-poetry run fraudtwin generate \
-  configs/benchmarks/m12-difficulty-v1.yaml \
-  --output-dir /tmp/fraudtwin-difficulty
+CONFIG=configs/benchmarks/m12-difficulty-v1.yaml
+RUNS_DIR=./runs
+
+poetry run fraudtwin generate "$CONFIG" --output-dir "$RUNS_DIR"
 ```
 
 The resolved profile, transformations, effective hash, and measured summaries are recorded in the source, dataset, and graph manifests. Active operational events omit direct scenario linkage; oracle artifacts retain it.
@@ -61,9 +65,10 @@ The resolved profile, transformations, effective hash, and measured summaries ar
 Camouflage makes fraud look more like legitimate activity without changing the underlying truth. Feature camouflage affects amount, timing, merchant, device, geography, and frequency. Relation camouflage adds ordinary support payments and graph relationships while leaving campaign membership and induced fraud topology unchanged.
 
 ```bash
-poetry run fraudtwin generate \
-  configs/benchmarks/m13-camouflage-v1.yaml \
-  --output-dir /tmp/fraudtwin-camouflage
+CONFIG=configs/benchmarks/m13-camouflage-v1.yaml
+RUNS_DIR=./runs
+
+poetry run fraudtwin generate "$CONFIG" --output-dir "$RUNS_DIR"
 ```
 
 Requested and effective strengths, cohort snapshots, constraints, and measured observable/oracle summaries are recorded in manifests. Geography is represented through valid customer and merchant choices because the payment schema has no standalone geography field. Requests that exceed available capacity are capped or redirected deterministically and recorded as constraints.
