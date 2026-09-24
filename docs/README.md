@@ -1,11 +1,22 @@
 # FraudTwin documentation
 
-FraudTwin is a deterministic synthetic payment world for fraud detection, graph analysis, data engineering, and machine-learning experiments. Follow the learning path below to move from a first generated run to reproducible fraud benchmarks. The published manual is versioned; use the version selector when an example must match a specific release.
+**Level:** All levels<br>
+**You will:** find the right learning route, canonical guide, and reference<br>
+surface for your work.
+**Before you start:** none.<br>
+**Services:** None.<br>
+
+FraudTwin is a deterministic synthetic payment world for fraud detection,
+graph analysis, data engineering, and machine-learning experiments. The manual
+is organized by experience level, not by internal project history. Follow one
+route from a first generated run to reproducible evaluation or production-style
+integration work.
 
 ## Installation
 
 - [Installation and support](installation.md) - install the base package, choose extras, and verify an environment.
 - [Quickstart](quickstart.md) - install FraudTwin and generate your first run.
+- [Learning paths](learning-paths.md) - choose the beginner, intermediate, or expert route.
 - [Python package and CLI](../README.md#quick-start) - choose between the Python API and command-line workflows.
 - Build the documentation with `poetry run sphinx-build -E -W --keep-going -b html docs docs/_build/html`.
 
@@ -41,13 +52,25 @@ filenames and rendered titles explain what each notebook teaches.
 - [Operations and incident response](tutorials/operations.md) - IDs 13–15 and 22–24 for repair, scale, persistence, and observability.
 - [Advanced experiments](tutorials/advanced-experiments.md) - four combined workflows for calibration/interventions, graph investigations, ML shift/backtesting, and scale/reproducibility.
 
-## Choose your role
+Tutorials remain a separate, notebook-first learning surface. They are linked
+from the level routes but are not rewritten as part of the guide refactor.
+
+## Choose your level
+
+- [Beginner](levels/beginner.md) - install, generate, inspect, and understand the core model.
+- [Intermediate](levels/intermediate.md) - configure evaluation workflows, quality, ML, and graphs.
+- [Expert](levels/expert.md) - operate integrations, extensions, scale workflows, and release evidence.
+
+## Find your path by role
 
 - [New users](audiences/new-users.md)
 - [Data and ML practitioners](audiences/data-ml.md)
 - [Fraud and risk practitioners](audiences/fraud-risk.md)
 - [Engineering and MLOps](audiences/engineering-mlops.md)
 - [Researchers and governance reviewers](audiences/researchers-governance.md)
+
+The role pages are shortcuts into the level routes. They do not duplicate the
+canonical guides.
 
 ## Guides and concepts
 
@@ -66,6 +89,20 @@ filenames and rendered titles explain what each notebook teaches.
 - [Migration guides](migration.md) - check compatibility boundaries when moving between releases.
 - [Compatibility and support policy](compatibility.md) - understand stable, optional, and experimental surfaces before upgrading.
 - [Release-readiness roadmap](release-readiness.md) - scale gates and deferred platform integrations.
+- [Architecture and trust boundaries](architecture.md) - source truth, chunked execution, and integration boundaries.
+- [Verified capabilities](verified-capabilities.md) - runnable commands and evidence behind supported workflows.
+- [Spark Structured Streaming](spark-streaming.md) - bounded Kafka/Parquet event-time processing.
+- [Extension SDK](extensions.md) - stable ports, discovery, provenance, and compatibility rules.
+- [Scale operations](scale-operations.md) - checkpointing, resume, storage, and claim boundaries.
+- [Release and benchmark evidence](release-evidence.md) - reproducible laptop evidence and release verification.
+
+## Documentation style
+
+Every maintained guide states its level, expected outcome, prerequisites, and
+service requirements near the beginning. Commands are written for copy/paste,
+with the expected artifact or next decision explained immediately afterward.
+Feature names are used in public prose; compatibility identifiers remain only
+where a file format, release history, or existing command requires them.
 
 ## Package Reference
 
@@ -96,3 +133,14 @@ filenames and rendered titles explain what each notebook teaches.
 ## A useful mental model
 
 Every run starts with entities and customer behavior, produces legitimate payments and lifecycle events, and can then layer on fraud, workflow, quality faults, graph structure, or benchmark stress. The simulator keeps those layers deterministic and connected, so a generated case can be traced back to the payment, actors, timestamps, and source records that explain it.
+
+## Next
+
+Choose a route from [Learning paths](learning-paths.md), starting with
+[Beginner](levels/beginner.md) if you are new to FraudTwin.
+
+## Related
+
+- [Installation](installation.md)
+- [Concepts](concepts.md)
+- [API reference](api.rst)

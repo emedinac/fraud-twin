@@ -63,6 +63,17 @@ from fraudtwin.difficulty import (
     apply_difficulty,
     resolve_difficulty,
 )
+from fraudtwin.extensions import (
+    BehaviorModel,
+    DataFaultInjector,
+    Extension,
+    ExtensionMetadata,
+    ExtensionRegistry,
+    FraudScenario,
+    OutputSink,
+    PaymentRail,
+    discover_extensions,
+)
 from fraudtwin.generation import (
     GeneratedData,
     GeneratedRun,
@@ -264,6 +275,15 @@ __all__ = [
     "CamouflagePlan",
     "ScenarioDifficultyPlan",
     "resolve_difficulty",
+    "BehaviorModel",
+    "DataFaultInjector",
+    "Extension",
+    "ExtensionMetadata",
+    "ExtensionRegistry",
+    "FraudScenario",
+    "OutputSink",
+    "PaymentRail",
+    "discover_extensions",
     "apply_difficulty",
     "resolve_camouflage",
     "apply_camouflage",

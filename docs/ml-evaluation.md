@@ -1,5 +1,11 @@
 # ML evaluation methodology
 
+**Level:** Intermediate<br><br>
+**You will:** evaluate predictions with point-in-time-safe features, mature<br><br>
+labels, temporal splits, and metrics that match the decision being tested.
+**Before you start:** [Data and evaluation workflows](workflows.md).<br><br>
+**Services:** None; MLflow is optional.<br><br>
+
 This guide describes how to turn generated events into an evidence-backed
 fraud model experiment. It is intended for data scientists, ML engineers, and
 researchers. The simulator produces controlled evidence; it does not predict
@@ -103,3 +109,14 @@ coverage, graph provenance, and operational failure handling. Synthetic metrics
 do not establish a production model's expected precision, recall, fairness, or
 financial return. Calibrate conclusions against reference data and document
 which simulator controls produced the observed result.
+
+## Next
+
+Use [Drift and shift](drift-and-shift.md) after evaluation, or continue to the
+[Model lifecycle](model-lifecycle.md) when an artifact should be served.
+
+## Related
+
+- [Data and evaluation workflows](workflows.md)
+- [Data contracts](data-contracts.rst)
+- [Release evidence](release-evidence.md)

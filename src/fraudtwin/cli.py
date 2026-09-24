@@ -389,6 +389,11 @@ def scale_benchmark_command(
             output_dir=output_dir,
             checkpoint_dir=checkpoint_dir,
             evidence_dir=evidence_dir,
+            command=(
+                f"fraudtwin scale-benchmark {path} --output-dir {output_dir} "
+                f"--checkpoint-dir {checkpoint_dir or '<checkpoint-dir>'} "
+                f"--evidence-dir {evidence_dir or '<evidence-dir>'}"
+            ),
         )
     except (OSError, RuntimeError, ValueError) as exc:
         typer.echo(f"Scale benchmark failed: {exc}", err=True)

@@ -140,6 +140,7 @@ and the [integration runbooks](docs/integrations.md).
 - Point-in-time datasets, replay, rolling backtests, baseline evaluation, calibration, counterfactuals, and drift reports.
 - Graph nodes, edges, campaigns, evidence, Neo4j exports, and PyTorch Geometric conversion.
 - Deterministic quality faults, schema evolution, Kafka chaos, partitioning, checkpoints, and reconciliation.
+- A versioned extension SDK for custom fraud scenarios, payment rails, behavior models, fault injectors, and output sinks.
 
 ## Generated outputs
 
@@ -180,6 +181,16 @@ Install only what a workflow needs. The base install remains dependency-light.
 poetry install -E ml -E graph
 poetry install -E kafka -E postgres -E lakehouse -E observability
 ```
+
+The optional Spark reference pipeline is documented in
+[`docs/spark-streaming.md`](docs/spark-streaming.md) and lives under
+`examples/spark-streaming/`. It consumes either the observable Kafka
+`payment-event` contract or persisted PaymentEvent Parquet rows. Spark is not
+required for local generation.
+
+For laptop validation, use only `configs/scale-dev.yaml` (1,000 target
+payments). Larger scale profiles are hardware-dependent benchmark targets and
+are not validated by CI or documentation examples.
 
 Docker-backed examples are documented separately and always include an
 offline fallback. Logical Kafka chaos simulates message delivery semantics;

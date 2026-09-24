@@ -1,5 +1,12 @@
 # Configuration
 
+**Level:** Beginner to Intermediate<br><br>
+**You will:** change the simulator safely, starting with a minimal YAML file<br><br>
+and progressing to evaluation, quality, scale, and integrations.
+**Before you start:** the [Quickstart](quickstart.md).<br><br>
+**Services:** None for configuration; enabled integrations may require Docker<br><br>
+or external services.
+
 FraudTwin treats configuration as part of the run’s identity. A validated YAML file determines the population, behavior, event timing, fraud campaigns, and output policy. Together with the seed, it gives the run a stable fingerprint.
 
 Start from [`configs/minimal.yaml`](../configs/minimal.yaml) and change only the section that describes the behavior you want to study.
@@ -88,7 +95,7 @@ The compatibility API still materializes canonical entity/behavior objects;
 use `dev` on a laptop. Production 100M/1B executions should wire a streaming
 canonical-row producer to this chunk writer on SSD or S3/MinIO.
 
-M22 also provides `standard-v1-dev` for running the quality protocol against
+The quality benchmark provides `standard-v1-dev` for running the quality protocol against
 the 1,000-payment smoke workload without launching a large benchmark.
 
 ## Reference calibration
@@ -370,3 +377,14 @@ before running a large job:
 
 When validation succeeds, save the resolved YAML and manifest together. When it
 fails, fix the first reported field rather than disabling strict validation.
+
+## Next
+
+Use [Data and evaluation workflows](workflows.md) for datasets and backtests,
+or choose an optional path from [Integration runbooks](integrations.md).
+
+## Related
+
+- [Configuration reference](configuration-reference.rst)
+- [CLI reference](cli.rst)
+- [Troubleshooting](troubleshooting.md)

@@ -1,5 +1,11 @@
 # Installation and support
 
+**Level:** Beginner<br><br>
+**You will:** install the base package, choose only the extras you need, and<br><br>
+verify a working environment.
+**Before you start:** Python 3.12 or newer.<br><br>
+**Services:** None for the base installation.<br><br>
+
 FraudTwin has a dependency-light core. Install the base package when you need
 deterministic generation, configuration validation, Parquet outputs, and the
 CLI. Add an extra only for the workflow you are running.
@@ -18,9 +24,18 @@ The package metadata is the source of truth for supported Python versions and
 dependency ranges. Pin the FraudTwin version and lock file when a researcher
 needs byte-for-byte reproducibility.
 
-## Choose an installation
+If you only want to try the package, the short command is
+`python -m pip install fraudtwin`. For a project you will revisit, Poetry is
+the recommended workflow because it records the complete dependency set.
 
-### PyPI user installation
+### Recommended: Poetry project installation
+
+```console
+poetry add fraudtwin==0.34.0
+poetry run fraudtwin config validate configs/minimal.yaml
+```
+
+### Quick package installation with pip
 
 ```console
 python -m venv .venv
@@ -30,13 +45,6 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install fraudtwin==0.34.0
 fraudtwin --help
-```
-
-### Poetry project installation
-
-```console
-poetry add fraudtwin==0.34.0
-poetry run fraudtwin config validate configs/minimal.yaml
 ```
 
 ### Repository or contributor installation
@@ -63,6 +71,7 @@ poetry run fraudtwin config validate configs/minimal.yaml
 | Prometheus metrics | `poetry install -E observability` | Prometheus/Grafana optional | MLOps |
 | MLflow tracking | `poetry install -E mlflow` | MLflow optional | ML engineers/MLOps |
 | FastAPI reference serving | `poetry install -E serving` | No | ML engineers |
+| Spark reference pipeline | `poetry install -E lakehouse` | Optional Kafka/Iceberg services | Data engineers |
 
 Extras are independent. For example, a local ML experiment does not require
 Kafka or PostgreSQL:
@@ -92,6 +101,8 @@ memory and local SSD capacity with the payment target: lifecycle, ledger,
 fraud, label, and graph rows can be several times larger than payment rows.
 The `dev` scale profile is the bounded 1,000-payment smoke path. Treat the
 100M/1B profiles as hardware benchmarks, not default development workloads.
+The Spark example is also bounded to the `dev` profile in the documented
+workflow; it is an interoperability example, not a capacity benchmark.
 
 ## Common installation failures
 
@@ -104,3 +115,13 @@ The `dev` scale profile is the bounded 1,000-payment smoke path. Treat the
 | Configuration validation fails | Unknown field, invalid range, or incompatible sections | Run `fraudtwin config validate` and fix the first reported field |
 
 See [troubleshooting](troubleshooting.md) for runtime and integration failures.
+
+## Next
+
+Run the [Quickstart](quickstart.md), then choose the [Beginner path](levels/beginner.md).
+
+## Related
+
+- [Configuration](configuration.md)
+- [Compatibility](compatibility.md)
+- [Troubleshooting](troubleshooting.md)

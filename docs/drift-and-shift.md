@@ -1,5 +1,12 @@
 # Data, domain, and concept shift
 
+**Level:** Intermediate<br><br>
+**You will:** distinguish changes in inputs, populations, labels, and model<br><br>
+performance, then produce reproducible drift evidence.
+**Before you start:** a point-in-time dataset and the [ML evaluation](ml-evaluation.md)<br><br>
+guide.
+**Services:** None; MLflow is optional.<br><br>
+
 FraudTwin can compare a stable reference window with a later production or
 stress window using `fraudtwin.ml.drift`.
 
@@ -93,4 +100,15 @@ reproducible response is:
 4. evaluate mature labels with the unchanged threshold policy;
 5. choose investigation, recalibration, retraining, or no action;
 6. record the decision and next review window.
+
+## Next
+
+Use [Model lifecycle](model-lifecycle.md) when a drift decision changes the
+model artifact or serving process.
+
+## Related
+
+- [ML evaluation](ml-evaluation.md)
+- [Data-quality incidents](data-quality-incidents.md)
+- [Workflows](workflows.md)
 # Drift and shift operations

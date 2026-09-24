@@ -1,5 +1,11 @@
 # Data and evaluation workflows
 
+**Level:** Intermediate<br><br>
+**You will:** generate source data once, then build point-in-time datasets,<br><br>
+replay windows, backtests, model evaluations, or operational projections.
+**Before you start:** [Quickstart](quickstart.md) and [Concepts](concepts.md).<br><br>
+**Services:** None for local workflows; integrations are optional.<br><br>
+
 FraudTwin separates generation from analysis. Generate a source run once, then build datasets, replay windows, or run backtests over those records without regenerating the financial world.
 
 ## Build a point-in-time dataset
@@ -67,7 +73,7 @@ poetry run fraudtwin ml backtest configs/minimal.yaml \
 
 Windows are chronological and non-overlapping. A benchmark pack freezes its own label-maturity gap, regime policy, seed/configuration identity, and metric definition so later comparisons remain meaningful.
 
-For the immutable Milestone 21 public packs, use the separate public-pack
+For the immutable public benchmark packs, use the separate public-pack
 commands:
 
 ```bash
@@ -77,7 +83,7 @@ fraudtwin benchmark verify runs/benchmarks/BM-<id>
 ```
 
 These bundled definitions verify generator compatibility and logical output
-fingerprints. The existing M10 `--benchmark-pack` option remains for backtests
+fingerprints. The existing legacy `--benchmark-pack` option remains for backtests
 over a previously generated run.
 
 ## Train baselines and evaluate external predictions
@@ -118,12 +124,12 @@ observable records. PostgreSQL writes currently require `quality.profile:
 clean`, are committed transactionally, and are immutable per `run_id` (a
 matching repeat is an idempotent no-op). Credentials are never written to the
 resolved configuration or manifest. `fraud_truth` is not exposed in the
-operational database. Debezium CDC remains a separate later milestone; native
+operational database. Debezium CDC remains a separate platform track; native
 Kafka publication is described below.
 
 ## Publish a native Kafka stream
 
-Milestone 25 publishes the clean observable M24 contracts directly to Kafka. The
+Native Kafka publication sends the clean observable contracts directly to Kafka. The
 bundled Avro registry remains authoritative; a remote Schema Registry is checked
 for matching canonical fingerprints and `FULL_TRANSITIVE` compatibility before
 any messages are sent.
@@ -166,7 +172,7 @@ deduplicated counts, partition counts, and input/output fingerprints. Use
 
 ## Validate Avro operational contracts
 
-Milestone 24 ships a source-controlled Avro registry for the clean observable
+FraudTwin ships a source-controlled Avro registry for the clean observable
 operational event projection. It contains `payment-event`, `customer-dispute`,
 `fraud-alert`, `fraud-case`, `fraud-case-confirmation`, and `fraud-label`
 subjects. The registry is local and bundled; it does not require a Schema
@@ -202,11 +208,11 @@ are two-decimal Avro `decimal` values. Fraud truth and other oracle-only fields
 are not part of the operational contracts. A compatible revision must provide
 reader defaults for new fields; an incompatible revision requires an explicit
 breaking major subject with `supersedes` metadata. Kafka producers and remote
-registry registration are deferred to Milestone 25.
+registry registration remains a separate broker integration concern.
 
 ## Publish a lakehouse run
 
-Milestone 26 keeps the normal Parquet run as the deterministic source and
+The lakehouse path keeps the normal Parquet run as the deterministic source and
 adds an optional Iceberg publication.  Start the local MinIO, REST Catalog,
 and Spark profile with:
 
@@ -227,11 +233,11 @@ manifest without optional Iceberg dependencies or services.  The normal
 observable namespaces never contain latent fraud truth; `--include-oracle`
 publishes the separate oracle namespace explicitly.
 
-M25 topics can be consumed incrementally with `fraudtwin lakehouse consume`.
+Kafka topics can be consumed incrementally with `fraudtwin lakehouse consume`.
 The consumer preserves raw framed payloads and transport metadata in Bronze,
 then applies deterministic Silver deduplication.  A complete batch bootstrap
 is still required for entity, ledger, graph, and PIT Gold tables because those
-records are not M25 Kafka subjects.
+records are not Kafka subjects.
 
 The consumer reads `FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS` and optionally
 `FRAUDTWIN_KAFKA_TOPIC_PREFIX` / `FRAUDTWIN_LAKEHOUSE_CONSUMER_GROUP`.
@@ -250,7 +256,7 @@ implicitly.  Compaction and orphan cleanup are delegated to the Spark profile.
 
 ## Observe a generated run
 
-Milestone 27 provides a small optional Prometheus/Grafana surface for local
+The package provides a small optional Prometheus/Grafana surface for local
 batch runs. Install the client and choose a non-default Grafana password:
 
 ```bash
@@ -269,8 +275,8 @@ fraudtwin generate configs/minimal.yaml --output-dir runs \
 
 Open Grafana at `http://localhost:3000` and select a `run_id` in the
 **FraudTwin run observability** dashboard. Prometheus retains local samples for
-15 days. The target is expected to be down between CLI invocations because M27
-does not add a permanent generator daemon, Pushgateway, or remote metrics
+15 days. The target is expected to be down between CLI invocations because the
+package does not add a permanent generator daemon, Pushgateway, or remote metrics
 storage. The dashboard shows generation rate and fraud volume together with
 generator/ledger failures, duplicate rate, invalid-record rate, and late-event
 counts. `fraudtwin validate-ledger` accepts the same metrics options and records
@@ -285,3 +291,14 @@ the selected run's reconciliation result.
 5. Inspect the source, operational, and oracle artifacts together when a case needs an explanation.
 
 This sequence keeps evaluation honest: the model sees only what would have been known at the time, while the oracle remains available for analysis and audit.
+
+## Next
+
+Continue with [ML evaluation](ml-evaluation.md), [Drift and shift](drift-and-shift.md),
+or [Model lifecycle](model-lifecycle.md) according to the question you need to answer.
+
+## Related
+
+- [Configuration](configuration.md)
+- [Data contracts](data-contracts.rst)
+- [Graph and benchmark workflows](graph-and-benchmarks.md)

@@ -147,6 +147,8 @@ def test_scale_benchmark_manifest_records_target_and_host(tmp_path: Path) -> Non
     payload = destination.read_text(encoding="utf-8")
     assert '"target_met": true' in payload
     assert '"throughput_payments_per_second": 5.0' in payload
+    assert '"claim_scope": "laptop-dev-only"' in payload
+    assert '"git_revision"' in payload
 
 
 def test_scale_target_mismatch_is_rejected_before_output(tmp_path: Path) -> None:

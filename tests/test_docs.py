@@ -154,6 +154,39 @@ def test_user_manual_covers_the_first_ten_documentation_gaps() -> None:
         assert marker in Path(guide).read_text(encoding="utf-8"), marker
 
 
+def test_non_tutorial_guides_have_reader_contracts_and_resolved_navigation() -> None:
+    """Keep the public guide layer level-aware and connected."""
+
+    guides = [
+        *Path("docs").glob("*.md"),
+        *Path("docs/audiences").glob("*.md"),
+        *Path("docs/levels").glob("*.md"),
+    ]
+    excluded = {Path("docs/tutorials.md")}
+    required = (
+        "**Level:**",
+        "**You will:**",
+        "**Before you start:**",
+        "**Services:**",
+        "## Next",
+        "## Related",
+    )
+    markdown_link = re.compile(r"\]\(([^)]+)\)")
+    for guide in sorted(path for path in guides if path not in excluded):
+        text = guide.read_text(encoding="utf-8")
+        for marker in required:
+            assert marker in text, f"{guide} is missing {marker}"
+        if guide.name != "compatibility.md":
+            public_prose = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+            public_prose = re.sub(r"`[^`]+`", "", public_prose)
+            assert not re.search(r"\b(?:M\d+|milestone)\b", public_prose, re.IGNORECASE), guide
+        for raw_target in markdown_link.findall(text):
+            target = raw_target.split("#", 1)[0].strip()
+            if not target or target.startswith(("http://", "https://", "mailto:")):
+                continue
+            assert (guide.parent / target).resolve().exists(), (guide, raw_target)
+
+
 def test_cli_command_map_covers_registered_commands() -> None:
     from fraudtwin import cli
 

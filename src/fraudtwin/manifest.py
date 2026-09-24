@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 from fraudtwin import __version__
 from fraudtwin.config import SimulationRunConfig, config_hash
+from fraudtwin.reproducibility import sha256_json
 
 
 def _drop_inactive_metadata(data: dict[str, object]) -> dict[str, object]:
@@ -22,6 +23,7 @@ def _drop_inactive_metadata(data: dict[str, object]) -> dict[str, object]:
         "postgres",
         "kafka",
         "lakehouse",
+        "extensions",
     ):
         if data.get(field) is None:
             data.pop(field, None)
@@ -69,6 +71,7 @@ class RunManifest(BaseModel):
     postgres: dict[str, object] | None = None
     kafka: dict[str, object] | None = None
     lakehouse: dict[str, object] | None = None
+    extensions: list[dict[str, str]] = Field(default_factory=list)
 
     @model_serializer(mode="wrap")
     def _serialize_without_inactive_metadata(self, handler):  # type: ignore[no-untyped-def]
@@ -222,6 +225,8 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         resolved.pop("labels", None)
     if not config.scale.enabled:
         resolved.pop("scale", None)
+    if not config.extensions.enabled:
+        resolved.pop("extensions", None)
     if not config.outputs.kafka:
         resolved.pop("kafka", None)
     if not config.outputs.iceberg:
@@ -229,6 +234,38 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         outputs = resolved.get("outputs")
         if isinstance(outputs, dict):
             outputs.pop("iceberg", None)
+    # Discovery is local-only and has no effect when no extension package is
+    # installed.  Capturing the registry snapshot makes extension-enabled
+    # runs auditable without changing the default run identity.
+    try:
+        from fraudtwin.extensions import discover_extensions
+
+        discovered_extensions = discover_extensions().manifest()
+        if config.extensions.enabled:
+            selected = set(config.extensions.selected)
+            discovered_extensions = [
+                item for item in discovered_extensions if item["extension_id"] in selected
+            ]
+            discovered_ids = {item["extension_id"] for item in discovered_extensions}
+            missing = sorted(selected - discovered_ids)
+            if missing:
+                raise ValueError("configured extensions are not installed: " + ", ".join(missing))
+            extension_configuration_hash = sha256_json(config.extensions.model_dump(mode="json"))
+            discovered_extensions = [
+                {
+                    **item,
+                    "configuration_hash": extension_configuration_hash,
+                    "order": str(index),
+                }
+                for index, item in enumerate(
+                    sorted(discovered_extensions, key=lambda value: value["extension_id"]),
+                    start=1,
+                )
+            ]
+        else:
+            discovered_extensions = []
+    except (ImportError, TypeError):
+        discovered_extensions = []
     return RunManifest(
         run_id=f"RUN-{run_hash}",
         generator_version=__version__,
@@ -248,6 +285,7 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         resolved_configuration=resolved,
         regime_definitions=[regime.model_dump(mode="json") for regime in config.backtest.regimes],
         difficulty=None,
+        extensions=discovered_extensions,
     )
 
 

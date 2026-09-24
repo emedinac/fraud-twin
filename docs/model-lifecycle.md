@@ -1,5 +1,11 @@
 # Model lifecycle: from simulation to service
 
+**Level:** Intermediate<br><br>
+**You will:** move from a generated dataset to a tracked model artifact and a<br><br>
+validated local scoring hand-off.
+**Before you start:** [ML evaluation](ml-evaluation.md).<br><br>
+**Services:** None for local artifacts; MLflow and FastAPI are optional.<br><br>
+
 This guide is the production-shaped path through FraudTwin. It keeps the
 generator, feature construction, evaluation, artifact, and serving boundaries
 explicit:
@@ -50,3 +56,14 @@ The [reference FastAPI service](production-serving.md) loads one artifact per
 process and validates typed point-in-time requests. Keep offline and online
 feature code identical, emit model/version metadata with every score, and
 monitor input drift, score drift, latency, errors, and delayed-label quality.
+
+## Next
+
+Follow [Production serving](production-serving.md) for the local HTTP boundary,
+then review [Compatibility](compatibility.md) before a package upgrade.
+
+## Related
+
+- [ML evaluation](ml-evaluation.md)
+- [Drift and shift](drift-and-shift.md)
+- [Integration runbooks](integrations.md)

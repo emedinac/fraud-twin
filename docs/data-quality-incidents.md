@@ -1,5 +1,11 @@
 # Data-quality incidents and replay
 
+**Level:** Intermediate<br><br>
+**You will:** inject explicit data faults, replay a bounded interval, and<br><br>
+repair downstream projections without rewriting source truth.
+**Before you start:** a generated run and the [Concepts](concepts.md) guide.<br><br>
+**Services:** None; service-backed checks are optional.<br><br>
+
 Quality faults are applied after business generation, so the canonical source
 and oracle remain available for investigation. Select a profile or set one
 fault explicitly:
@@ -32,3 +38,13 @@ fraudtwin replay --run-id <run-id> \
 Use the observable view for operational behavior and the oracle view only for
 offline diagnosis. A repair may rebuild a downstream table or deduplicate a
 stream, but it must never rewrite the canonical event or latent fraud truth.
+
+## Next
+
+Continue with [Data and evaluation workflows](workflows.md) or [Drift and shift](drift-and-shift.md).
+
+## Related
+
+- [Data contracts](data-contracts.rst)
+- [Kafka reliability](kafka-reliability.md)
+- [Scale operations](scale-operations.md)

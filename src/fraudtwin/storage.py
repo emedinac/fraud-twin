@@ -28,9 +28,14 @@ class LocalScaleStorage:
         if target.resolve() == local_root.resolve():
             return
         target.mkdir(parents=True, exist_ok=True)
-        for source in sorted(local_root.rglob("*")):
-            if not source.is_file():
-                continue
+        files = [source for source in local_root.rglob("*") if source.is_file()]
+        files.sort(
+            key=lambda source: (
+                source.name in {"checkpoint.json", "manifest.json"},
+                source.as_posix(),
+            )
+        )
+        for source in files:
             relative = source.relative_to(local_root)
             final = target / relative
             final.parent.mkdir(parents=True, exist_ok=True)
@@ -54,9 +59,17 @@ class FsspecScaleStorage:
             ) from exc
         target = str(destination or self.uri).rstrip("/")
         filesystem, base = fsspec.core.url_to_fs(target)
-        for source in sorted(local_root.rglob("*")):
-            if not source.is_file():
-                continue
+        files = [source for source in local_root.rglob("*") if source.is_file()]
+        # Publish immutable data chunks first.  A checkpoint/manifest is the
+        # commit record and must become visible only after every chunk upload
+        # has completed successfully.
+        files.sort(
+            key=lambda source: (
+                source.name in {"checkpoint.json", "manifest.json"},
+                source.as_posix(),
+            )
+        )
+        for source in files:
             relative = source.relative_to(local_root).as_posix()
             destination_path = f"{base.rstrip('/')}/{relative}"
             temporary_path = destination_path + ".tmp"

@@ -17,6 +17,24 @@ on:
       - "docs/development.md"
       - "README.md"
       - "docs/**"
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+    paths:
+      - "src/**"
+      - "contracts/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "poetry.lock"
+      - ".github/workflows/ci.yml"
+      - "docker-compose.yml"
+      - "observability/**"
+      - "docs/workflows.md"
+      - "docs/development.md"
+      - "README.md"
+      - "docs/**"
 
 permissions:
   contents: read

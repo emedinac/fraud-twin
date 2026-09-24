@@ -1902,6 +1902,25 @@ class CampaignDynamicsConfig(_StrictModel):
         return self.enabled
 
 
+class ExtensionsConfig(_StrictModel):
+    """Opt-in installed extension selections.
+
+    Discovery remains local to the process; the configuration stores only
+    stable IDs so source-run hashes do not depend on import paths.
+    """
+
+    enabled: bool = False
+    selected: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_extensions(self) -> "ExtensionsConfig":
+        if len(set(self.selected)) != len(self.selected):
+            raise ValueError("extensions.selected must contain unique IDs")
+        if not self.enabled and self.selected:
+            raise ValueError("extensions.selected requires extensions.enabled")
+        return self
+
+
 class SimulationRunConfig(_StrictModel):
     """Top-level configuration accepted by the CLI."""
 
@@ -1974,6 +1993,10 @@ class SimulationRunConfig(_StrictModel):
     calibration: CalibrationConfig = Field(
         default_factory=CalibrationConfig,
         description="Optional reference-derived aggregate calibration settings.",
+    )
+    extensions: ExtensionsConfig = Field(
+        default_factory=ExtensionsConfig,
+        description="Optional installed extension selections.",
     )
 
     def effective_label_delay_seconds(self) -> int:
@@ -2332,6 +2355,8 @@ def _canonical_config(
     # M18 is opt-in; disabled scale controls must preserve legacy identities.
     if not config.scale.enabled:
         payload.pop("scale", None)
+    if not config.extensions.enabled:
+        payload.pop("extensions", None)
     # Output sinks are delivery concerns, not generator inputs.  In
     # particular, enabling the M23 PostgreSQL mirror must not change the
     # generated records, stream seeds, run ID, or frozen M21 pack hashes.
