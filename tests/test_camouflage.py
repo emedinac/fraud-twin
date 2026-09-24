@@ -19,7 +19,7 @@ def _fraud_config(strength: float = 0.0) -> SimulationRunConfig:
     return base.model_copy(update={"fraud": fraud, "stress": StressConfig(camouflage=strength)})
 
 
-def test_m13_configuration_is_strict_and_resolves_precedence() -> None:
+def test_camouflage_configuration_is_strict_and_resolves_precedence() -> None:
     config = _fraud_config()
     raw = config.model_dump(mode="python")
     raw["stress"] = {
@@ -43,7 +43,7 @@ def test_m13_configuration_is_strict_and_resolves_precedence() -> None:
         SimulationRunConfig.model_validate(raw)
 
 
-def test_m13_alias_and_inactive_resolution() -> None:
+def test_camouflage_alias_and_inactive_resolution() -> None:
     config = _fraud_config()
     assert resolve_camouflage(config).enabled is False
     raw = config.model_dump(mode="python")
@@ -54,7 +54,7 @@ def test_m13_alias_and_inactive_resolution() -> None:
     assert resolve_camouflage(alias).source_namespace == "benchmark"
 
 
-def test_m13_generation_is_deterministic_and_reports_similarity() -> None:
+def test_camouflage_generation_is_deterministic_and_reports_similarity() -> None:
     config = _fraud_config(0.8)
     entities = EntityGenerator(config).generate()
     first = BehaviorGenerator(config, entities).generate()
@@ -68,7 +68,7 @@ def test_m13_generation_is_deterministic_and_reports_similarity() -> None:
     assert any(event.scenario_id is not None for event in first.oracle_tables["payment_events"])
 
 
-def test_neutral_m13_keeps_manifest_shape_and_configuration_hash() -> None:
+def test_neutral_camouflage_keeps_manifest_shape_and_configuration_hash() -> None:
     base = load_config(Path("configs/minimal.yaml"))
     neutral = base.model_copy(update={"stress": StressConfig()})
     assert create_manifest(base).model_dump(mode="json") == create_manifest(neutral).model_dump(
@@ -76,13 +76,13 @@ def test_neutral_m13_keeps_manifest_shape_and_configuration_hash() -> None:
     )
 
 
-def test_m13_fixture_validates() -> None:
+def test_camouflage_fixture_validates() -> None:
     config = load_config(Path("configs/benchmarks/m13-camouflage-v1.yaml"))
     assert resolve_camouflage(config).enabled
     assert config.stress.families == {}
 
 
-def test_m13_fixture_global_strength_changes_generated_summaries() -> None:
+def test_camouflage_fixture_global_strength_changes_generated_summaries() -> None:
     base = load_config(Path("configs/benchmarks/m13-camouflage-v1.yaml"))
     low = base.model_copy(
         update={

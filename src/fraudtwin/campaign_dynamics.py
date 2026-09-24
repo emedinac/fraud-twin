@@ -1,7 +1,5 @@
 """Deterministic, opt-in Milestone 15 campaign evolution."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from random import Random
@@ -710,7 +708,7 @@ def _campaign_actions(
 
 def evolve_campaigns(
     config: SimulationRunConfig,
-    entities: EntityDataset,
+    entities: "EntityDataset",
     graph_dataset: GraphFraudDataset,
     run_id: str,
 ) -> DynamicCampaignDataset:
@@ -759,7 +757,7 @@ def evolve_campaigns(
 
 
 def validate_campaign_dynamics(
-    config: SimulationRunConfig, entities: EntityDataset, dataset: DynamicCampaignDataset
+    config: SimulationRunConfig, entities: "EntityDataset", dataset: DynamicCampaignDataset
 ) -> None:
     """Validate dynamic IDs, lifecycle records, graph membership, and ledger closure."""
 

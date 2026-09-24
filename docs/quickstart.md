@@ -1,5 +1,11 @@
 # Quickstart
 
+**Level:** Beginner<br><br>
+**You will:** install or enter a FraudTwin environment, generate a small run,<br><br>
+and locate its main artifacts.
+**Before you start:** [Installation](installation.md).<br><br>
+**Services:** None.<br><br>
+
 This walkthrough creates a small payment world locally. It uses the tracked minimal configuration, so the result is quick to generate and easy to inspect.
 
 ## Requirements
@@ -64,8 +70,14 @@ poetry run fraudtwin generate \
 
 For a smaller custom run, set `fraud.enabled: true` in a copied YAML file. The generator supports F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack, with configurable hard negatives and workflow projections.
 
-## Next steps
+## Next
 
 - Adjust behavior and payment settings in [Configuration](configuration.md).
 - Build a historical ML table or replay a run with [Workflows](workflows.md).
 - Export graph views and compare stress levels with [Graph and benchmark workflows](graph-and-benchmarks.md).
+
+## Related
+
+- [Beginner path](levels/beginner.md)
+- [Data contracts](data-contracts.rst)
+- [Troubleshooting](troubleshooting.md)

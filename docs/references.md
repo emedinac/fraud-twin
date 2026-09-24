@@ -1,5 +1,11 @@
 # References and related work
 
+**Level:** Expert<br><br>
+**You will:** find the standards, libraries, papers, and projects that inform<br><br>
+FraudTwin's design without treating them as runtime dependencies.
+**Before you start:** the [Architecture](architecture.md) guide.<br><br>
+**Services:** None.<br><br>
+
 FraudTwin is released under the [Apache License 2.0](../LICENSE).
 
 These references informed FraudTwin’s design. The repository does not bundle copied proprietary source code or external datasets; generated records are synthetic and produced by FraudTwin. Third-party dependencies and referenced works remain subject to their own licenses and terms.
@@ -51,3 +57,14 @@ These references informed FraudTwin’s design. The repository does not bundle c
 - Haghighi et al., [*Beyond pairwise relationships*](https://doi.org/10.1007/s10115-025-02476-5) - higher-order fraud relationships.
 
 - [Python Packaging User Guide](https://packaging.python.org/en/latest/), [Pydantic documentation](https://docs.pydantic.dev/latest/), and [pytest documentation](https://docs.pytest.org/en/stable/) - informed package layout, typed configuration validation, and deterministic regression testing.
+
+## Next
+
+Return to [Architecture](architecture.md) to connect these references to the
+design, or use the [Expert path](levels/expert.md) for implementation routes.
+
+## Related
+
+- [Development](development.md)
+- [Compatibility](compatibility.md)
+- [Release evidence](release-evidence.md)

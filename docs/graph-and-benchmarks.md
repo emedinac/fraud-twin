@@ -1,5 +1,12 @@
 # Graph and benchmark workflows
 
+**Level:** Intermediate<br><br>
+**You will:** export temporal graph views, compare benchmark conditions, and<br><br>
+interpret quality results without confusing `N/A` with a zero score.
+**Before you start:** a generated run and [Concepts](concepts.md).<br><br>
+**Services:** None for local exports; Neo4j and optional model packages are<br><br>
+available for integration paths.
+
 Graph campaigns add relationships to the same payment and event identities already present in a run. They do not create a separate synthetic universe.
 
 ## Export graph views
@@ -119,30 +126,30 @@ observations remain delayed and incomplete in the generated dataset.
 
 ## Run an immutable public benchmark pack
 
-Milestone 21 bundles eight named packs whose generation controls, PIT windows,
+The public benchmark catalog bundles eight named packs whose generation controls, PIT windows,
 metrics, calibration identity, descriptors, and logical content fingerprints
 are frozen in the installed package:
 
 ```bash
-fraudtwin benchmark run FT-B04-CAMOUFLAGE@1.0
-fraudtwin benchmark describe FT-B04-CAMOUFLAGE@1.0.0
+fraudtwin benchmark run FT-B04-CAMOUFLAGE@0.34.0
+fraudtwin benchmark describe FT-B04-CAMOUFLAGE@0.34.0
 fraudtwin benchmark verify runs/benchmarks/BM-<id>
 ```
 
-The shorthand `@1.0` is accepted only when it resolves to one patch version.
+The shorthand `@0.34` is accepted only when it resolves to one patch version.
 Pack runs reject incompatible FraudTwin versions, altered definitions, and
 logical output drift. `benchmark verify` checks an existing artifact without
 rerunning it. Released definitions are never edited or removed; a
 change to seeds, scenarios, splits, metrics, label policy, or calibration
 creates a new pack version, while prior versions remain runnable.
 
-The M10 `fraudtwin.ml.BenchmarkPack` fixtures remain supported for backtests
-over an existing generated run and are separate from these M21 public packs.
+The legacy `fraudtwin.ml.BenchmarkPack` fixtures remain supported for backtests
+over an existing generated run and are separate from these public packs.
 
 ## Generator-quality benchmark
 
-Milestone 22 evaluates the generator itself rather than a fraud model. The
-standard profile runs every immutable M21 pack and reports correctness,
+The quality benchmark evaluates the generator itself rather than a fraud model. The
+standard profile runs every immutable public pack and reports correctness,
 statistical/temporal/graph fidelity, fraud difficulty, scalability,
 engineering performance, and reproducibility independently:
 
@@ -151,7 +158,7 @@ poetry run fraudtwin quality-benchmark --profile standard-v1
 poetry run fraudtwin report RUN-<id>
 ```
 
-Scalability metrics are populated from an explicitly executed M18 job; this
+Scalability metrics are populated from an explicitly executed scale job; this
 keeps large workloads out of normal quality runs.  Pass its evidence manifest
 to the matching profile:
 
@@ -167,3 +174,14 @@ The default profile uses the small workload. The immutable
 External generators can be supplied as a `module:factory` adapter or a
 normalized artifact bundle. A capability that is not supplied is reported as
 `N/A`, never as a zero score.
+
+## Next
+
+Move to [Data and evaluation workflows](workflows.md) for model comparison, or
+to [Integration runbooks](integrations.md) for service-backed graph workflows.
+
+## Related
+
+- [Concepts](concepts.md)
+- [Data contracts](data-contracts.rst)
+- [Verified capabilities](verified-capabilities.md)

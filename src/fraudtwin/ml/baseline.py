@@ -5,8 +5,6 @@ generation remain usable without the optional ML stack, while a trained run is
 fully described by local, content-addressed artifacts.
 """
 
-from __future__ import annotations
-
 import hashlib
 import importlib.metadata
 import io
@@ -24,6 +22,8 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from fraudtwin import __version__
+from fraudtwin.ml.metrics import auc as _auc
+from fraudtwin.ml.metrics import pr_auc as _pr_auc
 from fraudtwin.reproducibility import sha256_json, write_json
 
 MODEL_NAMES = ("logistic_regression", "lightgbm", "xgboost", "catboost")
@@ -159,7 +159,7 @@ class PredictionRecord(BaseModel):
         return value.astimezone(UTC)
 
     @model_validator(mode="after")
-    def exactly_one_target(self) -> PredictionRecord:
+    def exactly_one_target(self) -> "PredictionRecord":
         if sum(getattr(self, field) is not None for field in PREDICTION_FIELDS) != 1:
             raise ValueError("exactly one prediction target ID is required")
         if not math.isfinite(self.fraud_score):
@@ -336,32 +336,6 @@ def _utc(value: Any) -> datetime:
 
 def _labelled(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     return [dict(row) for row in rows if row.get("label") in LABELS]
-
-
-def _auc(labels: Sequence[int], scores: Sequence[float], ids: Sequence[str]) -> float | None:
-    positives = sum(labels)
-    negatives = len(labels) - positives
-    if not positives or not negatives:
-        return None
-    ordered = sorted(zip(scores, labels, ids, strict=True), key=lambda item: (item[0], item[2]))
-    rank_sum = sum(rank for rank, (_, label, _) in enumerate(ordered, 1) if label)
-    return (rank_sum - positives * (positives + 1) / 2) / (positives * negatives)
-
-
-def _pr_auc(labels: Sequence[int], scores: Sequence[float], ids: Sequence[str]) -> float | None:
-    positives = sum(labels)
-    if not positives:
-        return None
-    ordered = sorted(zip(scores, labels, ids, strict=True), key=lambda item: (-item[0], item[2]))
-    area = 0.0
-    found = 0
-    previous_recall = 0.0
-    for index, (_, label, _) in enumerate(ordered, 1):
-        found += label
-        recall = found / positives
-        area += (recall - previous_recall) * (found / index)
-        previous_recall = recall
-    return area
 
 
 def _operating_thresholds(

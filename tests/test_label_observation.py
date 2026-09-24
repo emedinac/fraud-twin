@@ -35,7 +35,7 @@ def _enabled_config():
     return base.model_copy(update={"fraud": fraud, "labels": labels})
 
 
-def test_m17_strict_configuration_accepts_compact_delay_and_rejects_unknown() -> None:
+def test_label_observation_strict_configuration_accepts_compact_delay_and_rejects_unknown() -> None:
     base = load_config(Path("configs/minimal.yaml"))
     values = base.model_dump(mode="python")
     values["labels"] = {"enabled": True, "confirmation_delay": "lognormal"}
@@ -46,7 +46,7 @@ def test_m17_strict_configuration_accepts_compact_delay_and_rejects_unknown() ->
         SimulationRunConfig.model_validate(values)
 
 
-def test_m17_history_is_deterministic_and_truth_is_immutable() -> None:
+def test_label_observation_history_is_deterministic_and_truth_is_immutable() -> None:
     config = _enabled_config()
     entities = EntityGenerator(config).generate()
     first_behavior = BehaviorGenerator(config, entities).generate()
@@ -61,7 +61,7 @@ def test_m17_history_is_deterministic_and_truth_is_immutable() -> None:
         assert visible.label_version >= 0
 
 
-def test_m17_pit_uses_only_available_version() -> None:
+def test_label_observation_pit_uses_only_available_version() -> None:
     config = _enabled_config()
     entities = EntityGenerator(config).generate()
     behavior = BehaviorGenerator(config, entities).generate()
@@ -79,7 +79,7 @@ def test_m17_pit_uses_only_available_version() -> None:
     assert row["fraud_truth"] is None
 
 
-def test_m17_standalone_policy_requires_seed() -> None:
+def test_label_observation_standalone_policy_requires_seed() -> None:
     config = _enabled_config()
     entities = EntityGenerator(config).generate()
     behavior = BehaviorGenerator(config, entities).generate()
@@ -91,7 +91,7 @@ def test_m17_standalone_policy_requires_seed() -> None:
         )
 
 
-def test_m17_validation_rejects_inconsistent_and_duplicate_version_ids() -> None:
+def test_label_observation_validation_rejects_inconsistent_and_duplicate_version_ids() -> None:
     config = _enabled_config()
     entities = EntityGenerator(config).generate()
     behavior = BehaviorGenerator(config, entities).generate()
@@ -116,7 +116,7 @@ def test_m17_validation_rejects_inconsistent_and_duplicate_version_ids() -> None
         )
 
 
-def test_m17_sidecar_round_trips_typed_history_artifacts(tmp_path: Path) -> None:
+def test_label_observation_sidecar_round_trips_typed_history_artifacts(tmp_path: Path) -> None:
     config = _enabled_config()
     source = generate(config)
     generated = generate(config, write=True, output_dir=tmp_path)

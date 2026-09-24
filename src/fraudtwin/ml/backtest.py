@@ -1,7 +1,5 @@
 """Leakage-safe rolling backtests over one generated FraudTwin history."""
 
-from __future__ import annotations
-
 import hashlib
 import math
 import re
@@ -25,6 +23,8 @@ from fraudtwin.config import (
 )
 from fraudtwin.manifest import BacktestManifest, RunManifest
 from fraudtwin.ml.dataset import PointInTimeDatasetBuilder
+from fraudtwin.ml.metrics import auc as _auc
+from fraudtwin.ml.metrics import pr_auc as _pr_auc
 from fraudtwin.reproducibility import as_utc, sha256_json
 from fraudtwin.simulation.behavior import BehaviorDataset
 from fraudtwin.simulation.generator import EntityDataset
@@ -99,7 +99,7 @@ class BenchmarkWindow(BaseModel):
         return _utc(value)
 
     @model_validator(mode="after")
-    def bounds_must_be_ordered(self) -> BenchmarkWindow:
+    def bounds_must_be_ordered(self) -> "BenchmarkWindow":
         if self.to_time <= self.from_time:
             raise ValueError("benchmark window to must be after from")
         return self
@@ -116,7 +116,7 @@ class BenchmarkPackWindows(BaseModel):
     stress: BenchmarkWindow | None = None
 
     @model_validator(mode="after")
-    def windows_must_not_overlap(self) -> BenchmarkPackWindows:
+    def windows_must_not_overlap(self) -> "BenchmarkPackWindows":
         ordered = tuple(
             window for window in (self.train, self.validation, self.test, self.stress) if window
         )
@@ -162,7 +162,7 @@ class BenchmarkPack(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def metrics_must_be_supported(self) -> BenchmarkPack:
+    def metrics_must_be_supported(self) -> "BenchmarkPack":
         if not self.metric_definitions or any(
             metric not in METRIC_NAMES for metric in self.metric_definitions
         ):
@@ -246,38 +246,6 @@ def _fit_baseline(rows: Iterable[dict[str, Any]]) -> _BaselineScorer:
     center = (sum(positives) / len(positives) + sum(negatives) / len(negatives)) / 2
     scale = max(abs(sum(positives) / len(positives) - sum(negatives) / len(negatives)), 1.0)
     return _BaselineScorer(round(center, 12), round(scale, 12))
-
-
-def _auc(labels: list[int], scores: list[float], row_ids: list[str]) -> float | None:
-    positives = sum(labels)
-    negatives = len(labels) - positives
-    if not positives or not negatives:
-        return None
-    ordered = sorted(zip(scores, labels, row_ids, strict=True), key=lambda item: (item[0], item[2]))
-    rank_sum = 0.0
-    for rank, (_, label, _) in enumerate(ordered, start=1):
-        if label:
-            rank_sum += rank
-    return (rank_sum - positives * (positives + 1) / 2) / (positives * negatives)
-
-
-def _pr_auc(labels: list[int], scores: list[float], row_ids: list[str]) -> float | None:
-    positives = sum(labels)
-    if not positives:
-        return None
-    ordered = sorted(
-        zip(scores, labels, row_ids, strict=True), key=lambda item: (-item[0], item[2])
-    )
-    area = 0.0
-    found = 0
-    previous_recall = 0.0
-    for index, (_, label, _) in enumerate(ordered, start=1):
-        found += label
-        recall = found / positives
-        precision = found / index
-        area += (recall - previous_recall) * precision
-        previous_recall = recall
-    return area
 
 
 def _metrics(rows: list[dict[str, Any]]) -> dict[str, object]:

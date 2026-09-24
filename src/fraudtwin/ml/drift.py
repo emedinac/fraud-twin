@@ -7,8 +7,6 @@ fingerprints, making an alert reproducible instead of an opaque dashboard
 number.
 """
 
-from __future__ import annotations
-
 import math
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
@@ -46,7 +44,7 @@ class DriftConfig(BaseModel):
     label_policy: str = Field(default="exclude_unresolved", min_length=1)
 
     @model_validator(mode="after")
-    def names_must_differ(self) -> DriftConfig:
+    def names_must_differ(self) -> "DriftConfig":
         if self.reference_name == self.comparison_name:
             raise ValueError("reference_name and comparison_name must differ")
         if self.fields is not None and len(set(self.fields)) != len(self.fields):

@@ -81,3 +81,13 @@ def test_seeded_generators_start_with_the_same_sequence() -> None:
     second = create_rng(42)
 
     assert [first.random() for _ in range(3)] == [second.random() for _ in range(3)]
+
+
+def test_extensions_are_opt_in_and_must_be_unique() -> None:
+    config = load_config(CONFIG_PATH).model_dump(mode="python")
+    config["extensions"] = {"enabled": True, "selected": ["example.extension"]}
+    enabled = SimulationRunConfig.model_validate(config)
+    assert enabled.extensions.selected == ("example.extension",)
+    config["extensions"]["selected"] = ["duplicate", "duplicate"]
+    with pytest.raises(ValidationError, match="unique"):
+        SimulationRunConfig.model_validate(config)

@@ -1,5 +1,5 @@
-FraudTwin
-=========
+FraudTwin documentation
+=======================
 
 .. container:: fraudtwin-hero
 
@@ -25,75 +25,75 @@ Install and run
    $ poetry run fraudtwin config validate configs/minimal.yaml
    $ poetry run fraudtwin generate configs/minimal.yaml --output-dir /tmp/fraudtwin-run
 
-Choose your path
-----------------
+Start here
+----------
 
-.. grid:: 2
+.. grid:: 3
    :gutter: 3
 
-   .. grid-item-card:: Visualize the payment world
-      :link: tutorials/visualization
-      :link-type: doc
-      :class-card: sd-border-0
-
-      Start by plotting temporal behavior, distributions, fraud scenarios, and
-      ML-ready features before choosing a modeling workflow.
-
-   .. grid-item-card:: Generate and inspect
+   .. grid-item-card:: Start Here
       :link: quickstart
       :link-type: doc
       :class-card: sd-border-0
 
-      Generate a small deterministic payment world and inspect its entities,
-      payments, lifecycle events, ledger, and manifest.
+      Install FraudTwin, create a small run, and learn what the generated
+      manifest and Parquet files mean.
 
-   .. grid-item-card:: Build an ML dataset
-      :link: workflows
+   .. grid-item-card:: Beginner
+      :link: levels/beginner
       :link-type: doc
       :class-card: sd-border-0
 
-      Build point-in-time-safe features, labels, replay windows, and rolling
-      backtests without leaking future information.
+      Follow a guided path for Python users who are new to data systems and
+      optional services.
 
-   .. grid-item-card:: Explore graph fraud
-      :link: graph-and-benchmarks
+   .. grid-item-card:: Intermediate
+      :link: levels/intermediate
       :link-type: doc
       :class-card: sd-border-0
 
-      Export observable and oracle graph views to Neo4j or PyTorch Geometric
-      while preserving event provenance.
+      Build reproducible datasets, evaluate models, inspect quality, and use
+      graph workflows.
 
-   .. grid-item-card:: Use the Python API
+   .. grid-item-card:: Expert
+      :link: levels/expert
+      :link-type: doc
+      :class-card: sd-border-0
+
+      Work with contracts, integrations, checkpoints, extensions, operations,
+      and release evidence.
+
+   .. grid-item-card:: Reference
       :link: api
       :link-type: doc
       :class-card: sd-border-0
 
-      Find signatures, parameters, return objects, source links, optional
-      dependencies, and configuration schemas in the reference manual.
+      Find the complete Python API, CLI, configuration, and data-contract
+      reference.
 
-Choose your role
-----------------
+Find your path by role
+----------------------
 
 .. grid:: 3
    :gutter: 2
 
-   .. grid-item-card:: New users
+   .. grid-item-card:: New users and analysts
       :link: audiences/new-users
       :link-type: doc
 
-      Install FraudTwin, generate a run, and learn the core concepts offline.
+      Use the beginner route for a local, offline start.
 
    .. grid-item-card:: Data and ML
       :link: audiences/data-ml
       :link-type: doc
 
-      Build point-in-time data, evaluate models, and analyze drift.
+      Use the intermediate route for datasets, evaluation, and drift.
 
    .. grid-item-card:: Engineering and MLOps
       :link: audiences/engineering-mlops
       :link-type: doc
 
-      Connect serving, tracking, Kafka, databases, and observability safely.
+      Use the expert route for services, operations, and release boundaries.
 
 How a run becomes an experiment
 -------------------------------
@@ -115,7 +115,21 @@ Documentation
 
    quickstart
    installation
+   learning-paths
    tutorials
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Learn by level
+
+   levels/beginner
+   levels/intermediate
+   levels/expert
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Find by role
+
    audiences
 
 .. toctree::
@@ -133,6 +147,12 @@ Documentation
    data-quality-incidents
    graph-and-benchmarks
    release-readiness
+   architecture
+   verified-capabilities
+   spark-streaming
+   extensions
+   scale-operations
+   release-evidence
 
 .. toctree::
    :maxdepth: 2

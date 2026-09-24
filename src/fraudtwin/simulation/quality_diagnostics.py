@@ -7,8 +7,6 @@ the remaining measurements follow the same validity, structure, uniqueness,
 and referential-integrity ideas as an SDMetrics diagnostic report.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
@@ -21,7 +19,10 @@ from fraudtwin.domain import (
     PIX_LIFECYCLE_EVENT_TYPES,
     PaymentEvent,
 )
-from fraudtwin.simulation.parquet import PAYMENT_EVENT_SCHEMA, PAYMENT_SCHEMA
+from fraudtwin.simulation.parquet import (  # type: ignore[attr-defined]
+    PAYMENT_EVENT_SCHEMA,
+    PAYMENT_SCHEMA,
+)
 
 if TYPE_CHECKING:
     from fraudtwin.simulation.behavior import BehaviorDataset
@@ -260,7 +261,9 @@ def _extreme_value_summary(events: Iterable[PaymentEvent]) -> dict[str, Any]:
     }
 
 
-def build_quality_diagnostics(clean: BehaviorDataset, output: BehaviorDataset) -> dict[str, Any]:
+def build_quality_diagnostics(
+    clean: "BehaviorDataset", output: "BehaviorDataset"
+) -> dict[str, Any]:
     """Build deterministic M8 diagnostics for clean and mutated records."""
 
     clean_payments = _frame(clean.payments, PAYMENT_SCHEMA)

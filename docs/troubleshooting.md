@@ -1,5 +1,11 @@
 # Troubleshooting
 
+**Level:** Beginner to Expert<br><br>
+**You will:** identify installation, configuration, service, data, and resume<br><br>
+failures from the first useful error message.
+**Before you start:** the guide that led to the failure.<br><br>
+**Services:** Follow the service requirements of the failing workflow.<br><br>
+
 ## Installation and optional extras
 
 Install the base package first, then add only the integration you need:
@@ -49,3 +55,14 @@ fraudtwin resume .fraudtwin/run
 
 Resume validates the resolved configuration and seed tree. Do not edit a
 checkpoint or versioned benchmark fixture in place.
+
+## Next
+
+Return to the relevant [learning path](learning-paths.md) after the environment
+is healthy.
+
+## Related
+
+- [Installation](installation.md)
+- [Configuration](configuration.md)
+- [Verified capabilities](verified-capabilities.md)

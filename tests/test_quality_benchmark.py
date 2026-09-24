@@ -13,7 +13,7 @@ from fraudtwin.quality_benchmark import (
 )
 
 
-def test_m22_standard_profile_is_complete_and_versioned() -> None:
+def test_quality_benchmark_standard_profile_is_complete_and_versioned() -> None:
     profile = load_quality_profile("standard-v1")
     assert profile.profile_id == "standard-v1"
     assert profile.protocol_version == "M22-quality-1"
@@ -22,13 +22,15 @@ def test_m22_standard_profile_is_complete_and_versioned() -> None:
     assert len(profile.fingerprint) == 64
 
 
-def test_m22_dev_profile_matches_laptop_scale_contract() -> None:
+def test_quality_benchmark_dev_profile_matches_laptop_scale_contract() -> None:
     profile = load_quality_profile("standard-v1-dev")
     assert profile.profile_id == "standard-v1-dev"
     assert profile.scale_size == "dev"
 
 
-def test_m22_external_bundle_reports_unsupported_dimensions_as_na(tmp_path: Path) -> None:
+def test_quality_benchmark_external_bundle_reports_unsupported_dimensions_as_na(
+    tmp_path: Path,
+) -> None:
     bundle = tmp_path / "bundle.json"
     bundle.write_text(
         json.dumps(
@@ -61,7 +63,7 @@ def test_m22_external_bundle_reports_unsupported_dimensions_as_na(tmp_path: Path
     assert metrics["scenario_coverage"]["status"] == "AVAILABLE"
 
 
-def test_m22_quality_benchmark_cli_accepts_bundle(tmp_path: Path) -> None:
+def test_quality_benchmark_cli_accepts_bundle(tmp_path: Path) -> None:
     bundle = tmp_path / "bundle.json"
     bundle.write_text(
         json.dumps(

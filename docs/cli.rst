@@ -157,7 +157,7 @@ Examples by audience
    $ fraudtwin kafka chaos --run-id RUN-... --boundary consumer --output-dir runs
 
    # Researcher: verify a public benchmark identity
-   $ fraudtwin benchmark describe FT-B04-CAMOUFLAGE@1.0.0
+   $ fraudtwin benchmark describe FT-B04-CAMOUFLAGE@0.34.0
    $ fraudtwin benchmark verify runs/benchmarks/BM-...
 
 The documentation tests compare the registered Typer command names with this

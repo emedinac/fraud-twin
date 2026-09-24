@@ -22,7 +22,7 @@ from fraudtwin.simulation.parquet import write_campaign_dynamics_sidecar
 FIXTURE = Path("configs/benchmarks/m15-campaign-dynamics-v1.yaml")
 
 
-def test_m15_is_strict_and_neutral_identity_is_unchanged() -> None:
+def test_campaign_dynamics_is_strict_and_neutral_identity_is_unchanged() -> None:
     assert __version__ == "0.34.0"
     base = load_config(Path("configs/minimal.yaml"))
     neutral = base.model_copy(update={"campaign_dynamics": CampaignDynamicsConfig()})
@@ -33,7 +33,7 @@ def test_m15_is_strict_and_neutral_identity_is_unchanged() -> None:
         SimulationRunConfig.model_validate(raw)
 
 
-def test_m15_rejects_invalid_transition_graph_and_template() -> None:
+def test_campaign_dynamics_rejects_invalid_transition_graph_and_template() -> None:
     base = load_config(FIXTURE).model_dump(mode="python")
     base["campaign_dynamics"]["bindings"][0]["template"] = "CYCLIC_RING"
     with pytest.raises(ValidationError, match="requires template"):
@@ -44,7 +44,7 @@ def test_m15_rejects_invalid_transition_graph_and_template() -> None:
         SimulationRunConfig.model_validate(base)
 
 
-def test_m15_rejects_zero_actions_and_caps_initial_membership() -> None:
+def test_campaign_dynamics_rejects_zero_actions_and_caps_initial_membership() -> None:
     base = load_config(FIXTURE).model_dump(mode="python")
     base["campaign_dynamics"]["bindings"][0]["max_actions"] = 0
     with pytest.raises(ValidationError, match="greater than or equal to 1"):
@@ -62,7 +62,7 @@ def _dynamic_run() -> tuple[SimulationRunConfig, object, object]:
     return config, entities, behavior
 
 
-def test_m15_is_deterministic_and_validates_all_dynamic_lifecycles() -> None:
+def test_campaign_dynamics_is_deterministic_and_validates_all_dynamic_lifecycles() -> None:
     config, entities, first = _dynamic_run()
     second = BehaviorGenerator(config, entities, simulation_run_id="RUN-M15").generate()
     assert first.campaign_dynamics == second.campaign_dynamics
@@ -104,7 +104,7 @@ def test_m15_is_deterministic_and_validates_all_dynamic_lifecycles() -> None:
     )
 
 
-def test_m15_joins_respect_max_active_members() -> None:
+def test_campaign_dynamics_joins_respect_max_active_members() -> None:
     config = load_config(FIXTURE)
     bindings = list(config.campaign_dynamics.bindings)
     bindings[0] = bindings[0].model_copy(update={"max_active_members": 6})
@@ -131,7 +131,7 @@ def test_m15_joins_respect_max_active_members() -> None:
     assert all(len(snapshot.active_actor_ids) <= 6 for snapshot in capped_snapshots)
 
 
-def test_m15_dynamic_graph_truth_has_membership_and_hyperedge_closure() -> None:
+def test_campaign_dynamics_dynamic_graph_truth_has_membership_and_hyperedge_closure() -> None:
     config, entities, behavior = _dynamic_run()
     assert behavior.campaign_dynamics is not None
     assert any(item.campaign_id for item in behavior.graph_memberships)
@@ -141,7 +141,7 @@ def test_m15_dynamic_graph_truth_has_membership_and_hyperedge_closure() -> None:
     )
 
 
-def test_m15_sidecar_records_are_loaded_and_merged(tmp_path: Path) -> None:
+def test_campaign_dynamics_sidecar_records_are_loaded_and_merged(tmp_path: Path) -> None:
     config = load_config(FIXTURE)
     static_config = config.model_copy(update={"campaign_dynamics": CampaignDynamicsConfig()})
     source = generate(static_config)
@@ -175,7 +175,7 @@ def test_m15_sidecar_records_are_loaded_and_merged(tmp_path: Path) -> None:
     )
 
 
-def test_m15_custom_transition_registration_is_public() -> None:
+def test_campaign_dynamics_custom_transition_registration_is_public() -> None:
     class CloseImmediately:
         name = "test-close-immediately"
 

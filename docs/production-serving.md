@@ -1,5 +1,12 @@
 # Production serving reference
 
+**Level:** Expert<br><br>
+**You will:** validate the reference HTTP service boundary and understand what<br><br>
+must be added before a real deployment.
+**Before you start:** [Model lifecycle](model-lifecycle.md) and basic HTTP<br><br>
+service knowledge.
+**Services:** None for the local reference service.<br><br>
+
 The repository includes a small local FastAPI reference service in
 `examples/model_service`. It is designed to teach the boundary between a
 trained FraudTwin artifact and an online scoring system, not to replace a
@@ -34,7 +41,7 @@ Endpoints:
 | `POST` | `/score` | validates a point-in-time request and returns a score/decision |
 
 Requests require an event ID, timezone-aware `prediction_timestamp`, and a
-feature mapping restricted to the M19 model allowlist. Responses include the
+feature mapping restricted to the published model feature allowlist. Responses include the
 model ID and feature version so predictions can be joined to deployment
 metadata.
 
@@ -92,3 +99,14 @@ For an offline experiment, the following is sufficient:
 4. call ``GET /health`` and a valid/invalid ``POST /score`` request;
 5. replay historical rows and compare predictions;
 6. remove the temporary service and artifact directory.
+
+## Next
+
+Review [Architecture](architecture.md) and [Integration runbooks](integrations.md)
+before adding authentication, deployment, or service observability.
+
+## Related
+
+- [Model lifecycle](model-lifecycle.md)
+- [Compatibility](compatibility.md)
+- [Troubleshooting](troubleshooting.md)

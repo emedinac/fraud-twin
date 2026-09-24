@@ -12,6 +12,7 @@ import os
 import platform
 import resource
 import sqlite3
+import subprocess
 import sys
 import time
 from collections.abc import Iterable, Iterator, Mapping
@@ -39,6 +40,24 @@ from fraudtwin.reproducibility import sha256_json
 from fraudtwin.seed import create_stream_rng
 
 SEED_TREE_VERSION = "M18-seed-tree-1"
+
+
+def _connect_state_database(path: Path) -> tuple[Any, str]:
+    """Open the configured state store with a dependency-light fallback.
+
+    DuckDB is the declared M18 backend and is used whenever the optional scale
+    extra is installed.  The SQLite fallback keeps the base installation and
+    bounded developer fixtures usable; its implementation is recorded in the
+    spool metadata so it cannot be mistaken for a scale benchmark result.
+    """
+
+    try:
+        import duckdb  # type: ignore[import-not-found]
+    except ImportError:
+        connection = sqlite3.connect(path)
+        connection.execute("PRAGMA synchronous=OFF")
+        return connection, "sqlite-compat"
+    return duckdb.connect(str(path.with_suffix(".duckdb"))), "duckdb"
 
 
 class ScalePlan(BaseModel):
@@ -382,7 +401,7 @@ def iter_partition_query(
     if batch_size < 1:
         raise ValueError("batch_size must be positive")
     try:
-        import duckdb  # type: ignore[import-not-found]
+        import duckdb
     except ImportError as exc:  # pragma: no cover - depends on optional extra
         raise RuntimeError("DuckDB support requires the optional 'scale' dependency extra") from exc
     scale_root = Path(run_dir) / "scale"
@@ -420,6 +439,8 @@ def write_scale_benchmark_manifest(
     elapsed_seconds: float,
     resume: Mapping[str, Any] | None = None,
     output_dir: str | Path | None = None,
+    claim_scope: str = "laptop-dev-only",
+    command: str | None = None,
 ) -> Path:
     """Write non-deterministic machine evidence separately from run identity."""
 
@@ -430,6 +451,8 @@ def write_scale_benchmark_manifest(
         )
     payload = {
         "version": "M18-benchmark-1",
+        "claim_scope": claim_scope,
+        "command": command,
         "target_unit": "payments",
         "target_payments": target_payments,
         "realized_counts": dict(realized_counts),
@@ -446,11 +469,13 @@ def write_scale_benchmark_manifest(
         "output_bytes": output_bytes,
         "host": {
             "platform": platform.platform(),
+            "machine": platform.machine(),
             "python": sys.version,
             "cpu_count": os.cpu_count(),
             "memory_bytes": _host_memory_bytes(),
             "packages": _package_versions(),
         },
+        "git_revision": _git_revision(),
         "resume": dict(resume or {}),
         "recorded_at_epoch": time.time(),
     }
@@ -460,6 +485,18 @@ def write_scale_benchmark_manifest(
     temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(temporary, destination)
     return destination
+
+
+def _git_revision() -> str:
+    """Return the source revision without making Git a runtime dependency."""
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, check=False, text=True, timeout=2
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "unknown"
+    return result.stdout.strip() if result.returncode == 0 else "unknown"
 
 
 def _host_memory_bytes() -> int | None:
@@ -476,6 +513,17 @@ def _host_memory_bytes() -> int | None:
 def _package_versions() -> dict[str, str]:
     versions: dict[str, str] = {}
     for name in ("fraudtwin", "polars", "pyarrow", "duckdb"):
+        if name == "fraudtwin":
+            # Editable checkouts can have stale distribution metadata in the
+            # environment.  Evidence must identify the source package that
+            # actually executed the command.
+            try:
+                from fraudtwin import __version__
+
+                versions[name] = __version__
+                continue
+            except (ImportError, AttributeError):
+                pass
         try:
             versions[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:
@@ -517,6 +565,7 @@ def run_scale_benchmark(
     output_dir: str | Path,
     checkpoint_dir: str | Path | None = None,
     evidence_dir: str | Path | None = None,
+    command: str | None = None,
 ) -> Path:
     """Run one explicitly requested scale job and publish machine evidence.
 
@@ -551,6 +600,8 @@ def run_scale_benchmark(
         elapsed_seconds=elapsed,
         resume={"checkpoint": scale.get("checkpoint"), "completed": True},
         output_dir=result.run_dir,
+        command=command
+        or "fraudtwin scale-benchmark <scale-enabled-config> --output-dir <run-dir>",
     )
 
 
@@ -753,17 +804,23 @@ def write_scale_partitions(
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             reused_spool = False
     if not reused_spool:
-        (spool_root / "logical-ids.sqlite").unlink(missing_ok=True)
-        (spool_root / "ledger-state.sqlite").unlink(missing_ok=True)
-        id_database = sqlite3.connect(spool_root / "logical-ids.sqlite")
+        state_files = (
+            "logical-ids.sqlite",
+            "logical-ids.duckdb",
+            "ledger-state.sqlite",
+            "ledger-state.duckdb",
+        )
+        for state_name in state_files:
+            (spool_root / state_name).unlink(missing_ok=True)
+        id_database, state_backend = _connect_state_database(spool_root / "logical-ids.sqlite")
         id_database.execute("CREATE TABLE IF NOT EXISTS logical_ids (logical_id TEXT PRIMARY KEY)")
-        id_database.execute("PRAGMA synchronous=OFF")
-        ledger_database = sqlite3.connect(spool_root / "ledger-state.sqlite")
+        ledger_database, ledger_state_backend = _connect_state_database(
+            spool_root / "ledger-state.sqlite"
+        )
         ledger_database.execute(
             "CREATE TABLE IF NOT EXISTS ledger_state "
             "(account_id TEXT PRIMARY KEY, balance REAL NOT NULL, entries INTEGER NOT NULL)"
         )
-        ledger_database.execute("PRAGMA synchronous=OFF")
         handles = {
             item.shard_id: (spool_root / f"{item.shard_id}.jsonl").open("w", encoding="utf-8")
             for item in descriptors
@@ -772,13 +829,17 @@ def write_scale_partitions(
             for record in records:
                 row = dict(record)
                 logical_id = str(row["logical_id"])
-                inserted = id_database.execute(
-                    "INSERT OR IGNORE INTO logical_ids(logical_id) VALUES (?)", (logical_id,)
-                ).rowcount
-                if inserted == 0:
+                already_seen = id_database.execute(
+                    "SELECT 1 FROM logical_ids WHERE logical_id = ?", (logical_id,)
+                ).fetchone()
+                if already_seen is not None:
                     duplicate_count += 1
                     if len(duplicate_logical_ids) < 100:
                         duplicate_logical_ids.append(logical_id)
+                else:
+                    id_database.execute(
+                        "INSERT INTO logical_ids(logical_id) VALUES (?)", (logical_id,)
+                    )
                 # Account-local rows carry a stable partition key.  Legacy callers
                 # may omit it, in which case the logical ID remains the fallback.
                 owner_key = str(row.get("partition_key", logical_id))
@@ -846,6 +907,8 @@ def write_scale_partitions(
             "duplicate_logical_ids": duplicate_logical_ids,
             "account_balance_violations": account_balance_violations,
             "accounts_reconciled": accounts_reconciled,
+            "state_backend": state_backend,
+            "ledger_state_backend": ledger_state_backend,
         }
         temporary = spool_manifest.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(spool_payload, sort_keys=True) + "\n", encoding="utf-8")
@@ -961,8 +1024,14 @@ def write_scale_partitions(
     for spool_file in spool_root.glob("*.jsonl"):
         spool_file.unlink()
     spool_manifest.unlink(missing_ok=True)
-    (spool_root / "logical-ids.sqlite").unlink(missing_ok=True)
-    (spool_root / "ledger-state.sqlite").unlink(missing_ok=True)
+    state_files = (
+        "logical-ids.sqlite",
+        "logical-ids.duckdb",
+        "ledger-state.sqlite",
+        "ledger-state.duckdb",
+    )
+    for state_name in state_files:
+        (spool_root / state_name).unlink(missing_ok=True)
     spool_root.rmdir()
 
     # Exact ID reconciliation remains available as a small-run API.  The

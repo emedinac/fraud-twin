@@ -1,5 +1,12 @@
 # Kafka reliability and event-time correctness
 
+**Level:** Expert<br><br>
+**You will:** reason about delivery semantics, event time, contracts,<br><br>
+deduplication, retries, and bounded failure exercises.
+**Before you start:** the [Integration runbooks](integrations.md) and Docker.<br><br>
+**Services:** Kafka and Schema Registry for broker checks; the logical chaos<br><br>
+path is offline.
+
 FraudTwin's Kafka publisher is intentionally explicit about contract versions,
 partition keys, idempotence, retries, acknowledgements, and pacing. The chaos
 harness adds deterministic logical-message faults around either boundary:
@@ -140,3 +147,15 @@ not a substitute for socket-level failure testing or broker capacity testing.
 For broker configuration, security, capacity, and production operations, use
 the [Confluent Kafka Python documentation](https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html)
 and [Schema Registry documentation](https://docs.confluent.io/platform/current/schema-registry/index.html).
+
+## Next
+
+Use [Spark Structured Streaming](spark-streaming.md) for bounded downstream
+processing, or return to [Data-quality incidents](data-quality-incidents.md)
+for offline fault repair.
+
+## Related
+
+- [Integration runbooks](integrations.md)
+- [Data contracts](data-contracts.rst)
+- [Architecture](architecture.md)

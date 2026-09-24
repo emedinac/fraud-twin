@@ -1,5 +1,11 @@
 # Compatibility and support policy
 
+**Level:** Expert<br><br>
+**You will:** decide which APIs, schemas, manifests, and artifacts are safe to<br><br>
+carry across an upgrade.
+**Before you start:** a released FraudTwin run or package version.<br><br>
+**Services:** None.<br><br>
+
 FraudTwin keeps generated artifacts reproducible, but not every interface has
 the same stability promise. Pin the documentation version when a pipeline or
 benchmark must be replayed exactly.
@@ -27,3 +33,14 @@ benchmark must be replayed exactly.
 
 See [migration notes](migration.md) and the [release notes](../CHANGELOG.md)
 for version-specific changes.
+
+## Next
+
+Use [Release evidence](release-evidence.md) before publishing a package or
+benchmark result.
+
+## Related
+
+- [Migration guides](migration.md)
+- [Data contracts](data-contracts.rst)
+- [Verified capabilities](verified-capabilities.md)

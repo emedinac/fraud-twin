@@ -1,5 +1,13 @@
 # Integration runbooks
 
+**Level:** Expert<br><br>
+**You will:** connect optional services while keeping Parquet artifacts,<br><br>
+contracts, credentials, and reconciliation visible.
+**Before you start:** the [Architecture](architecture.md) guide and Docker<br><br>
+basics.
+**Services:** Depends on the integration; every section identifies its local<br><br>
+fallback.
+
 FraudTwin's core generator is offline and deterministic. These runbooks cover
 optional local integrations for MLOps and data-engineering workflows. Every
 service-backed path has an offline notebook or manifest-based fallback.
@@ -9,6 +17,7 @@ service-backed path has an offline notebook or manifest-based fallback.
 | Integration | Extra/client | Start locally | First health check | Offline fallback |
 | --- | --- | --- | --- | --- |
 | Kafka + Schema Registry | `kafka` / `confluent-kafka` | `docker compose --profile streaming up -d kafka schema-registry streaming-topics` | broker metadata and `GET /subjects` | `fraudtwin kafka chaos` |
+| Spark Structured Streaming | external Spark 3.5 runtime | `spark-submit examples/spark-streaming/spark_streaming.py --source parquet --input /path/to/payments --output /tmp/spark-out --output-format parquet --trigger available-now` | `spark-run-report.json` and output row counts | local Parquet batch generation |
 | PostgreSQL | `postgres` / `psycopg[binary]` | `docker compose --profile integration up -d postgres` | `pg_isready` and `SELECT 1` | local Parquet manifest |
 | Iceberg + MinIO | `lakehouse` / `pyiceberg[s3fs]` | `docker compose --profile lakehouse up -d minio minio-init iceberg-rest` | catalog namespaces and object-store health | Bronze/Silver/Gold local projections |
 | Neo4j | `neo4j` driver (not a project extra) | `docker run --name fraudtwin-neo4j --detach --rm --publish 7474:7474 --publish 7687:7687 --env NEO4J_AUTH=neo4j/password neo4j:5` | Bolt connectivity and `RETURN 1` | Cypher files and local graph frames |
@@ -146,3 +155,14 @@ Verify target health before interpreting counters. Track generation throughput,
 publication lag, invalid records, duplicate rate, reconciliation failures, and
 checkpoint progress. The offline fallback records the same checks in a manifest
 so a service is never required to learn the operational concepts.
+
+## Next
+
+Choose one concrete path: [Kafka reliability](kafka-reliability.md), [Spark
+Structured Streaming](spark-streaming.md), or [Production serving](production-serving.md).
+
+## Related
+
+- [Architecture](architecture.md)
+- [Data contracts](data-contracts.rst)
+- [Scale operations](scale-operations.md)

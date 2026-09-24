@@ -5,8 +5,6 @@ It produces append-only sidecar data and never mutates the source models or the
 ordinary M1--M13 output tables.
 """
 
-from __future__ import annotations
-
 import hashlib
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
@@ -335,7 +333,7 @@ def _initial_event(events: Iterable[PaymentEvent]) -> PaymentEvent:
 
 def select_source_trajectories(
     config: SimulationRunConfig,
-    payments: tuple[Payment, ...] | PaymentDataset,
+    payments: "tuple[Payment, ...] | PaymentDataset",
     *,
     events: tuple[PaymentEvent, ...] | None = None,
     ledger_entries: tuple[LedgerEntry, ...] = (),
@@ -402,7 +400,7 @@ def _derived_id(prefix: str, material: str) -> str:
 def _candidate_values(
     dimension: str,
     source: Payment,
-    entities: EntityDataset,
+    entities: "EntityDataset",
 ) -> tuple[object, ...]:
     if dimension == "amount":
         return tuple(
@@ -485,7 +483,7 @@ def _objective_rails(objective: str) -> set[str]:
 def _find_feasible_mutation(
     scope: CounterfactualScope,
     source: SourceTrajectory,
-    entities: EntityDataset,
+    entities: "EntityDataset",
     *,
     amount_multiplier: float,
     timing_multiplier: float,
@@ -556,7 +554,7 @@ def _clone_trajectory(
     *,
     objective: str,
     config: SimulationRunConfig,
-    entities: EntityDataset,
+    entities: "EntityDataset",
     request_index: int,
 ) -> tuple[Payment, tuple[PaymentEvent, ...], tuple[LedgerEntry, ...], dict[str, str]]:
     source = trajectory.source_payment
@@ -666,8 +664,8 @@ def _clone_trajectory(
 
 def generate_counterfactuals(
     config: SimulationRunConfig,
-    entities: EntityDataset,
-    baseline: PaymentDataset,
+    entities: "EntityDataset",
+    baseline: "PaymentDataset",
     *,
     counterfactual_id: str | None = None,
     run_id: str | None = None,

@@ -1,5 +1,10 @@
 # Glossary
 
+**Level:** Beginner<br><br>
+**You will:** look up the terms used across the simulator and its guides.<br><br>
+**Before you start:** None.<br><br>
+**Services:** None.<br><br>
+
 | Term | Meaning |
 | --- | --- |
 | **Observable view** | Records and relationships available to an operational detector at a selected cutoff. |
@@ -14,3 +19,14 @@
 | **Run manifest** | The identity, configuration, schema, count, provenance, and output metadata for a run. |
 
 See also: :doc:`concepts`, :doc:`configuration`, and :doc:`data-contracts`.
+
+## Next
+
+Start with the [Beginner path](levels/beginner.md) if a term is new, or open
+the [API reference](api.rst) for its typed definition.
+
+## Related
+
+- [Concepts](concepts.md)
+- [Data contracts](data-contracts.rst)
+- [Troubleshooting](troubleshooting.md)

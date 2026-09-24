@@ -389,6 +389,11 @@ def scale_benchmark_command(
             output_dir=output_dir,
             checkpoint_dir=checkpoint_dir,
             evidence_dir=evidence_dir,
+            command=(
+                f"fraudtwin scale-benchmark {path} --output-dir {output_dir} "
+                f"--checkpoint-dir {checkpoint_dir or '<checkpoint-dir>'} "
+                f"--evidence-dir {evidence_dir or '<evidence-dir>'}"
+            ),
         )
     except (OSError, RuntimeError, ValueError) as exc:
         typer.echo(f"Scale benchmark failed: {exc}", err=True)
@@ -533,7 +538,7 @@ def benchmark_command(
 
 @benchmark_app.command("run")
 def benchmark_pack_run(
-    pack_ref: Annotated[str, typer.Argument(help="Immutable pack, e.g. FT-B04-CAMOUFLAGE@1.0")],
+    pack_ref: Annotated[str, typer.Argument(help="Immutable pack, e.g. FT-B04-CAMOUFLAGE@0.34.0")],
     output_dir: Annotated[
         Path, typer.Option("--output-dir", help="Directory for benchmark artifacts.")
     ] = Path("runs/benchmarks"),

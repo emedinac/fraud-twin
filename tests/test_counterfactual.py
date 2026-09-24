@@ -33,7 +33,7 @@ def _config() -> object:
     )
 
 
-def test_m14_configuration_is_strict_and_alias_conflicts_are_rejected() -> None:
+def test_counterfactual_configuration_is_strict_and_alias_conflicts_are_rejected() -> None:
     config = _config()
     assert resolve_counterfactual(config).enabled  # type: ignore[arg-type]
     raw = config.model_dump(mode="python")
@@ -46,7 +46,7 @@ def test_m14_configuration_is_strict_and_alias_conflicts_are_rejected() -> None:
         type(config).model_validate(raw)
 
 
-def test_m14_neutral_configuration_preserves_manifest_identity() -> None:
+def test_counterfactual_neutral_configuration_preserves_manifest_identity() -> None:
     base = load_config(Path("configs/minimal.yaml"))
     neutral = base.model_copy(update={"counterfactual": CounterfactualConfig()})
     assert create_manifest(base).model_dump(mode="json") == create_manifest(neutral).model_dump(
@@ -54,7 +54,7 @@ def test_m14_neutral_configuration_preserves_manifest_identity() -> None:
     )
 
 
-def test_m14_generation_is_deterministic_and_keeps_source_immutable() -> None:
+def test_counterfactual_generation_is_deterministic_and_keeps_source_immutable() -> None:
     config = _config()
     entities = EntityGenerator(config).generate()  # type: ignore[arg-type]
     first = BehaviorGenerator(config, entities, simulation_run_id="RUN-M14").generate()  # type: ignore[arg-type]
@@ -67,7 +67,7 @@ def test_m14_generation_is_deterministic_and_keeps_source_immutable() -> None:
     assert tuple(first.payments) == tuple(second.payments)
 
 
-def test_m14_public_generator_accepts_pristine_payment_dataset() -> None:
+def test_counterfactual_public_generator_accepts_pristine_payment_dataset() -> None:
     config = _config()
     entities = EntityGenerator(config).generate()  # type: ignore[arg-type]
     behavior = BehaviorGenerator(
@@ -83,7 +83,7 @@ def test_m14_public_generator_accepts_pristine_payment_dataset() -> None:
     assert len(dataset.change_sets) == 2
 
 
-def test_m14_infeasible_budget_is_recorded_without_partial_output() -> None:
+def test_counterfactual_infeasible_budget_is_recorded_without_partial_output() -> None:
     config = _config().model_copy(
         update={
             "counterfactual": CounterfactualConfig(
@@ -100,7 +100,7 @@ def test_m14_infeasible_budget_is_recorded_without_partial_output() -> None:
     assert not behavior.counterfactual.modified_payments
 
 
-def test_m14_standalone_cli_writes_append_only_sidecar(tmp_path: Path) -> None:
+def test_counterfactual_standalone_cli_writes_append_only_sidecar(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         ["generate", "configs/minimal.yaml", "--output-dir", str(tmp_path)],

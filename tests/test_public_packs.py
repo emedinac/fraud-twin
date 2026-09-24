@@ -26,20 +26,20 @@ PACK_IDS = (
 )
 
 
-def test_m21_registry_contains_the_complete_initial_pack_family() -> None:
+def test_public_pack_registry_contains_the_complete_initial_pack_family() -> None:
     packs = list_public_packs()
     assert tuple(pack.id for pack in packs) == PACK_IDS
-    assert all(pack.version == "1.0.0" for pack in packs)
+    assert all(pack.version == "0.34.0" for pack in packs)
     assert all(pack.expected_descriptors for pack in packs)
     assert all(pack.expected_fingerprints for pack in packs)
-    assert load_public_pack("FT-B04-CAMOUFLAGE@1.0").identity == "FT-B04-CAMOUFLAGE@1.0.0"
+    assert load_public_pack("FT-B04-CAMOUFLAGE@0.34").identity == "FT-B04-CAMOUFLAGE@0.34.0"
 
 
 @pytest.mark.parametrize("pack_id", PACK_IDS)
-def test_m21_pack_runs_match_frozen_goldens(pack_id: str, tmp_path: Path) -> None:
-    result = run_public_benchmark(f"{pack_id}@1.0.0", output_dir=tmp_path)
+def test_public_pack_runs_match_frozen_goldens(pack_id: str, tmp_path: Path) -> None:
+    result = run_public_benchmark(f"{pack_id}@0.34.0", output_dir=tmp_path)
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
-    assert manifest["public_pack"]["identity"] == f"{pack_id}@1.0.0"
+    assert manifest["public_pack"]["identity"] == f"{pack_id}@0.34.0"
     assert manifest["public_pack"]["verification"]["descriptors_match"] is True
     if pack_id == "FT-B04-CAMOUFLAGE":
         row = result.results[0]
@@ -47,9 +47,9 @@ def test_m21_pack_runs_match_frozen_goldens(pack_id: str, tmp_path: Path) -> Non
         assert row["f1"] is not None
 
 
-def test_m21_repeated_executions_are_identical(tmp_path: Path) -> None:
-    first = run_public_benchmark("FT-B08-MIXED@1.0.0", output_dir=tmp_path / "first")
-    second = run_public_benchmark("FT-B08-MIXED@1.0.0", output_dir=tmp_path / "second")
+def test_public_pack_repeated_executions_are_identical(tmp_path: Path) -> None:
+    first = run_public_benchmark("FT-B08-MIXED@0.34.0", output_dir=tmp_path / "first")
+    second = run_public_benchmark("FT-B08-MIXED@0.34.0", output_dir=tmp_path / "second")
     first_manifest = json.loads(first.manifest_path.read_text(encoding="utf-8"))
     second_manifest = json.loads(second.manifest_path.read_text(encoding="utf-8"))
     assert (
@@ -59,9 +59,9 @@ def test_m21_repeated_executions_are_identical(tmp_path: Path) -> None:
     assert first_manifest["output_fingerprint"] == second_manifest["output_fingerprint"]
 
 
-def test_m21_cli_describe_and_legacy_generic_command(tmp_path: Path) -> None:
+def test_public_pack_cli_describe_and_legacy_generic_command(tmp_path: Path) -> None:
     runner = CliRunner()
-    described = runner.invoke(app, ["benchmark", "describe", "FT-B01-STABLE@1.0"])
+    described = runner.invoke(app, ["benchmark", "describe", "FT-B01-STABLE@0.34"])
     assert described.exit_code == 0, described.stdout
     assert "FT-B01-STABLE" in described.stdout
 
@@ -81,10 +81,10 @@ def test_m21_cli_describe_and_legacy_generic_command(tmp_path: Path) -> None:
     assert "Benchmark generated:" in generic.stdout
 
 
-def test_m21_verifies_existing_artifact_and_rejects_tampered_descriptors(
+def test_public_pack_verifies_existing_artifact_and_rejects_tampered_descriptors(
     tmp_path: Path,
 ) -> None:
-    result = run_public_benchmark("FT-B01-STABLE@1.0.0", output_dir=tmp_path / "run")
+    result = run_public_benchmark("FT-B01-STABLE@0.34.0", output_dir=tmp_path / "run")
     verified = verify_public_benchmark(result.root)
     assert verified["descriptors_match"] is True
 
@@ -99,6 +99,9 @@ def test_m21_verifies_existing_artifact_and_rejects_tampered_descriptors(
     assert checked.exit_code == 1
 
 
-def test_m21_rejects_unknown_pack_reference() -> None:
+def test_public_pack_rejects_unknown_pack_reference() -> None:
     with pytest.raises(ValueError, match="public pack reference"):
-        load_public_pack("FT-B99-UNKNOWN@1.0")
+        load_public_pack("FT-B99-UNKNOWN@0.34")
+
+    with pytest.raises(ValueError, match="does not exist"):
+        load_public_pack("FT-B01-STABLE@1.0.0")

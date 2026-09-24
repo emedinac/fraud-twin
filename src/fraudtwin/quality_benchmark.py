@@ -33,7 +33,7 @@ from fraudtwin.reproducibility import sha256_json, write_json
 QUALITY_PROFILE_RESOURCE_DIR = "quality_profiles"
 QUALITY_PROFILE_VERSION = "1"
 QUALITY_PACK_REFS = tuple(
-    f"FT-B{index:02d}-{name}@1.0.0"
+    f"FT-B{index:02d}-{name}@0.34.0"
     for index, name in enumerate(
         (
             "STABLE",

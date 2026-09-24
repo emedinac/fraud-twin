@@ -1,5 +1,11 @@
 # Concepts
 
+**Level:** Beginner<br><br>
+**You will:** learn the small set of ideas needed to read a run: identity,<br><br>
+time, lifecycle, labels, and observable versus oracle data.
+**Before you start:** the [Quickstart](quickstart.md).<br><br>
+**Services:** None.<br><br>
+
 ## Determinism and seed streams
 
 FraudTwin derives named random streams from the configured seed. Entity IDs,
@@ -47,3 +53,13 @@ read with its view and time window recorded.
 Quality profiles inject explicit faults such as duplicates, delays, invalid
 values, outages, schema changes, and spikes. The fault is intentional and
 reported in manifests; it is not a silent relaxation of the source contract.
+
+## Next
+
+Try the [Quickstart](quickstart.md), then move to [Configuration](configuration.md).
+
+## Related
+
+- [Glossary](glossary.md)
+- [Data contracts](data-contracts.rst)
+- [Verified capabilities](verified-capabilities.md)

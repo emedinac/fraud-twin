@@ -1,15 +1,23 @@
 # Release notes
 
-## 0.34.0 — Documentation and visualization upgrade
+## 0.34.0 — Release-readiness, Spark, extensions, and documentation
 
-- Added a visualization-first tutorial path with temporal, spatial, distribution,
-  fraud-scenario, benchmark, correlation, leakage, and embedding analyses.
-- Expanded all maintained notebooks with deterministic inspection, verification,
-  artifacts, and explicit offline/service metadata.
-- Improved the generated Python API reference and typed examples for public
-  run, dataset, registry, scale, and Bronze/Silver workflows.
-- Preserved historical notebook URLs, the `/api.html` redirect, existing
-  dependencies, and optional integration boundaries.
+- Added the isolated Spark Structured Streaming reference application for
+  bounded Kafka and Parquet inputs, event-time deduplication, late-event
+  routing, account velocity windows, and Parquet/Iceberg outputs.
+- Added the public extension SDK with typed scenario, rail, behavior, quality,
+  and sink protocols, explicit entry-point discovery, configuration validation,
+  and manifest provenance.
+- Hardened bounded M18 execution with disk-backed reconciliation state,
+  checkpoint and chunk integrity checks, resumable publication, and a
+  reproducible laptop evidence manifest.
+- Added release automation for tagged wheel/sdist validation, build
+  provenance, GitHub Releases, and trusted PyPI publishing.
+- Reworked the README and documentation around local simulation, data/ML
+  evaluation, optional integrations, verified capabilities, Spark, extensions,
+  M18 operations, and release evidence.
+- Preserved the deterministic in-memory API and documented the current M18
+  claim boundary: no 100M/1B performance or production-scale claim is made.
 
 ## 0.33.0 — Fix: Milestone 18 bounded-scale contract
 
