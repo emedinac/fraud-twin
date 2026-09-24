@@ -1,4 +1,4 @@
-"""Core synthetic entities for Milestone 1.
+"""Core synthetic entities.
 
 These models deliberately contain no generated real-world personal data. They
 are immutable after validation so relationship-bearing records cannot be

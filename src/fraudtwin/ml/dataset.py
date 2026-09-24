@@ -1,4 +1,4 @@
-"""Deterministic point-in-time training data construction for Milestone 9.
+"""Deterministic point-in-time training data construction.
 
 The builder works on the existing in-memory M1-M8 records or on one generated
 run.  It deliberately does not regenerate simulation state and does not add a

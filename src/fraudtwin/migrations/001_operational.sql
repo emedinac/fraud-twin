@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS fraudtwin.fraud_cases (
 );
 
 -- Reserved for the customer-interaction workflow introduced by a later
--- milestone. Keeping the table in the operational schema makes the initial
+-- release. Keeping the table in the operational schema makes the initial
 -- PostgreSQL layout compatible with the documented minimum without inventing
 -- synthetic interactions that do not yet exist in the domain model.
 CREATE TABLE IF NOT EXISTS fraudtwin.customer_interactions (

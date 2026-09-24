@@ -1,4 +1,4 @@
-"""Deterministic, scenario-driven fraud generation for Milestone 6."""
+"""Deterministic, scenario-driven fraud generation."""
 
 from collections import defaultdict
 from collections.abc import Mapping

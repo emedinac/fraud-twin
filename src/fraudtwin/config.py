@@ -452,7 +452,7 @@ class LabelObservationCondition(_StrictModel):
 
 
 class LabelObservationConfig(_StrictModel):
-    """Explicit deterministic observation policy for Milestone 17."""
+    """Explicit deterministic label-observation policy."""
 
     enabled: bool = False
     investigation_rate: float = Field(default=0.70, ge=0, le=1)
@@ -499,7 +499,7 @@ class LabelObservationConfig(_StrictModel):
 
 
 class ScaleConfig(_StrictModel):
-    """Opt-in deterministic large-run execution controls for Milestone 18."""
+    """Opt-in deterministic large-run execution controls."""
 
     profile: ScaleProfile | None = None
     # The primary M18 target is canonical payment rows.  ``None`` preserves
@@ -799,7 +799,7 @@ _QUALITY_PROFILE_DEFAULTS: dict[QualityProfile, dict[str, float]] = {
 
 
 class OutputsConfig(_StrictModel):
-    """Output sinks enabled for later milestones."""
+    """Output sinks enabled for optional integrations."""
 
     parquet: bool = False
     postgres: bool = False
@@ -808,7 +808,7 @@ class OutputsConfig(_StrictModel):
 
 
 class KafkaConfig(_StrictModel):
-    """Delivery controls for the optional native Kafka sink (Milestone 25)."""
+    """Delivery controls for the optional native Kafka sink."""
 
     topic_prefix: str = Field(default="fraudsim", min_length=1, max_length=128)
     max_events_per_second: float | None = Field(default=None, gt=0)
@@ -826,7 +826,7 @@ class KafkaConfig(_StrictModel):
 
 
 class LakehouseConfig(_StrictModel):
-    """Optional Iceberg lakehouse publication controls (Milestone 26).
+    """Optional Iceberg lakehouse publication controls.
 
     Connection details are deliberately not configuration fields: the catalog,
     object-store endpoint, and credentials are supplied through the environment
@@ -836,7 +836,7 @@ class LakehouseConfig(_StrictModel):
     catalog_name: str = Field(default="fraudtwin")
     namespace_prefix: str = Field(default="fraudtwin")
     include_oracle: bool = False
-    checkpoint_location: str = Field(default="/tmp/fraudtwin-iceberg-checkpoints")
+    checkpoint_location: str = Field(default="./runs/iceberg-checkpoints")
 
     @field_validator("catalog_name", "namespace_prefix")
     @classmethod
@@ -1085,7 +1085,7 @@ CalibrationSummaryName = Literal[
 
 
 class CalibrationConfig(_StrictModel):
-    """Strict opt-in controls for Milestone 16 reference calibration."""
+    """Strict opt-in controls for reference calibration."""
 
     enabled: bool = False
     profile: Path | None = None
@@ -1288,7 +1288,7 @@ def _default_counterfactual_dimensions() -> (
 
 
 class CounterfactualConfig(_StrictModel):
-    """Strict, opt-in Milestone 14 counterfactual controls."""
+    """Strict, opt-in counterfactual controls."""
 
     enabled: bool = False
     budget: float = Field(default=4.0, ge=0)
@@ -1881,7 +1881,7 @@ class CampaignDynamicsBinding(_StrictModel):
 
 
 class CampaignDynamicsConfig(_StrictModel):
-    """Strict opt-in controls for Milestone 15 campaign evolution."""
+    """Strict opt-in controls for campaign evolution."""
 
     enabled: bool = False
     bindings: tuple[CampaignDynamicsBinding, ...] = ()

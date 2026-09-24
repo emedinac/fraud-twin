@@ -350,7 +350,7 @@ def quality_benchmark_command(
         ),
     ] = None,
 ) -> None:
-    """Run the Milestone 22 generator-quality protocol."""
+    """Run the generator-quality protocol."""
 
     try:
         result = run_quality_benchmark(

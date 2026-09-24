@@ -1,4 +1,4 @@
-"""Immutable label-observation records for Milestone 17."""
+"""Immutable label-observation records."""
 
 from datetime import datetime
 from typing import Literal

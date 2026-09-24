@@ -1,4 +1,4 @@
-"""Deterministic generation of the Milestone 1 entity population."""
+"""Deterministic generation of the entity population."""
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -88,7 +88,7 @@ def _synthetic_date(start: datetime, rng: Random, min_age: int, max_age: int) ->
 
 @dataclass(frozen=True)
 class EntityDataset:
-    """Stable, ordered collections of all Milestone 1 entities."""
+    """Stable, ordered collections of all generated entities."""
 
     customers: tuple[Customer, ...]
     institutions: tuple[Institution, ...]

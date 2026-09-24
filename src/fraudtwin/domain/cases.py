@@ -1,4 +1,4 @@
-"""Fraud investigations and operationally delayed labels for Milestone 7."""
+"""Fraud investigations and operationally delayed labels."""
 
 from collections.abc import Mapping
 from datetime import datetime
