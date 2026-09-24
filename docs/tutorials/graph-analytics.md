@@ -13,12 +13,10 @@ startup command, connectivity check, and a small Cypher query. The offline
 graph export and Polars investigation remain the default path. Tutorial 17
 uses the existing `graph` extra; no external service is required.
 
-```{toctree}
-:maxdepth: 1
+## Tutorials
 
-neo4j-graph-fraud.ipynb
-pyg-graph-model.ipynb
-```
+- [Investigate fraud with temporal graph exports](neo4j-graph-fraud.ipynb)
+- [Build and evaluate temporal graph features](pyg-graph-model.ipynb)
 
 **Related:** [graph and benchmark workflows](../graph-and-benchmarks.md).
 

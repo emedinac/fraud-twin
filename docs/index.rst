@@ -119,6 +119,41 @@ Documentation
    tutorials
 
 .. toctree::
+   :hidden:
+
+   tutorials/first-generated-run.ipynb
+   tutorials/configure-a-simulation.ipynb
+   tutorials/explore-payments-and-lifecycles.ipynb
+   tutorials/explore-fraud-and-delayed-labels.ipynb
+   tutorials/temporal-payment-lifecycle-visualization.ipynb
+   tutorials/fraud-scenarios-difficulty-benchmarks.ipynb
+   tutorials/ml-feature-distributions-embeddings.ipynb
+   tutorials/from-events-to-ml-dataset.ipynb
+   tutorials/stress-test-fraud-scenarios.ipynb
+   tutorials/build-a-reproducible-fraud-benchmark.ipynb
+   tutorials/train-a-simple-fraud-model.ipynb
+   tutorials/train-and-track-fraud-model.ipynb
+   tutorials/stress-drift-and-camouflage.ipynb
+   tutorials/checkpoint-resume-scale.ipynb
+   tutorials/mlflow-model-promotion.ipynb
+   tutorials/segmented-drift-analysis.ipynb
+   tutorials/neo4j-graph-fraud.ipynb
+   tutorials/pyg-graph-model.ipynb
+   tutorials/avro-kafka-stream.ipynb
+   tutorials/kafka-outage-recovery.ipynb
+   tutorials/schema-evolution-compatibility.ipynb
+   tutorials/operational-lakehouse-observability.ipynb
+   tutorials/lakehouse-observability.ipynb
+   tutorials/scale-checkpoint-resume.ipynb
+   tutorials/data-quality-repair-replay.ipynb
+   tutorials/postgres-persistence-reconciliation.ipynb
+   tutorials/iceberg-time-travel-observability.ipynb
+   tutorials/calibration-and-counterfactuals.ipynb
+   tutorials/campaign-graph-investigation.ipynb
+   tutorials/ml-shift-and-backtesting.ipynb
+   tutorials/scale-reconciliation-and-reproducibility.ipynb
+
+.. toctree::
    :maxdepth: 1
    :caption: Learn by level
 

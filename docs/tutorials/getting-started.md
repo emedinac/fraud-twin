@@ -10,13 +10,11 @@ later tutorials.
 | 1–2 | 20–30 min | base install | run manifest and configuration tables |
 | 3–4 | 30–45 min | base install | lifecycle tables and delayed-label view |
 
-```{toctree}
-:maxdepth: 1
+## Tutorials
 
-first-generated-run.ipynb
-configure-a-simulation.ipynb
-explore-payments-and-lifecycles.ipynb
-explore-fraud-and-delayed-labels.ipynb
-```
+- [Generate your first run](first-generated-run.ipynb)
+- [Configure a simulation](configure-a-simulation.ipynb)
+- [Explore payments and lifecycle events](explore-payments-and-lifecycles.ipynb)
+- [Explore fraud and delayed labels](explore-fraud-and-delayed-labels.ipynb)
 
 **Next path:** [Core workflows](core-workflows.md).

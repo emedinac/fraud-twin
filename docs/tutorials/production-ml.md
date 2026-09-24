@@ -14,15 +14,13 @@ The model lifecycle notebooks include optional `mlflow` and FastAPI/Uvicorn
 client cells. They log or score a bounded artifact when available and retain a
 local manifest fallback when no tracking server or HTTP process is running.
 
-```{toctree}
-:maxdepth: 1
+## Tutorials
 
-train-a-simple-fraud-model.ipynb
-train-and-track-fraud-model.ipynb
-stress-drift-and-camouflage.ipynb
-checkpoint-resume-scale.ipynb
-mlflow-model-promotion.ipynb
-segmented-drift-analysis.ipynb
-```
+- [Build a Simple Fraud Scoring Model](train-a-simple-fraud-model.ipynb)
+- [Train, evaluate, and track a fraud model](train-and-track-fraud-model.ipynb)
+- [Promote and serve a model locally](stress-drift-and-camouflage.ipynb)
+- [Resume a scale run from a checkpoint](checkpoint-resume-scale.ipynb)
+- [Promote, reject, and roll back model versions](mlflow-model-promotion.ipynb)
+- [Measure drift by operational segment](segmented-drift-analysis.ipynb)
 
 **Next path:** [Graph analytics](graph-analytics.md).
