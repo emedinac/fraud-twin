@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/_static/fraudtwin-mark.svg" alt="FraudTwin logo" width="120">
+</p>
+
 # FraudTwin
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB.svg?logo=python&logoColor=white)](https://docs.python.org/3/)
