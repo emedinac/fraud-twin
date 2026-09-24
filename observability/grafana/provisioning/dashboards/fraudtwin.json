@@ -7,24 +7,39 @@
     {
       "type": "stat",
       "title": "Generation rate",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
       "targets": [{"expr": "events_generated_per_second{run_id=\"$run_id\"}", "refId": "A"}]
     },
     {
       "type": "stat",
       "title": "Fraud events",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
       "targets": [{"expr": "fraud_events_total{run_id=\"$run_id\"}", "refId": "A"}]
     },
     {
+      "type": "stat",
+      "title": "Exporter health",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "targets": [{"expr": "up{job=\"fraudtwin-cli\"}", "refId": "A"}],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "down"}, "1": {"text": "up"}}}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        },
+        "overrides": []
+      }
+    },
+    {
       "type": "timeseries",
-      "title": "Generated events",
+      "title": "Generated events (final batch total)",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
       "targets": [{"expr": "events_generated_total{run_id=\"$run_id\"}", "refId": "A"}]
     },
     {
       "type": "timeseries",
-      "title": "Errors and reconciliation",
+      "title": "Errors and reconciliation (final values)",
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
       "targets": [
         {"expr": "generator_errors_total{run_id=\"$run_id\"}", "legendFormat": "generator errors", "refId": "A"},
@@ -33,7 +48,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Injected data-quality faults",
+      "title": "Injected data-quality faults (final values)",
       "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
       "targets": [
         {"expr": "duplicate_rate{run_id=\"$run_id\"}", "legendFormat": "duplicate rate", "refId": "A"},
@@ -51,8 +66,8 @@
         "label": "Run ID",
         "type": "query",
         "datasource": {"type": "prometheus", "uid": "prometheus"},
-        "query": "label_values(events_generated_total, run_id)",
-        "refresh": 2,
+        "query": "label_values(events_generated_total{run_id!=\"unknown\"}, run_id)",
+        "refresh": 1,
         "includeAll": false,
         "multi": false,
         "sort": 1

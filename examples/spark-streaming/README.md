@@ -2,7 +2,7 @@
 
 This example is an optional integration boundary. It does not add Spark to
 the base FraudTwin installation or change the deterministic source run. The
-application accepts observable `PaymentEvent` Parquet rows or the M25 Kafka
+application accepts observable `PaymentEvent` Parquet rows or the Kafka
 `payment-event` topic and produces the same projections:
 
 ```text
@@ -23,12 +23,16 @@ Install the lakehouse extra and generate only the existing `dev` fixture:
 
 ```console
 poetry install -E lakehouse
-poetry run fraudtwin generate configs/scale-dev.yaml --output-dir /tmp/fraudtwin-spark
+RUNS_DIR=./runs
+SPARK_OUTPUT_DIR=./runs/spark-output
+SPARK_CHECKPOINT_DIR=./runs/spark-checkpoint
+
+poetry run fraudtwin generate configs/scale-dev.yaml --output-dir "$RUNS_DIR"
 spark-submit examples/spark-streaming/spark_streaming.py \
   --source parquet \
-  --input /tmp/fraudtwin-spark/RUN-*/payments/payment_events.parquet \
-  --output /tmp/fraudtwin-spark-output \
-  --checkpoint /tmp/fraudtwin-spark-checkpoint
+  --input "$RUNS_DIR"/RUN-*/payments/payment_events.parquet \
+  --output "$SPARK_OUTPUT_DIR" \
+  --checkpoint "$SPARK_CHECKPOINT_DIR"
 ```
 
 For Kafka, start the documented streaming Compose profile, publish a clean
