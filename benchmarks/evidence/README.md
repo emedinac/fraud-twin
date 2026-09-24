@@ -7,9 +7,12 @@ the `dev` profile. Do not commit generated Parquet runs or evidence from the
 Generate a local evidence manifest with:
 
 ```console
+EVIDENCE_DIR=./runs/evidence-dev
+CHECKPOINT_DIR=./runs/evidence-dev-checkpoint
+
 poetry run fraudtwin scale-benchmark configs/scale-dev.yaml \
-  --output-dir /tmp/fraudtwin-evidence-run \
-  --checkpoint-dir /tmp/fraudtwin-evidence-checkpoint \
+  --output-dir "$EVIDENCE_DIR" \
+  --checkpoint-dir "$CHECKPOINT_DIR" \
   --evidence-dir benchmarks/evidence
 ```
 
