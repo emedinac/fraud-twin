@@ -67,8 +67,6 @@ services:
     command: server /data --console-address ":9001"
 
   minio-init:
-    # The server image bundles the mc client, avoiding a separate registry
-    # image that is no longer anonymously pullable in CI.
     image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     profiles: [lakehouse]
     depends_on: [minio]
