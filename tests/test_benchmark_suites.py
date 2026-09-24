@@ -1,4 +1,4 @@
-"""Focused Milestone 20 fraud stress benchmark tests."""
+"""Focused fraud stress benchmark tests."""
 
 import json
 import sys

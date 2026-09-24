@@ -1,4 +1,4 @@
-"""Focused Milestone 13 camouflage contracts."""
+"""Focused camouflage contract tests."""
 
 from pathlib import Path
 

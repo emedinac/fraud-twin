@@ -1,4 +1,4 @@
-"""Milestone 21 immutable public benchmark-pack tests."""
+"""Immutable public benchmark-pack tests."""
 
 import json
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""Focused Milestone 18 deterministic scale tests (small fixtures only)."""
+"""Focused deterministic scale tests (small fixtures only)."""
 
 from pathlib import Path
 

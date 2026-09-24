@@ -1,4 +1,4 @@
-"""Focused Milestone 22 generator-quality benchmark tests."""
+"""Focused generator-quality benchmark tests."""
 
 import json
 from pathlib import Path

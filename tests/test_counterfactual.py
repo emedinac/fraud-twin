@@ -1,4 +1,4 @@
-"""Focused Milestone 14 counterfactual contracts."""
+"""Focused counterfactual contract tests."""
 
 import json
 from pathlib import Path
