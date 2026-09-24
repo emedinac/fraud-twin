@@ -15,16 +15,14 @@ local startup commands, bounded health checks, and cleanup guidance. Offline
 Bronze/Silver/Gold projections and reconciliation manifests remain complete
 without Docker.
 
-```{toctree}
-:maxdepth: 1
+## Tutorials
 
-operational-lakehouse-observability.ipynb
-lakehouse-observability.ipynb
-scale-checkpoint-resume.ipynb
-data-quality-repair-replay.ipynb
-postgres-persistence-reconciliation.ipynb
-iceberg-time-travel-observability.ipynb
-```
+- [Audit quality faults and build observable projections](operational-lakehouse-observability.ipynb)
+- [Materialize a lakehouse snapshot and verify it](lakehouse-observability.ipynb)
+- [Resume a scale run from a checkpoint](scale-checkpoint-resume.ipynb)
+- [Repair damaged data and replay a bounded interval](data-quality-repair-replay.ipynb)
+- [Persist PostgreSQL rows idempotently](postgres-persistence-reconciliation.ipynb)
+- [Verify Iceberg time travel and observability signals](iceberg-time-travel-observability.ipynb)
 
 **Related guides:** [Kafka reliability](../kafka-reliability.md), [data-quality
 incidents](../data-quality-incidents.md), and [production serving](../production-serving.md).

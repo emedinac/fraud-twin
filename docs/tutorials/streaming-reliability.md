@@ -13,13 +13,11 @@ The Kafka notebooks include `!pip install confluent-kafka` and optional broker
 and Schema Registry checks. They continue with contract-backed local records
 and logical chaos when Docker services are unavailable.
 
-```{toctree}
-:maxdepth: 1
+## Tutorials
 
-avro-kafka-stream.ipynb
-kafka-outage-recovery.ipynb
-schema-evolution-compatibility.ipynb
-```
+- [Publish contracts and inspect Kafka delivery semantics](avro-kafka-stream.ipynb)
+- [Recover from Kafka outages and duplicate delivery](kafka-outage-recovery.ipynb)
+- [Test Avro compatibility and schema evolution](schema-evolution-compatibility.ipynb)
 
 **Related:** [Kafka reliability](../kafka-reliability.md).
 

@@ -376,9 +376,8 @@ def test_every_tutorial_belongs_to_exactly_one_category() -> None:
     memberships = [
         notebook
         for page in category_pages
-        for notebook in re.findall(
-            r"^[A-Za-z0-9][^\s]+\.ipynb$", (Path("docs/tutorials") / page).read_text(), re.MULTILINE
-        )
+        for line in (Path("docs/tutorials") / page).read_text().splitlines()
+        for notebook in re.findall(r"(?:^|\]\()([A-Za-z0-9][^\s)]+\.ipynb)", line)
     ]
     assert set(memberships) == notebooks
     assert len(memberships) == len(notebooks)

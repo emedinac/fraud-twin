@@ -88,12 +88,10 @@ are not categories called “easy” or “hard” on each record.*
 | 26 | Scenarios, difficulty, camouflage, and benchmarks | 20–30 min | base | comparison tables and manifest |
 | 27 | Distributions, correlation, leakage, PCA, and t-SNE | 25–40 min | `ml` + plotting optional | feature report, embeddings, split checks |
 
-```{toctree}
-:maxdepth: 1
+## Tutorials
 
-temporal-payment-lifecycle-visualization.ipynb
-fraud-scenarios-difficulty-benchmarks.ipynb
-ml-feature-distributions-embeddings.ipynb
-```
+- [Visualize payment time, space, and lifecycle behavior](temporal-payment-lifecycle-visualization.ipynb)
+- [Compare fraud scenarios, difficulty, camouflage, and benchmarks](fraud-scenarios-difficulty-benchmarks.ipynb)
+- [Explore ML-ready distributions, correlation, and embeddings](ml-feature-distributions-embeddings.ipynb)
 
 **Next path:** [Getting started](getting-started.md).
