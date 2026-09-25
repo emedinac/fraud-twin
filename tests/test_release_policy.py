@@ -14,6 +14,7 @@ _POLICY_SPEC.loader.exec_module(_POLICY)
 bump_release_identity = _POLICY.bump_release_identity
 check_commit_subjects = _POLICY.check_commit_subjects
 check_release_identity = _POLICY.check_release_identity
+check_version_advanced = _POLICY.check_version_advanced
 
 
 def _write_release_tree(root: Path, *, version: str, changelog_version: str | None = None) -> None:
@@ -64,6 +65,20 @@ def test_bump_does_not_repeat_for_an_already_higher_version(tmp_path: Path) -> N
 
     assert bump_release_identity(work, base) is None
     check_release_identity(work)
+
+
+def test_version_policy_requires_a_version_advance(tmp_path: Path) -> None:
+    base = tmp_path / "base"
+    work = tmp_path / "work"
+    _write_release_tree(base, version="0.34.0")
+    _write_release_tree(work, version="0.34.0")
+
+    with pytest.raises(ValueError, match="must be greater than base version"):
+        check_version_advanced(work, base)
+
+    advanced = tmp_path / "advanced"
+    _write_release_tree(advanced, version="0.34.1")
+    check_version_advanced(advanced, base)
 
 
 def test_commit_subjects_follow_the_conventional_commit_allowlist(tmp_path: Path) -> None:

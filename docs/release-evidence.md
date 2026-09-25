@@ -8,11 +8,10 @@ benchmark claims without overstating hardware capacity.
 
 A release artifact is trustworthy only when the code, documentation, package,
 and evidence agree. Pull-request CI runs the test suite before merge. The
-release workflow is activated only by a `vX.Y.Z` tag or a merged commit message
-containing exactly one `vX.Y.Z` marker; it validates the package metadata and
-Avro contracts, verifies the built wheel in a clean environment, builds strict
-documentation, and attaches the wheel and source distribution to the GitHub
-release before trusted PyPI publication.
+release workflow is activated only by a `vX.Y.Z` tag; it validates the package
+metadata and Avro contracts, verifies the built wheel in a clean environment,
+builds strict documentation, and attaches the wheel and source distribution to
+the GitHub release before trusted PyPI publication.
 
 ## Laptop evidence protocol
 

@@ -38,10 +38,14 @@ commit does not rerun the test suite. Protect `main` with a GitHub ruleset that
 requires those pull-request checks and disallows direct pushes. GitHub Actions
 cannot enforce that restriction by itself.
 
-To publish, push a `vX.Y.Z` tag or merge a commit whose message contains
-exactly one `vX.Y.Z` marker. The latter path creates an annotated tag after the
-package build succeeds. Ordinary pushes to `main` do not consume a runner or
-publish a release.
+Version policy is read-only: every PR must raise the version above `main` and
+keep `pyproject.toml`, `src/fraudtwin/__init__.py`, and `CHANGELOG.md` in sync.
+The workflow never commits or pushes version bumps on your behalf.
+
+To publish, push a `vX.Y.Z` tag from the merged release commit. The tag must
+match the versions in `pyproject.toml`, `src/fraudtwin/__init__.py`, and the
+top `CHANGELOG.md` heading. Ordinary pushes and commit messages never publish a
+release.
 
 ## Focused tests
 
