@@ -33,8 +33,9 @@ the recommended workflow because it records the complete dependency set.
 ```console
 poetry add fraudtwin
 poetry run fraudtwin --help
-# From a repository checkout, validate the initial configuration:
-poetry run fraudtwin config validate configs/minimal.yaml
+# Create a project-owned configuration and validate it:
+poetry run fraudtwin config init config.yaml
+poetry run fraudtwin config validate config.yaml
 ```
 
 ### Quick package installation with pip
@@ -47,6 +48,8 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install fraudtwin
 fraudtwin --help
+fraudtwin config init config.yaml
+fraudtwin config validate config.yaml
 ```
 
 ### Repository or contributor installation
@@ -57,6 +60,11 @@ cd fraudtwin
 poetry install
 poetry run fraudtwin config validate configs/minimal.yaml
 ```
+
+Repository fixtures such as `configs/minimal.yaml` are available after cloning
+the source tree. Installed-package users should create their own file with
+`fraudtwin config init config.yaml`; this keeps the configuration visible and
+independent of the package's internal resource layout.
 
 To exercise both service-backed adapters in the repository environment, install
 their optional clients together:

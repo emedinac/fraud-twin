@@ -1,0 +1,71 @@
+# Complete file: approximately 50% true-fraud payment rows using F04 only.
+#
+# The baseline is 3 payments/day * 1826 days = 5,478 payments. F04 creates
+# one payment per campaign. Matching its 5,478 campaign capacity to the
+# baseline therefore produces approximately 5,478 baseline and 5,478 fraud
+# payments. target_rate: 1.0 permits that budget; it does not create 50% by
+# itself.
+
+simulation:
+  seed: 42
+  start: 2021-09-25T00:00:00Z
+  duration_days: 1826
+  speed: batch
+
+population:
+  customers: 100
+  institutions: 3
+  accounts: 150
+  cards: 0
+  merchants: 25
+  devices: 100
+  pix_keys: 80
+
+payments:
+  daily_target: 3
+  rails:
+    CARD: 0.0
+    PIX: 1.0
+    ACCOUNT_TRANSFER: 0.0
+
+behavior:
+  amount_min: 1.0
+  amount_max: 5.0
+
+fraud:
+  enabled: true
+  target_rate: 1.0
+  scenario_count: 5478
+  hard_negative_rate: 0.0
+  scenarios:
+    F01: {enabled: false, count: 0}
+    F02: {enabled: false, count: 0}
+    F03: {enabled: false, count: 0}
+    F04:
+      enabled: true
+      weight: 1.0
+      count: 5478
+      amount_min: 1.0
+      amount_max: 1.0
+    F05: {enabled: false, count: 0}
+
+labels:
+  enabled: true
+  investigation_rate: 1.0
+  missing_fraud_rate: 0.0
+  preliminary_error_rate: 0.0
+  correction_rate: 0.0
+  reopening_rate: 0.0
+
+quality:
+  profile: clean
+
+dataset:
+  enabled: false
+  unresolved_labels: include
+
+outputs:
+  parquet: true
+  postgres: false
+  kafka: false
+  iceberg: false

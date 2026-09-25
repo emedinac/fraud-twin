@@ -45,7 +45,13 @@ templates_path = ["_templates"]
 html_sidebars = {
     "**": ["sidebar-docs-nav.html"],
 }
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "tutorials/outputs/*"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "tutorials/outputs/*",
+    "_static/images/README.md",
+]
 autosummary_generate = True
 autodoc_member_order = "bysource"
 autodoc_typehints = "description"

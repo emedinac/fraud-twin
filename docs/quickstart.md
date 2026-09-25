@@ -6,7 +6,9 @@ and locate its main artifacts.
 **Before you start:** [Installation](installation.md).<br><br>
 **Services:** None.<br><br>
 
-This walkthrough creates a small payment world locally. It uses the tracked minimal configuration, so the result is quick to generate and easy to inspect.
+This walkthrough creates a small payment world locally. You can use the
+packaged template in an installed project or the tracked fixture in a source
+checkout. The result is quick to generate and easy to inspect.
 
 ## Requirements
 
@@ -18,6 +20,20 @@ Install the project from the repository root:
 ```bash
 poetry install
 ```
+
+## Create a project-owned configuration
+
+From an installed package, create a visible configuration file before changing
+simulation settings:
+
+```bash
+fraudtwin config init config.yaml
+fraudtwin config validate config.yaml
+```
+
+The command refuses to overwrite an existing file unless `--force` is supplied.
+From a repository checkout, `configs/minimal.yaml` is the equivalent tracked
+fixture.
 
 ## Generate a first run
 
@@ -58,6 +74,25 @@ print(data.run_id, len(data.behavior.payments))
 Use the CLI when you want the standard Parquet and manifest layout. Use the
 Python API when you want typed records directly in a notebook or application.
 
+When settings depend on runtime values, start from the packaged defaults instead
+of reading an internal YAML resource:
+
+```python
+from datetime import datetime, timezone
+
+import fraudtwin
+from fraudtwin.config import SimulationRunConfig
+
+config = fraudtwin.load_default_config()
+values = config.model_dump(mode="python")
+values["simulation"].update(
+    start=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    duration_days=30,
+)
+config = SimulationRunConfig.model_validate(values)
+data = fraudtwin.generate(config)
+```
+
 ## What a run contains
 
 Each run is stored under `runs/<run_id>/` (or the directory supplied with `--output-dir`):
@@ -89,7 +124,25 @@ poetry run fraudtwin config validate "$CONFIG"
 poetry run fraudtwin generate "$CONFIG" --output-dir "$RUNS_DIR"
 ```
 
-For a smaller custom run, set `fraud.enabled: true` in a copied YAML file. The generator supports F01 Card Not Present, F02 Card Testing, F03 Account Takeover, F04 Instant-Payment Scam, and F05 Velocity Attack, with configurable hard negatives and workflow projections.
+For a smaller custom run, set `fraud.enabled: true` in a copied YAML file. The
+generator supports five built-in stories:
+
+- `F01` Card Not Present: three card payments per campaign.
+- `F02` Card Testing: repeated low-value card attempts, controlled by
+  `attempt_count`.
+- `F03` Account Takeover: two account-transfer payments per campaign.
+- `F04` Instant-Payment Scam: one PIX payment per campaign.
+- `F05` Velocity Attack: repeated card attempts, controlled by
+  `attempt_count` and `window_seconds`.
+
+Card scenarios require active cards. F03 requires account relationships, and
+F04 requires PIX-capable accounts and PIX keys. `fraud.target_rate` is a
+campaign budget, not a guarantee that the same percentage of final payment
+rows will be fraudulent; see the worked
+[fraud prevalence examples](configuration.md#choosing-a-target-fraud-prevalence).
+When customizing `fraud.scenarios`, remember that a partial mapping inherits
+the other built-in scenarios. Disable unwanted scenario IDs explicitly when
+you want an F04-only or otherwise restricted run.
 
 ## Next
 

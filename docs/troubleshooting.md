@@ -50,6 +50,73 @@ Unknown fields are rejected intentionally. Check required relationships such as
 accounts needing customers and institutions, rail weights summing to `1.0`,
 and timezone-aware simulation timestamps.
 
+## Generation fails after configuration validation
+
+Configuration validation answers whether the YAML has the right fields and
+values. Generation performs a second kind of validation: it realizes entities,
+payments, lifecycle events, fraud, and ledger entries. A file can therefore be
+valid YAML and a valid `SimulationRunConfig`, but still request a generated
+state that cannot be reconciled.
+
+Known generation failures are reported with a code, stage, affected record,
+and suggested fixes. For example:
+
+```text
+Generation failed [LEDGER_OVERDRAFT_EXCEEDED]
+
+Stage: baseline payment ledger
+Account: ACC-000228
+Payment: PAY-...
+Event: EVT-...
+Debit: 537.34
+Balance before: 345.11
+Balance after: -192.23
+Allowed overdraft: 100.00
+```
+
+The stage tells you whether the failure happened while creating baseline,
+fraud, graph, camouflage, campaign-dynamics, or streaming records. The
+account, payment, and event identify the first failing ledger operation. No
+manifest is available when generation stops before run materialization.
+
+### Ledger capacity errors
+
+FraudTwin preserves every requested payment amount. It does not silently clip
+an amount to make an invalid ledger pass. For an account, the permitted debit
+boundary is:
+
+```text
+available debit capacity = opening ledger balance + overdraft limit
+```
+
+`behavior.amount_max` limits one payment; it does not limit the total amount
+spent by an account across a long simulation. Many individually valid payments
+can exhaust the same account's capacity. Reduce `payments.daily_target`,
+`behavior.amount_max`, or `simulation.duration_days`, increase the account
+capacity, or choose a capacity-aware scenario. Labels and dataset settings are
+not involved when the failure stage is `baseline payment ledger`.
+
+### Other generated-state failures
+
+- A lifecycle-window failure means an authorization, settlement, refund, or
+  return delay no longer fits inside the simulation window. Shorten the delay
+  or extend `simulation.duration_days`.
+- A missing-entity-capacity failure means the requested payment or scenario
+  cannot find a valid account, customer, institution, card, PIX key, merchant,
+  or device. Increase the relevant population or disable the dependent rail or
+  scenario.
+- Fraud and hard-negative capacity failures mean the selected campaigns or
+  lookalikes cannot be placed with the requested relationships or ledger
+  capacity. Reduce campaign counts, hard-negative rate, or scenario scope.
+- Optional sink failures usually mean a missing extra, unavailable service, or
+  invalid connection settings. Install the matching extra and check the
+  service before retrying.
+
+Retry only after correcting the field or capacity named by the report. Python
+callers can catch `fraudtwin.errors.GenerationError` and inspect `error.code`,
+`error.stage`, and the typed diagnostic attributes. Unexpected programming
+errors remain tracebacks so they can be reported to developers.
+
 ## Labels are missing or unresolved
 
 Check `label_available_at` against `prediction_time`. A label may be true in

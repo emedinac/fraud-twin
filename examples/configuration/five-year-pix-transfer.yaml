@@ -1,0 +1,46 @@
+# A complete, fixed-date example for a five-year PIX/account-transfer history.
+# Use the Python example in docs/configuration.md when the window should roll
+# relative to the current date.
+
+simulation:
+  seed: 42
+  start: 2021-01-01T00:00:00Z
+  duration_days: 1826
+  speed: batch
+
+population:
+  customers: 1000
+  institutions: 5
+  accounts: 1000
+  # Cards are unnecessary because CARD traffic and card scenarios are disabled.
+  # Card expiration only matters when card-based traffic is part of the run.
+  cards: 0
+  merchants: 25
+  devices: 1000
+  pix_keys: 800
+
+payments:
+  daily_target: 6
+  rails:
+    CARD: 0.0
+    PIX: 0.75
+    ACCOUNT_TRANSFER: 0.25
+
+behavior:
+  amount_max: 5.0
+
+fraud:
+  enabled: false
+  target_rate: 0.002
+
+quality:
+  profile: clean
+
+dataset:
+  enabled: false
+
+outputs:
+  parquet: true
+  postgres: false
+  kafka: false
+  iceberg: false
