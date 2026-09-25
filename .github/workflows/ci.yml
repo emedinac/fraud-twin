@@ -7,12 +7,15 @@ on:
     paths:
       - "src/**"
       - "contracts/**"
+      - "configs/**"
+      - "examples/**"
       - "tests/**"
       - "pyproject.toml"
       - "poetry.lock"
-      - ".github/workflows/ci.yml"
+      - ".github/workflows/**"
       - "docker-compose.yml"
       - "observability/**"
+      - "DEVELOPMENT.md"
       - "docs/workflows.md"
       - "docs/development.md"
       - "README.md"
@@ -25,12 +28,15 @@ on:
     paths:
       - "src/**"
       - "contracts/**"
+      - "configs/**"
+      - "examples/**"
       - "tests/**"
       - "pyproject.toml"
       - "poetry.lock"
-      - ".github/workflows/ci.yml"
+      - ".github/workflows/**"
       - "docker-compose.yml"
       - "observability/**"
+      - "DEVELOPMENT.md"
       - "docs/workflows.md"
       - "docs/development.md"
       - "README.md"
@@ -40,19 +46,23 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-pr-${{ github.event.pull_request.number }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  static-quality:
+  static-checks:
+    name: Static checks and build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Install Poetry
+        run: pipx install poetry
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Poetry
-        run: pipx install poetry
+          cache: poetry
+          cache-dependency-path: poetry.lock
       - name: Install dependencies
         run: poetry install --only main,dev -E postgres -E kafka -E observability
       - name: Ruff lint
@@ -68,11 +78,21 @@ jobs:
         run: poetry run ruff format --check .
       - name: Mypy
         run: poetry run mypy src
+      - name: Build
+        run: poetry build
+      - name: Installed-wheel contract registry
+        run: |
+          python -m venv /tmp/fraudtwin-wheel
+          /tmp/fraudtwin-wheel/bin/pip install dist/*.whl
+          /tmp/fraudtwin-wheel/bin/fraudtwin schema validate
       - name: Diff check
         run: git diff --check
 
-  quality:
+  test-suite:
+    name: Test suite
+    needs: static-checks
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -91,15 +111,108 @@ jobs:
       FRAUDTWIN_POSTGRES_DSN: postgresql://fraudtwin:fraudtwin@localhost:5432/fraudtwin
     steps:
       - uses: actions/checkout@v4
+      - name: Install Poetry
+        run: pipx install poetry
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Poetry
-        run: pipx install poetry
+          cache: poetry
+          cache-dependency-path: poetry.lock
       - name: Install dependencies
         run: poetry install -E postgres -E kafka -E observability
       - name: Tests
-        run: poetry run pytest
+        run: poetry run pytest -n auto
+
+  integration-tests:
+    name: Integration tests
+    # External services are intentionally exercised only for pull requests;
+    # normal local/CI unit runs keep the optional stack out of the fast path.
+    needs: static-checks
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      POSTGRES_USER: fraudtwin
+      POSTGRES_PASSWORD: fraudtwin
+      POSTGRES_DB: fraudtwin
+      FRAUDTWIN_POSTGRES_DSN: postgresql://fraudtwin:fraudtwin@localhost:5432/fraudtwin
+      FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+      FRAUDTWIN_SCHEMA_REGISTRY_URL: http://localhost:8081
+      FRAUDTWIN_ICEBERG_CATALOG_URI: http://localhost:8181
+      FRAUDTWIN_ICEBERG_WAREHOUSE: s3://warehouse/
+      FRAUDTWIN_ICEBERG_S3_ENDPOINT: http://localhost:9000
+      FRAUDTWIN_ICEBERG_S3_ACCESS_KEY: minioadmin
+      FRAUDTWIN_ICEBERG_S3_SECRET_KEY: minioadmin
+      GRAFANA_ADMIN_PASSWORD: ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Poetry
+        run: pipx install poetry
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: poetry
+          cache-dependency-path: poetry.lock
+      - name: Install integration dependencies
+        run: poetry install --only main,dev -E postgres -E kafka -E lakehouse -E observability
+      - name: Run PostgreSQL, Kafka, and Iceberg smoke tests
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker compose --profile integration --profile streaming --profile lakehouse --profile observability down -v >/dev/null 2>&1 || true
+          }
+          on_exit() {
+            status=$?
+            if [[ "$status" -ne 0 ]]; then
+              docker compose --profile integration --profile streaming --profile lakehouse --profile observability ps -a || true
+              docker compose --profile integration --profile streaming --profile lakehouse --profile observability logs --no-color --tail=200 \
+                postgres kafka schema-registry minio iceberg-rest || true
+            fi
+            cleanup
+            exit "$status"
+          }
+          trap on_exit EXIT
+
+          docker compose --profile integration --profile streaming --profile lakehouse up -d \
+            postgres kafka schema-registry streaming-topics minio minio-init iceberg-rest
+
+          postgres_ready=false
+          for _ in $(seq 1 150); do
+            if docker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+              postgres_ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [[ "$postgres_ready" != true ]]; then
+            docker compose --profile integration --profile streaming --profile lakehouse --profile observability ps -a
+            docker compose --profile integration --profile streaming --profile lakehouse --profile observability logs --no-color --tail=120 postgres
+            echo "PostgreSQL did not become ready within 300 seconds" >&2
+            exit 1
+          fi
+          echo "PostgreSQL is ready"
+
+          for _ in $(seq 1 60); do
+            topics="$(docker compose exec -T kafka kafka-topics --bootstrap-server kafka:29092 --list 2>/dev/null || true)"
+            if curl -fsS http://localhost:8081/subjects >/dev/null 2>&1 && \
+               grep -q '^fraudsim\.payment\.events\.v1$' <<<"$topics"; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8081/subjects >/dev/null
+          docker compose exec -T kafka kafka-topics --bootstrap-server kafka:29092 --list | \
+            grep -q '^fraudsim\.payment\.events\.v1$'
+
+          for _ in $(seq 1 60); do
+            if curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && \
+               curl -fsS http://localhost:8181/v1/config >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://localhost:9000/minio/health/live >/dev/null
+          curl -fsS http://localhost:8181/v1/config >/dev/null
+
+          FRAUDTWIN_INTEGRATION_SMOKE=1 poetry run pytest tests/test_integration_smoke.py --no-cov -q
       - name: Prometheus/Grafana integration
         env:
           GRAFANA_ADMIN_PASSWORD: ci-only-password
@@ -131,86 +244,3 @@ jobs:
           curl -fsS -u "admin:${GRAFANA_ADMIN_PASSWORD}" \
             http://127.0.0.1:3000/api/dashboards/uid/fraudtwin-m27 | \
             grep -q 'FraudTwin run observability'
-      - name: Build
-        run: poetry build
-      - name: Installed-wheel contract registry
-        run: |
-          python -m venv /tmp/fraudtwin-wheel
-          /tmp/fraudtwin-wheel/bin/pip install dist/*.whl
-          /tmp/fraudtwin-wheel/bin/fraudtwin schema validate
-
-  integration-smoke:
-    # External services are intentionally exercised only for pull requests;
-    # normal local/CI unit runs keep the optional stack out of the fast path.
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    env:
-      POSTGRES_USER: fraudtwin
-      POSTGRES_PASSWORD: fraudtwin
-      POSTGRES_DB: fraudtwin
-      FRAUDTWIN_POSTGRES_DSN: postgresql://fraudtwin:fraudtwin@localhost:5432/fraudtwin
-      FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS: localhost:9092
-      FRAUDTWIN_SCHEMA_REGISTRY_URL: http://localhost:8081
-      FRAUDTWIN_ICEBERG_CATALOG_URI: http://localhost:8181
-      FRAUDTWIN_ICEBERG_WAREHOUSE: s3://warehouse/
-      FRAUDTWIN_ICEBERG_S3_ENDPOINT: http://localhost:9000
-      FRAUDTWIN_ICEBERG_S3_ACCESS_KEY: minioadmin
-      FRAUDTWIN_ICEBERG_S3_SECRET_KEY: minioadmin
-      GRAFANA_ADMIN_PASSWORD: ci-only-password
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install Poetry
-        run: pipx install poetry
-      - name: Install integration dependencies
-        run: poetry install -E postgres -E kafka -E lakehouse
-      - name: Run PostgreSQL, Kafka, and Iceberg smoke tests
-        run: |
-          set -euo pipefail
-          cleanup() {
-            docker compose --profile integration --profile streaming --profile lakehouse down -v >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
-          docker compose --profile integration --profile streaming --profile lakehouse up -d \
-            postgres kafka schema-registry streaming-topics minio minio-init iceberg-rest
-
-          postgres_ready=false
-          for _ in $(seq 1 150); do
-            if docker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
-              postgres_ready=true
-              break
-            fi
-            sleep 2
-          done
-          if [[ "$postgres_ready" != true ]]; then
-            docker compose ps -a
-            docker compose logs --no-color --tail=120 postgres
-            echo "PostgreSQL did not become ready within 300 seconds" >&2
-            exit 1
-          fi
-          docker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
-
-          for _ in $(seq 1 60); do
-            topics="$(docker compose exec -T kafka kafka-topics --bootstrap-server kafka:29092 --list 2>/dev/null || true)"
-            if curl -fsS http://localhost:8081/subjects >/dev/null 2>&1 && \
-               grep -q '^fraudsim\.payment\.events\.v1$' <<<"$topics"; then break; fi
-            sleep 2
-          done
-          curl -fsS http://localhost:8081/subjects >/dev/null
-          docker compose exec -T kafka kafka-topics --bootstrap-server kafka:29092 --list | \
-            grep -q '^fraudsim\.payment\.events\.v1$'
-
-          for _ in $(seq 1 60); do
-            if curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && \
-               curl -fsS http://localhost:8181/v1/config >/dev/null 2>&1; then
-              break
-            fi
-            sleep 2
-          done
-          curl -fsS http://localhost:9000/minio/health/live >/dev/null
-          curl -fsS http://localhost:8181/v1/config >/dev/null
-
-          FRAUDTWIN_INTEGRATION_SMOKE=1 poetry run pytest tests/test_integration_smoke.py --no-cov -q
