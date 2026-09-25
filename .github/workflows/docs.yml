@@ -33,11 +33,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/setup-poetry
         with:
           python-version: "3.12"
-      - name: Install Poetry
-        run: pipx install poetry
       - name: Install documentation dependencies
         run: poetry install --with docs
       - name: Configure GitHub Pages
@@ -65,11 +63,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/setup-poetry
         with:
           python-version: "3.12"
       - name: Install project
-        run: pipx install poetry && poetry install
+        run: poetry install
       - name: Execute representative documentation example
         run: poetry run pytest tests/test_docs_examples.py -o addopts=
 
@@ -78,11 +76,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/setup-poetry
         with:
           python-version: "3.12"
       - name: Install documentation dependencies
-        run: pipx install poetry && poetry install --with docs
+        run: poetry install --with docs
       - name: Check external documentation links
         run: poetry run sphinx-build -E -b linkcheck docs docs/_build/linkcheck
 
