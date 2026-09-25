@@ -354,8 +354,7 @@ def test_integration_tutorials_have_guarded_client_smoke_cells() -> None:
             )
             normalized_source = re.sub(r"\s+", " ", notebook_source)
             assert any(
-                item in notebook_source
-                or re.sub(r"\s+", " ", item) in normalized_source
+                item in notebook_source or re.sub(r"\s+", " ", item) in normalized_source
                 for item in accepted
             ), filename
         for cell in service_cells:
