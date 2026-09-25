@@ -72,6 +72,7 @@ jobs:
         run: git diff --check
 
   quality:
+    needs: static-quality
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -142,6 +143,7 @@ jobs:
   integration-smoke:
     # External services are intentionally exercised only for pull requests;
     # normal local/CI unit runs keep the optional stack out of the fast path.
+    needs: static-quality
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     env:
