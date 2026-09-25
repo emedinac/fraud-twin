@@ -82,7 +82,7 @@ The manifest records the seed, configuration, schemas, counts, fingerprints, and
 Use a benchmark fixture when you want a complete, repeatable example:
 
 ```bash
-CONFIG=configs/benchmarks/m12-difficulty-v1.yaml
+CONFIG=configs/benchmarks/difficulty-v1.yaml
 RUNS_DIR=./runs
 
 poetry run fraudtwin config validate "$CONFIG"

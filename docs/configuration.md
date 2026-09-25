@@ -177,7 +177,7 @@ workflow is available for legitimate-only source runs:
 
 ```bash
 fraudtwin counterfactual generate \
-  --config configs/benchmarks/m14-counterfactual-v1.yaml \
+  --config configs/benchmarks/counterfactual-v1.yaml \
   --source-run-id RUN-... \
   --output-dir ./runs
 ```

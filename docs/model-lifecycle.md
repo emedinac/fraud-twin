@@ -24,7 +24,7 @@ fraud scenario mix before training.
 ## 2. Build leakage-safe data
 
 ```console
-CONFIG=configs/benchmarks/m13-camouflage-v1.yaml
+CONFIG=configs/benchmarks/camouflage-v1.yaml
 RUN_ID=RUN-...
 RUNS_DIR=./runs
 

@@ -81,7 +81,7 @@ RUNS_DIR=./runs
 
 poetry run fraudtwin ml backtest "$CONFIG" \
   --run-id "$RUN_ID" \
-  --benchmark-pack configs/benchmarks/m10-minimal-v1.yaml \
+  --benchmark-pack configs/benchmarks/temporal-v1.yaml \
   --output-dir "$RUNS_DIR"
 ```
 
