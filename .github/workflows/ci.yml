@@ -100,7 +100,7 @@ jobs:
       - name: Install dependencies
         run: poetry install -E postgres -E kafka -E observability
       - name: Tests
-        run: poetry run pytest
+        run: poetry run pytest -n auto
       - name: Prometheus/Grafana integration
         env:
           GRAFANA_ADMIN_PASSWORD: ci-only-password
