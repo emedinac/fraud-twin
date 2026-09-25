@@ -20,7 +20,7 @@ from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.graph_fraud import GraphFraudDataset
 from fraudtwin.simulation.parquet import write_campaign_dynamics_sidecar
 
-FIXTURE = Path("configs/benchmarks/m15-campaign-dynamics-v1.yaml")
+FIXTURE = Path("configs/benchmarks/campaign-dynamics-v1.yaml")
 
 
 def test_campaign_dynamics_is_strict_and_neutral_identity_is_unchanged() -> None:

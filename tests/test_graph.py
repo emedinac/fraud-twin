@@ -29,7 +29,7 @@ runner = CliRunner()
 
 def _config(*, graph: bool = False) -> SimulationRunConfig:
     if graph:
-        return load_config(Path("configs/benchmarks/m11-graph-v2.yaml"))
+        return load_config(Path("configs/benchmarks/graph-v2.yaml"))
     return load_config(CONFIG_PATH)
 
 
