@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from fraudtwin.config import SimulationRunConfig, config_hash, load_config
+from fraudtwin.config import SimulationRunConfig, config_hash, load_config, load_default_config
 from fraudtwin.seed import create_rng
 
 CONFIG_PATH = Path("configs/minimal.yaml")
@@ -14,6 +14,13 @@ def test_minimal_config_is_valid_and_hash_is_stable() -> None:
 
     assert config.simulation.seed == 42
     assert config_hash(config) == config_hash(load_config(CONFIG_PATH))
+
+
+def test_public_default_config_matches_packaged_minimal_fixture() -> None:
+    packaged = load_default_config()
+    fixture = load_config(Path("src/fraudtwin/defaults/minimal.yaml"))
+
+    assert config_hash(packaged) == config_hash(fixture)
 
 
 def test_invalid_rail_distribution_is_rejected() -> None:

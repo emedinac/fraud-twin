@@ -154,6 +154,17 @@ def test_user_manual_covers_the_first_ten_documentation_gaps() -> None:
     ):
         assert marker in Path(guide).read_text(encoding="utf-8"), marker
 
+    troubleshooting = Path("docs/troubleshooting.md").read_text(encoding="utf-8")
+    assert "## Generation fails after configuration validation" in troubleshooting
+    assert "LEDGER_OVERDRAFT_EXCEEDED" in troubleshooting
+    assert "available debit capacity = opening ledger balance + overdraft limit" in troubleshooting
+
+    configuration = Path("docs/configuration.md").read_text(encoding="utf-8")
+    assert "### What each F scenario means" in configuration
+    for scenario in ("F01", "F02", "F03", "F04", "F05"):
+        assert f"`{scenario}`" in configuration
+    assert "Where the F names come from" in configuration
+
 
 def test_non_tutorial_guides_have_reader_contracts_and_resolved_navigation() -> None:
     """Keep active public guides level-aware and connected."""

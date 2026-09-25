@@ -11,8 +11,15 @@ from typer.testing import CliRunner
 
 from fraudtwin.cli import app
 from fraudtwin.config import SimulationRunConfig, load_config
-from fraudtwin.domain import validate_card_lifecycle, validate_ledger, validate_pix_lifecycle
+from fraudtwin.domain import (
+    PaymentEvent,
+    validate_card_lifecycle,
+    validate_ledger,
+    validate_pix_lifecycle,
+)
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
+from fraudtwin.simulation.behavior import BehaviorDataset
+from fraudtwin.simulation.generator import EntityDataset
 from fraudtwin.simulation.parquet import (
     FRAUD_RECORD_SCHEMA,
     PAYMENT_EVENT_SCHEMA,
@@ -24,7 +31,7 @@ runner = CliRunner()
 
 
 @cache
-def _fraud_config():
+def _fraud_config() -> SimulationRunConfig:
     base = load_config(CONFIG_PATH)
     scenario_settings = {
         scenario_id: settings.model_copy(
@@ -43,8 +50,76 @@ def _fraud_config():
     return base.model_copy(update={"fraud": fraud})
 
 
+def _focused_scenario_config(
+    scenario: str,
+    *,
+    target_rate: float = 1.0,
+    scenario_count: int = 2,
+    scenario_capacity: int = 2,
+    hard_negative_rate: float = 0.0,
+    labels_enabled: bool = False,
+) -> SimulationRunConfig:
+    """Build a small one-rail configuration for campaign semantics tests."""
+
+    base = load_config(CONFIG_PATH)
+    scenarios = {
+        scenario_id: settings.model_copy(
+            update={
+                "enabled": scenario_id == scenario,
+                "weight": 1.0 if scenario_id == scenario else 0.0,
+                "count": scenario_capacity if scenario_id == scenario else 0,
+            }
+        )
+        for scenario_id, settings in base.fraud.scenarios.items()
+    }
+    fraud = base.fraud.model_copy(
+        update={
+            "enabled": True,
+            "target_rate": target_rate,
+            "scenario_count": scenario_count,
+            "hard_negative_rate": hard_negative_rate,
+            "scenarios": scenarios,
+        }
+    )
+    payments = base.payments.model_copy(
+        update={
+            "daily_target": 10,
+            "rails": {"CARD": 0.0, "PIX": 1.0, "ACCOUNT_TRANSFER": 0.0},
+        }
+    )
+    labels = base.labels.model_copy(
+        update={
+            "enabled": labels_enabled,
+            "investigation_rate": 1.0,
+            "missing_fraud_rate": 0.0,
+            "preliminary_error_rate": 0.0,
+            "correction_rate": 0.0,
+        }
+    )
+    return base.model_copy(
+        update={
+            "payments": payments,
+            "fraud": fraud,
+            "labels": labels,
+            "population": base.population.model_copy(update={"cards": 0}),
+        }
+    )
+
+
+def _baseline_and_fraud(
+    config: SimulationRunConfig,
+) -> tuple[BehaviorDataset, BehaviorDataset]:
+    entities = EntityGenerator(config).generate()
+    baseline_config = config.model_copy(
+        update={"fraud": config.fraud.model_copy(update={"enabled": False})}
+    )
+    baseline = BehaviorGenerator(baseline_config, entities).generate()
+    fraud = BehaviorGenerator(config, entities).generate()
+    return baseline, fraud
+
+
 @cache
-def _dataset():
+def _dataset() -> tuple[SimulationRunConfig, EntityDataset, BehaviorDataset]:
     config = _fraud_config()
     entities = EntityGenerator(config).generate()
     return config, entities, BehaviorGenerator(config, entities).generate()
@@ -99,6 +174,69 @@ def test_all_m6_scenarios_are_deterministic_and_explainable() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("target_rate", "scenario_count", "scenario_capacity", "expected_campaigns"),
+    (
+        (0.5, 9, 9, 5),
+        (1.0, 3, 9, 3),
+        (1.0, 9, 2, 2),
+    ),
+)
+def test_campaign_count_uses_all_three_documented_caps(
+    target_rate: float,
+    scenario_count: int,
+    scenario_capacity: int,
+    expected_campaigns: int,
+) -> None:
+    config = _focused_scenario_config(
+        "F04",
+        target_rate=target_rate,
+        scenario_count=scenario_count,
+        scenario_capacity=scenario_capacity,
+    )
+    baseline, fraud = _baseline_and_fraud(config)
+
+    assert len(baseline.payments) == 10
+    assert len([record for record in fraud.fraud_records if record.fraud_truth]) == (
+        expected_campaigns
+    )
+    assert len(fraud.payments) - len(baseline.payments) == expected_campaigns
+
+
+def test_f03_creates_two_true_fraud_payments_per_campaign() -> None:
+    config = _focused_scenario_config("F03", scenario_count=2, scenario_capacity=2)
+    baseline, fraud = _baseline_and_fraud(config)
+
+    true_records = [record for record in fraud.fraud_records if record.fraud_truth]
+    assert len(true_records) == 2 * 2
+    assert len(fraud.payments) - len(baseline.payments) == 2 * 2
+
+
+def test_hard_negatives_do_not_count_as_true_fraud() -> None:
+    config = _focused_scenario_config(
+        "F04", scenario_count=2, scenario_capacity=2, hard_negative_rate=1.0
+    )
+    _, fraud = _baseline_and_fraud(config)
+
+    assert sum(record.fraud_truth for record in fraud.fraud_records) == 2
+    assert sum(not record.fraud_truth for record in fraud.fraud_records) == 2
+    assert all(
+        record.record_type == "HARD_NEGATIVE"
+        for record in fraud.fraud_records
+        if not record.fraud_truth
+    )
+
+
+def test_label_observation_does_not_change_source_fraud() -> None:
+    source_config = _focused_scenario_config("F04", labels_enabled=False)
+    observed_config = _focused_scenario_config("F04", labels_enabled=True)
+    _, source = _baseline_and_fraud(source_config)
+    _, observed = _baseline_and_fraud(observed_config)
+
+    assert source.payments == observed.payments
+    assert source.fraud_records == observed.fraud_records
+
+
 def test_scenario_sequences_and_hard_negatives_have_expected_signals() -> None:
     config, entities, dataset = _dataset()
     negatives = [record for record in dataset.fraud_records if not record.fraud_truth]
@@ -129,7 +267,7 @@ def test_scenario_sequences_and_hard_negatives_have_expected_signals() -> None:
     assert max(velocity_times) - min(velocity_times) <= timedelta(seconds=60)
 
     payments = {payment.payment_id: payment for payment in dataset.payments}
-    by_payment: dict[str, list] = {}
+    by_payment: dict[str, list[PaymentEvent]] = {}
     for event in dataset.payment_events:
         by_payment.setdefault(event.payment_id, []).append(event)
     for payment_id, events in by_payment.items():
