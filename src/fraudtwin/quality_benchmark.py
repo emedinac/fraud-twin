@@ -32,22 +32,20 @@ from fraudtwin.reproducibility import sha256_json, write_json
 
 QUALITY_PROFILE_RESOURCE_DIR = "quality_profiles"
 QUALITY_PROFILE_VERSION = "1"
-QUALITY_PACK_REFS = tuple(
-    f"FT-B{index:02d}-{name}@0.34.0"
-    for index, name in enumerate(
-        (
-            "STABLE",
-            "TEMPORAL",
-            "BOUNDARY",
-            "CAMOUFLAGE",
-            "GRAPH",
-            "OBSERVABILITY",
-            "CALIBRATED",
-            "MIXED",
-        ),
-        start=1,
+
+
+def _default_quality_pack_refs() -> tuple[str, ...]:
+    raw = yaml.safe_load(
+        files("fraudtwin")
+        .joinpath(QUALITY_PROFILE_RESOURCE_DIR, "standard-v1.yaml")
+        .read_text(encoding="utf-8")
     )
-)
+    if not isinstance(raw, dict) or not isinstance(raw.get("public_packs"), list):
+        raise ValueError("standard-v1 quality profile must define public_packs")
+    return tuple(str(reference) for reference in raw["public_packs"])
+
+
+QUALITY_PACK_REFS = _default_quality_pack_refs()
 SCALE_SIZES = ("dev", "small", "medium", "large", "xlarge", "billion")
 
 
