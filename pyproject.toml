@@ -111,5 +111,5 @@ strict = true
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["fsspec"]
+module = ["fsspec", "pyarrow", "pyarrow.*"]
 ignore_missing_imports = true

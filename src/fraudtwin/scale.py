@@ -780,8 +780,8 @@ def write_scale_partitions(
     # without regenerating or re-spooling the producer input.
     spool_manifest = spool_root / "manifest.json"
     try:
-        import pyarrow as pa  # type: ignore[import-untyped]
-        import pyarrow.ipc as pa_ipc  # type: ignore[import-untyped]
+        import pyarrow as pa
+        import pyarrow.ipc as pa_ipc
     except ImportError:
         pa = None
         pa_ipc = None
