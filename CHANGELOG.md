@@ -1,9 +1,14 @@
 # Release notes
 
-## 0.34.5 — Release policy reliability
+## 0.34.6 — Release policy reliability
 
 - Fixed version-policy automation so changelog version updates are committed
   together with the package metadata.
+
+## 0.34.5 — Release policy reliability
+
+- Preserved the tagged release path while keeping version validation separate
+  from package publication.
 
 ## 0.34.4 — Release automation
 
