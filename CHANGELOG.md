@@ -1,6 +1,6 @@
 # Release notes
 
-## Unreleased — Configuration workflow documentation
+## 0.34.7 — Unreleased — Configuration workflow documentation
 
 - Added a supported `fraudtwin.load_default_config()` Python entry point and
   `fraudtwin config init` command for creating project-owned YAML files.
