@@ -311,8 +311,8 @@ def test_integration_tutorials_have_guarded_client_smoke_cells() -> None:
     }
     startup_markers = {
         "neo4j-graph-fraud.ipynb": "docker run --name fraudtwin-neo4j",
-            "avro-kafka-stream.ipynb": "docker compose --profile streaming up -d",
-            "kafka-outage-recovery.ipynb": '"docker", "compose", "--profile", "streaming", "up"',
+        "avro-kafka-stream.ipynb": "docker compose --profile streaming up -d",
+        "kafka-outage-recovery.ipynb": '"docker", "compose", "--profile", "streaming", "up"',
         "schema-evolution-compatibility.ipynb": "docker compose --profile streaming up -d",
         "postgres-persistence-reconciliation.ipynb": "docker compose --profile integration up -d",
         "iceberg-time-travel-observability.ipynb": "docker compose --profile lakehouse up -d",
