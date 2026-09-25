@@ -2,56 +2,16 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - "v*.*.*"
 
 permissions:
-  actions: write
   contents: write
   id-token: write
   attestations: write
 
 jobs:
-  detect-release:
-    name: Detect release marker
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    outputs:
-      release: ${{ steps.detect.outputs.release }}
-      tag: ${{ steps.detect.outputs.tag }}
-    steps:
-      - name: Inspect ref and commit message
-        id: detect
-        env:
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-        run: |
-          set -euo pipefail
-          if [[ "$REF_TYPE" == "tag" ]]; then
-            printf 'release=true\ntag=%s\n' "$REF_NAME" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          mapfile -t release_tags < <(
-            printf '%s\n' "$COMMIT_MESSAGE" |
-              grep -oE 'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)([^[:alnum:].-]|$)' |
-              sed -E 's/[^[:alnum:].-]$//' |
-              sort -u || true
-          )
-          if [[ "${#release_tags[@]}" -eq 1 ]]; then
-            printf 'release=true\ntag=%s\n' "${release_tags[0]}" >> "$GITHUB_OUTPUT"
-          else
-            # A normal main push, or an ambiguous marker, is a successful
-            # no-op. Do not fail the workflow or start the package job.
-            printf 'release=false\n' >> "$GITHUB_OUTPUT"
-          fi
-
   package:
-    needs: detect-release
-    if: needs.detect-release.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -62,9 +22,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Validate release identity
-        run: >-
-          python .github/scripts/release_policy.py check
-          --tag "${{ needs.detect-release.outputs.tag }}"
+        run: python .github/scripts/release_policy.py check --tag "$GITHUB_REF_NAME"
       - name: Install project
         run: poetry install --only main,docs
       - name: Verify release metadata
@@ -86,31 +44,9 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: "dist/*"
-      - name: Create release tag for a marked main commit
-        if: github.ref_type != 'tag'
-        env:
-          RELEASE_TAG: ${{ needs.detect-release.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}^{commit}" >/dev/null; then
-            existing_commit="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
-            if [[ "$existing_commit" != "$GITHUB_SHA" ]]; then
-              echo "${RELEASE_TAG} already points to ${existing_commit}, not ${GITHUB_SHA}." >&2
-              exit 1
-            fi
-          else
-            git tag -a "$RELEASE_TAG" "$GITHUB_SHA" -m "Release ${RELEASE_TAG}"
-            git push origin "refs/tags/${RELEASE_TAG}"
-          fi
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.detect-release.outputs.tag }}
-        run: gh release create "$RELEASE_TAG" dist/* --generate-notes
-      - name: Deploy documentation for a marked main commit
-        if: github.ref_type != 'tag'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run docs.yml --ref main
+        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
