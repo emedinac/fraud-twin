@@ -156,7 +156,7 @@ def test_user_manual_covers_the_first_ten_documentation_gaps() -> None:
 
 
 def test_non_tutorial_guides_have_reader_contracts_and_resolved_navigation() -> None:
-    """Keep the public guide layer level-aware and connected."""
+    """Keep active public guides level-aware and connected."""
 
     guides = [
         *Path("docs").glob("*.md"),
@@ -175,6 +175,8 @@ def test_non_tutorial_guides_have_reader_contracts_and_resolved_navigation() -> 
     markdown_link = re.compile(r"\]\(([^)]+)\)")
     for guide in sorted(path for path in guides if path not in excluded):
         text = guide.read_text(encoding="utf-8")
+        if re.search(r"^orphan:\s*true\s*$", text, re.MULTILINE):
+            continue
         for marker in required:
             assert marker in text, f"{guide} is missing {marker}"
         if guide.name != "compatibility.md":
@@ -380,7 +382,7 @@ def test_every_tutorial_belongs_to_exactly_one_category() -> None:
         notebook
         for page in category_pages
         for line in (Path("docs/tutorials") / page).read_text().splitlines()
-        for notebook in re.findall(r"(?:^|\]\()([A-Za-z0-9][^\s)]+\.ipynb)", line)
+        for notebook in re.findall(r"\]\(([^)\s]+\.ipynb)\)", line)
     ]
     assert set(memberships) == notebooks
     assert len(memberships) == len(notebooks)
@@ -396,11 +398,13 @@ def test_audience_pages_and_documentation_images_are_discoverable() -> None:
         "researchers-governance",
     }
     index = Path("docs/audiences.md").read_text(encoding="utf-8")
+    assert "learning-paths.md" in index
+    assert "legacy" in index.lower()
     for page in audience_pages:
-        assert page.stem in index
         content = page.read_text(encoding="utf-8")
-        assert "Start with" in content
-        assert "offline" in content.lower()
+        assert re.search(r"^orphan:\s*true\s*$", content, re.MULTILINE)
+        assert "legacy" in content.lower()
+        assert "learning-paths.md" in content
 
     images = sorted((Path("docs/_static/images")).glob("*.svg"))
     assert len(images) >= 10
