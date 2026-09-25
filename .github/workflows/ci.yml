@@ -56,13 +56,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Install Poetry
+        run: pipx install poetry
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: poetry
           cache-dependency-path: poetry.lock
-      - name: Install Poetry
-        run: pipx install poetry
       - name: Install dependencies
         run: poetry install --only main,dev -E postgres -E kafka -E observability
       - name: Ruff lint
@@ -111,13 +111,13 @@ jobs:
       FRAUDTWIN_POSTGRES_DSN: postgresql://fraudtwin:fraudtwin@localhost:5432/fraudtwin
     steps:
       - uses: actions/checkout@v4
+      - name: Install Poetry
+        run: pipx install poetry
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: poetry
           cache-dependency-path: poetry.lock
-      - name: Install Poetry
-        run: pipx install poetry
       - name: Install dependencies
         run: poetry install -E postgres -E kafka -E observability
       - name: Tests
@@ -146,13 +146,13 @@ jobs:
       GRAFANA_ADMIN_PASSWORD: ci-only-password
     steps:
       - uses: actions/checkout@v4
+      - name: Install Poetry
+        run: pipx install poetry
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: poetry
           cache-dependency-path: poetry.lock
-      - name: Install Poetry
-        run: pipx install poetry
       - name: Install integration dependencies
         run: poetry install --only main,dev -E postgres -E kafka -E lakehouse -E observability
       - name: Run PostgreSQL, Kafka, and Iceberg smoke tests
