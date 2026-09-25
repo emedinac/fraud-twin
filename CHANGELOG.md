@@ -1,5 +1,12 @@
 # Release notes
 
+## 0.34.2 — Docs fixes
+
+- Updated README, API reference, documentation-site, and source-code links for
+  the `fraudtwin` repository rename.
+- Corrected contributor installation commands, extension examples, and version
+  switcher URLs throughout the documentation.
+
 ## 0.34.1 — Optional dependency diagnostics and compatibility fixes
 
 - Added actionable validation for incomplete Kafka and PostgreSQL optional
