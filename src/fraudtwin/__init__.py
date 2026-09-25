@@ -64,6 +64,7 @@ from fraudtwin.difficulty import (
     apply_difficulty,
     resolve_difficulty,
 )
+from fraudtwin.errors import GenerationError, LedgerCapacityError
 from fraudtwin.extensions import (
     BehaviorModel,
     DataFaultInjector,
@@ -75,7 +76,6 @@ from fraudtwin.extensions import (
     PaymentRail,
     discover_extensions,
 )
-from fraudtwin.errors import GenerationError, LedgerCapacityError
 from fraudtwin.generation import (
     GeneratedData,
     GeneratedRun,
