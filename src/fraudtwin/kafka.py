@@ -323,7 +323,8 @@ def _dependencies() -> tuple[Any, Any]:
     if missing:
         raise _missing_kafka_dependency(
             "The installed confluent-kafka package is incomplete; missing callable symbols: "
-            + ", ".join(missing) + "."
+            + ", ".join(missing)
+            + "."
         )
     return confluent_kafka.Producer, schema_registry.SchemaRegistryClient
 

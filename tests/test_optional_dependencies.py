@@ -71,4 +71,3 @@ def test_postgres_missing_dsn_is_reported_before_client_validation(
     monkeypatch.setitem(sys.modules, "psycopg", incomplete)
     with pytest.raises(ValueError, match=postgres.DSN_ENVIRONMENT):
         postgres.database_status()
-
