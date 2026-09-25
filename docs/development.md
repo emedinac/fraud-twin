@@ -40,8 +40,8 @@ cannot enforce that restriction by itself.
 
 To publish, push a `vX.Y.Z` tag or merge a commit whose message contains
 exactly one `vX.Y.Z` marker. The latter path creates an annotated tag after the
-package build succeeds. Ordinary pushes to `main` do not consume a runner or
-publish a release.
+package build succeeds. Ordinary pushes to `main` run only a lightweight
+marker detector; they do not build, publish, or fail a release.
 
 ## Focused tests
 
