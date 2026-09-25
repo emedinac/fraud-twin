@@ -127,6 +127,17 @@ def _version_tuple(version: str) -> tuple[int, int, int]:
     return tuple(int(part) for part in version.split("."))  # type: ignore[return-value]
 
 
+def check_version_advanced(root: Path, base_root: Path) -> None:
+    """Require a PR version to advance beyond the target branch version."""
+    current_version = _read_project_version(root)
+    base_version = _read_project_version(base_root)
+    if _version_tuple(current_version) <= _version_tuple(base_version):
+        raise ValueError(
+            f"PR version {current_version} must be greater than base version {base_version}; "
+            "update pyproject.toml, src/fraudtwin/__init__.py, and CHANGELOG.md"
+        )
+
+
 def _next_patch(version: str) -> str:
     major, minor, patch = _version_tuple(version)
     return f"{major}.{minor}.{patch + 1}"
@@ -198,6 +209,7 @@ def main() -> int:
 
     check_parser = subparsers.add_parser("check")
     check_parser.add_argument("--root", type=Path, default=Path.cwd())
+    check_parser.add_argument("--base-root", type=Path)
     check_parser.add_argument("--tag")
     check_parser.add_argument("--commit-subjects", type=Path)
 
@@ -209,6 +221,8 @@ def main() -> int:
     try:
         if args.command == "check":
             check_release_identity(args.root.resolve(), args.tag)
+            if args.base_root is not None:
+                check_version_advanced(args.root.resolve(), args.base_root.resolve())
             if args.commit_subjects is not None:
                 check_commit_subjects(args.commit_subjects)
         else:

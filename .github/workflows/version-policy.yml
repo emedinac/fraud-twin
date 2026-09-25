@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
 
 concurrency:
@@ -33,24 +33,6 @@ jobs:
           path: work
           fetch-depth: 1
 
-      - name: Bump same-repository pull request version
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          set -euo pipefail
-          python policy/.github/scripts/release_policy.py bump \
-            --root work \
-            --base-root policy
-          if [[ -n "$(git -C work status --short)" ]]; then
-            version="$(python -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("work/pyproject.toml").read_text())["project"]["version"])')"
-            git -C work config user.name "github-actions[bot]"
-            git -C work config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git -C work add pyproject.toml src/fraudtwin/__init__.py CHANGELOG.md
-            git -C work commit -m "chore: bump version to ${version}"
-            git -C work push origin "HEAD:${HEAD_REF}"
-          fi
-
       - name: Collect pull request commit subjects
         env:
           GH_TOKEN: ${{ github.token }}
@@ -62,8 +44,9 @@ jobs:
             --jq '.[].commit.message | split("\n")[0]' \
             > /tmp/fraudtwin-commit-subjects.txt
 
-      - name: Validate release identity and commit subjects
+      - name: Validate version, release identity, and commit subjects
         run: |
           python policy/.github/scripts/release_policy.py check \
             --root work \
+            --base-root policy \
             --commit-subjects /tmp/fraudtwin-commit-subjects.txt
