@@ -181,9 +181,7 @@ class GraphFraudGenerator:
                     )
         ledger = PaymentGenerator(
             self.config, self.accounts, (), (), self.devices, (), simulation_run_id=self.run_id
-        ).materialize_ledger(
-            tuple(payments), tuple(events), stage="graph fraud ledger"
-        )
+        ).materialize_ledger(tuple(payments), tuple(events), stage="graph fraud ledger")
         return GraphFraudDataset(
             tuple(payments),
             tuple(events),
