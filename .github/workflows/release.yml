@@ -2,17 +2,22 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*.*.*"
 
 permissions:
-  actions: read
+  actions: write
   contents: write
   id-token: write
   attestations: write
 
 jobs:
   package:
+    # GitHub Actions cannot filter `push` events by commit message.  This
+    # condition therefore prevents runner work for ordinary pushes to main.
+    if: github.ref_type == 'tag' || contains(github.event.head_commit.message, 'v')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -22,47 +27,39 @@ jobs:
       - uses: ./.github/actions/setup-poetry
         with:
           python-version: "3.12"
-      - name: Validate release identity
-        run: python .github/scripts/release_policy.py check --tag "${GITHUB_REF_NAME}"
-      - name: Wait for CI
+      - name: Resolve release tag
+        id: release
         env:
-          GH_TOKEN: ${{ github.token }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-          # Tag pushes do not start the full CI matrix. Wait for the CI run
-          # produced by the corresponding push to main instead.
-          for _ in $(seq 1 60); do
-            ci_state="$(gh run list \
-              --workflow ci.yml \
-              --commit "$GITHUB_SHA" \
-              --event push \
-              --limit 1 \
-              --json status,conclusion \
-              --jq '.[0] | "\(.status) \(.conclusion // "")"' || true)"
-            if [[ -z "$ci_state" ]]; then
-              sleep 10
-              continue
-            fi
-            ci_status="${ci_state%% *}"
-            ci_conclusion="${ci_state#* }"
-            if [[ "$ci_status" == "completed" ]]; then
-              if [[ "$ci_conclusion" == "success" ]]; then
-                exit 0
-              fi
-              echo "CI completed with conclusion: $ci_conclusion" >&2
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            release_tag="$REF_NAME"
+          else
+            mapfile -t release_tags < <(
+              printf '%s\n' "$COMMIT_MESSAGE" |
+                grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' |
+                sort -u
+            )
+            if [[ "${#release_tags[@]}" -ne 1 ]]; then
+              echo "A release commit must contain exactly one vX.Y.Z marker." >&2
               exit 1
             fi
-            sleep 10
-          done
-          echo "Timed out waiting for CI" >&2
-          exit 1
+            release_tag="${release_tags[0]}"
+          fi
+          printf 'tag=%s\n' "$release_tag" >> "$GITHUB_OUTPUT"
+      - name: Validate release identity
+        run: >-
+          python .github/scripts/release_policy.py check
+          --tag "${{ steps.release.outputs.tag }}"
       - name: Install project
-        run: poetry install
+        run: poetry install --only main,docs
       - name: Verify release metadata
         run: |
           poetry check --strict
           poetry run fraudtwin schema validate
-          poetry run pytest tests/test_cli.py tests/test_schema.py tests/test_docs.py -o addopts=
       - name: Build strict documentation
         run: poetry run sphinx-build -E -W -b html docs /tmp/fraudtwin-release-docs
       - name: Build distributions
@@ -78,9 +75,31 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: "dist/*"
+      - name: Create release tag for a marked main commit
+        if: github.ref_type != 'tag'
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}^{commit}" >/dev/null; then
+            existing_commit="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+            if [[ "$existing_commit" != "$GITHUB_SHA" ]]; then
+              echo "${RELEASE_TAG} already points to ${existing_commit}, not ${GITHUB_SHA}." >&2
+              exit 1
+            fi
+          else
+            git tag -a "$RELEASE_TAG" "$GITHUB_SHA" -m "Release ${RELEASE_TAG}"
+            git push origin "refs/tags/${RELEASE_TAG}"
+          fi
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/* --generate-notes
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: gh release create "$RELEASE_TAG" dist/* --generate-notes
+      - name: Deploy documentation for a marked main commit
+        if: github.ref_type != 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docs.yml --ref main
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

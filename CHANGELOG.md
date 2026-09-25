@@ -1,6 +1,6 @@
 # Release notes
 
-## 0.34.7 — Release policy reliability
+## 0.34.8 — Release policy reliability
 
 - Fixed version-policy automation so changelog version updates are committed
   together with the package metadata.

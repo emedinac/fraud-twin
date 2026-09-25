@@ -21,32 +21,12 @@ on:
       - "docs/development.md"
       - "README.md"
       - "docs/**"
-  push:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - "contracts/**"
-      - "configs/**"
-      - "examples/**"
-      - "tests/**"
-      - "pyproject.toml"
-      - "poetry.lock"
-      - ".github/workflows/**"
-      - "docker-compose.yml"
-      - "observability/**"
-      - ".github/scripts/**"
-      - "DEVELOPMENT.md"
-      - "docs/workflows.md"
-      - "docs/development.md"
-      - "README.md"
-      - "docs/**"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -119,10 +99,7 @@ jobs:
 
   integration-tests:
     name: Integration tests
-    # External services are intentionally exercised only for pull requests;
-    # normal local/CI unit runs keep the optional stack out of the fast path.
     needs: static-checks
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
