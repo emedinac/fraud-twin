@@ -1,6 +1,6 @@
 [project]
 name = "fraudtwin"
-version = "0.34.4"
+version = "0.34.5"
 description = "Fraud emulator for real-world ML and data pipelines"
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
