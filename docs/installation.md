@@ -31,7 +31,9 @@ the recommended workflow because it records the complete dependency set.
 ### Recommended: Poetry project installation
 
 ```console
-poetry add fraudtwin==0.34.0
+poetry add fraudtwin
+poetry run fraudtwin --help
+# From a repository checkout, validate the initial configuration:
 poetry run fraudtwin config validate configs/minimal.yaml
 ```
 
@@ -43,7 +45,7 @@ python -m venv .venv
 source .venv/bin/activate
 # Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install fraudtwin==0.34.0
+python -m pip install fraudtwin
 fraudtwin --help
 ```
 
