@@ -86,7 +86,7 @@ def test_commit_subjects_follow_the_conventional_commit_allowlist(tmp_path: Path
     subjects.write_text(
         "feat(cli): add command\n"
         "fix: correct output\n"
-        "Revert \"chore: bump version\"\n"
+        'Revert "chore: bump version"\n'
         "Merge branch 'main' into dev\n"
         "Merge pull request #28 from emedinac/dev\n",
         encoding="utf-8",
