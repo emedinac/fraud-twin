@@ -18,7 +18,7 @@ PROJECT_VERSION_RE = re.compile(
 )
 COMMIT_SUBJECT_RE = re.compile(
     r"^(?:feat|fix|refactor|perf|docs|test|build|ci|chore|style|revert)"
-    r"(?:\([^()]+\))?!?:\s+\S.+$"
+    r"(?:\([^()]+\))?!?:\s+\S.*$"
 )
 PACKAGE_PIN_RE = re.compile(
     r"\bfraudtwin(?:==|>=|<=|~=)\s*" r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\b"
