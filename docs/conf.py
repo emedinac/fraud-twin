@@ -42,6 +42,9 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
+html_sidebars = {
+    "index": ["sidebar-docs-nav.html"],
+}
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "tutorials/outputs/*"]
 autosummary_generate = True
 autodoc_member_order = "bysource"
@@ -81,6 +84,9 @@ html_logo = "_static/fraudtwin-mark.svg"
 html_favicon = "_static/fraudtwin-mark.svg"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
+# Keep source files available to the documentation build, but do not expose
+# Sphinx's generated "Show Source" link in the published sidebar.
+html_show_sourcelink = False
 _site_version = globals().get("smv_current_version", "latest")
 if _site_version in {"main", "dev"}:
     _site_version = "latest"
@@ -100,13 +106,6 @@ html_theme_options = {
         "FraudTwin documentation is versioned. Check the version selector before "
         "copying an API example."
     ),
-    "icon_links": [
-        {
-            "name": "GitHub",
-            "url": "https://github.com/emedinac/fraud-twin",
-            "icon": "fa-brands fa-github",
-        },
-    ],
 }
 if os.environ.get("FRAUDTWIN_VERSIONED_BUILD") and not os.environ.get(
     "FRAUDTWIN_SKIP_VERSION_SWITCHER"

@@ -43,27 +43,27 @@ visible instead of silently rewarding them.
 
 ## Quick start
 
-Requirements: Python 3.12+ and Poetry 2.x. See the [installation and support
-matrix](docs/installation.md) for PyPI installs, optional extras, and resource
-expectations.
+Requirements: Python 3.12+. Install the package in an existing project with
+Poetry, or install it directly into a virtual environment with pip:
 
-```bash
-git clone https://github.com/emedinac/fraud-twin.git
-cd fraud-twin
-poetry install
+```console
+# Poetry-managed project
+poetry add fraudtwin
+poetry run fraudtwin --help
 
-# Validate and generate the minimal local run.
-CONFIG=configs/minimal.yaml
-RUNS_DIR=./runs
+# Generate and persist the built-in minimal local run.
+poetry run python -c 'import fraudtwin; run = fraudtwin.generate(write=True, output_dir="runs"); print(f"Run generated: {run.run_id}")'
 
-poetry run fraudtwin config validate "$CONFIG"
-poetry run fraudtwin generate "$CONFIG" --output-dir "$RUNS_DIR"
+# Or a virtual environment managed with pip
+python -m pip install fraudtwin
+fraudtwin --help
+python -c 'import fraudtwin; run = fraudtwin.generate(write=True, output_dir="runs"); print(f"Run generated: {run.run_id}")'
 ```
 
-The command prints an immutable run ID and writes a manifest plus Parquet
-tables. The baseline configuration creates a small payment world with fraud
-disabled. Copy it, enable the fraud and workflow sections, and keep the same
-seed while iterating on a scenario.
+The built-in minimal configuration is validated during generation and writes an
+immutable run manifest plus Parquet tables under `runs/<run-id>/`. For custom
+YAML configurations and repository workflows, see the [installation and support
+matrix](docs/installation.md).
 
 ### Python API
 
@@ -73,18 +73,13 @@ The public API is typed and has two explicit workflows:
 from pathlib import Path
 
 import fraudtwin
-from fraudtwin.config import load_config
-
-config = load_config(Path("configs/minimal.yaml"))
-
 # In-memory: precise IDE autocomplete for entities, behavior, and datasets.
-data = fraudtwin.generate(config)
+data = fraudtwin.generate()
 dataset = data.require_dataset().frame
 print(data.run_id, dataset.shape)
 
 # Persisted: metadata and paths first; load records only when needed.
 run = fraudtwin.generate(
-    config,
     write=True,
     output_dir=Path("runs"),
 )
@@ -187,8 +182,13 @@ Install only what a workflow needs. The base install remains dependency-light.
 | `mlflow`, `serving` | Artifact tracking and the local FastAPI scoring reference service. |
 
 ```bash
-poetry install -E ml -E graph
-poetry install -E kafka -E postgres -E lakehouse -E observability
+# Poetry-managed project
+poetry add fraudtwin --extras ml --extras graph
+poetry add fraudtwin --extras kafka --extras postgres --extras lakehouse --extras observability
+
+# Or with pip
+python -m pip install "fraudtwin[ml,graph]"
+python -m pip install "fraudtwin[kafka,postgres,lakehouse,observability]"
 ```
 
 The optional Spark reference pipeline is documented in
