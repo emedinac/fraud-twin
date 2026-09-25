@@ -1,5 +1,6 @@
 """Customer behavior profiles and their generated payment dataset."""
 
+import time
 from dataclasses import dataclass, field, replace
 from random import Random
 from typing import TYPE_CHECKING, Literal
@@ -47,6 +48,7 @@ from fraudtwin.simulation.payments import (
     count_pix_lifecycle_events,
 )
 from fraudtwin.simulation.quality import QualityFaultInjector
+from fraudtwin.timing import StageMetrics, finish_stage, measure_stage
 
 if TYPE_CHECKING:
     from fraudtwin.campaign_dynamics import DynamicCampaignDataset
@@ -220,14 +222,22 @@ class BehaviorGenerator:
         entities: EntityDataset,
         simulation_run_id: str | None = None,
         calibration: ResolvedCalibration | None = None,
+        stage_timings: StageMetrics | None = None,
     ) -> None:
         self.config = config
         self.entities = entities
         self.simulation_run_id = simulation_run_id
         self.calibration = calibration
+        self.stage_timings = stage_timings
+        self._scale_features = frozenset(config.scale.features) if config.scale.enabled else None
         self.merchant_categories = tuple(
             sorted({merchant.merchant_category_code for merchant in entities.merchants})
         )
+
+    def _feature_enabled(self, name: str) -> bool:
+        """Return whether a scale-only stage is enabled for this run."""
+
+        return self._scale_features is None or name in self._scale_features
 
     def _profile_devices(self, rng: Random) -> tuple[str, ...]:
         limit = self.config.behavior.preferred_device_limit
@@ -325,17 +335,22 @@ class BehaviorGenerator:
     def generate(self) -> BehaviorDataset:
         """Generate profiles, base payments, fraud scenarios, and events."""
 
-        profiles = self.generate_profiles()
-        payment_dataset = PaymentGenerator(
-            self.config,
-            self.entities.accounts,
-            self.entities.cards,
-            self.entities.merchants,
-            self.entities.devices,
-            self.entities.pix_keys,
-            simulation_run_id=self.simulation_run_id,
-            calibration=self.calibration,
-        ).generate(profiles)
+        with measure_stage(self.stage_timings, "profile_generation"):
+            profiles = self.generate_profiles()
+        with measure_stage(self.stage_timings, "payments_lifecycle"):
+            payment_dataset = PaymentGenerator(
+                self.config,
+                self.entities.accounts,
+                self.entities.cards,
+                self.entities.merchants,
+                self.entities.devices,
+                self.entities.pix_keys,
+                simulation_run_id=self.simulation_run_id,
+                calibration=self.calibration,
+                include_lifecycle=self._feature_enabled("lifecycle"),
+                include_ledger=self._feature_enabled("ledger"),
+            ).generate(profiles)
+        downstream_started = time.perf_counter()
         counterfactual_dataset = (
             generate_counterfactuals(
                 self.config,
@@ -349,26 +364,48 @@ class BehaviorGenerator:
             if self.config.counterfactual.active
             else None
         )
-        fraud_dataset = FraudScenarioGenerator(
-            self.config,
-            self.entities.accounts,
-            self.entities.cards,
-            self.entities.merchants,
-            self.entities.devices,
-            self.entities.pix_keys,
-            payment_dataset,
-            simulation_run_id=self.simulation_run_id,
-        ).generate()
-        graph_dataset = GraphFraudGenerator(
-            self.config,
-            self.entities.accounts,
-            self.entities.devices,
-            self.entities.network_endpoints,
-            fraud_dataset,
-            simulation_run_id=self.simulation_run_id,
-            merchants=self.entities.merchants,
-            pix_keys=self.entities.pix_keys,
-        ).generate()
+        if self._feature_enabled("fraud") and self.config.fraud.enabled:
+            fraud_dataset = FraudScenarioGenerator(
+                self.config,
+                self.entities.accounts,
+                self.entities.cards,
+                self.entities.merchants,
+                self.entities.devices,
+                self.entities.pix_keys,
+                payment_dataset,
+                simulation_run_id=self.simulation_run_id,
+            ).generate()
+        else:
+            fraud_dataset = FraudDataset(
+                payments=payment_dataset.payments,
+                payment_events=payment_dataset.payment_events,
+                ledger_entries=payment_dataset.ledger_entries,
+                fraud_records=(),
+            )
+        if self._feature_enabled("graph") and self.config.graph.enabled:
+            graph_dataset = GraphFraudGenerator(
+                self.config,
+                self.entities.accounts,
+                self.entities.devices,
+                self.entities.network_endpoints,
+                fraud_dataset,
+                simulation_run_id=self.simulation_run_id,
+                merchants=self.entities.merchants,
+                pix_keys=self.entities.pix_keys,
+            ).generate()
+        else:
+            graph_dataset = GraphFraudDataset(
+                payments=fraud_dataset.payments,
+                payment_events=fraud_dataset.payment_events,
+                ledger_entries=fraud_dataset.ledger_entries,
+                # ``transform_generated_data`` receives baseline fraud records
+                # separately; the graph dataset contributes only graph-stage
+                # records.  Keep this aligned with GraphFraudGenerator's
+                # disabled-stage behavior.
+                fraud_records=(),
+                memberships=(),
+                patterns=(),
+            )
         dynamic_dataset: DynamicCampaignDataset | None = None
         if self.config.campaign_dynamics.active:
             from fraudtwin.campaign_dynamics import evolve_campaigns
@@ -432,7 +469,7 @@ class BehaviorGenerator:
         ).generate()
         label_observations: tuple[LabelObservation, ...] = ()
         final_observed_labels: tuple[FinalObservedLabel, ...] = ()
-        if self.config.labels.enabled:
+        if self.config.labels.enabled and self._feature_enabled("labels"):
             workflow_alerts = workflow_dataset.alerts
             label_observations, final_observed_labels = apply_label_observation(
                 self.config,
@@ -502,6 +539,7 @@ class BehaviorGenerator:
         dataset = QualityFaultInjector(self.config).apply(dataset)
         if resolve_difficulty(self.config).enabled or resolve_camouflage(self.config).enabled:
             dataset = _mask_difficulty_event_truth(dataset)
+        finish_stage(self.stage_timings, "fraud_graph_quality", downstream_started)
         return dataset
 
 

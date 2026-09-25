@@ -46,6 +46,13 @@ from fraudtwin.seed import create_stream_rng
 _ID_WIDTH = 8
 T = TypeVar("T")
 Record = TypeVar("Record")
+type ProfileTimeCache = tuple[
+    tuple[int, ...],
+    tuple[date, ...],
+    tuple[float, ...],
+    dict[date, tuple[int, ...]],
+    dict[date, tuple[float, ...]],
+]
 
 
 def _weighted_choice(rng: Random, values: tuple[T, ...], weights: tuple[float, ...]) -> T:
@@ -167,6 +174,8 @@ class PaymentGenerator:
         pix_keys: tuple[PixKey, ...] = (),
         simulation_run_id: str | None = None,
         calibration: ResolvedCalibration | None = None,
+        include_lifecycle: bool = True,
+        include_ledger: bool = True,
     ) -> None:
         self.config = config
         self.start = config.simulation.start.astimezone(UTC)
@@ -175,12 +184,71 @@ class PaymentGenerator:
         self.merchants = merchants
         self.simulation_run_id = simulation_run_id or self._stable_run_id()
         self.calibration = calibration
+        self.include_lifecycle = include_lifecycle
+        self.include_ledger = include_ledger
         self.accounts_by_customer = _group_by(accounts, lambda account: account.customer_id)
         self.accounts_by_institution = _group_by(accounts, lambda account: account.institution_id)
         self.cards_by_customer = _group_by(cards, lambda card: card.customer_id)
         self.accounts_by_id = {account.account_id: account for account in accounts}
         self.devices_by_id = {device.device_id: device for device in devices}
         self.pix_keys_by_account = _group_by(pix_keys, lambda key: key.account_id)
+        self._configured_rails = tuple(
+            rail for rail, weight in config.payments.rails.items() if weight > 0
+        )
+        self._active_accounts = tuple(account for account in accounts if account.status == "ACTIVE")
+        self._active_accounts_by_customer = {
+            customer_id: tuple(
+                account for account in customer_accounts if account.status == "ACTIVE"
+            )
+            for customer_id, customer_accounts in self.accounts_by_customer.items()
+        }
+        self._active_pix_accounts = tuple(
+            account
+            for account in self._active_accounts
+            if account.account_id in self.pix_keys_by_account
+        )
+        self._active_pix_key_accounts = frozenset(
+            account.account_id
+            for account in self._active_accounts
+            if any(
+                key.status == "ACTIVE"
+                for key in self.pix_keys_by_account.get(account.account_id, ())
+            )
+        )
+        self._active_payees_by_account = {
+            account.account_id: tuple(
+                candidate
+                for candidate in self._active_accounts
+                if candidate.account_id != account.account_id
+            )
+            for account in self._active_accounts
+        }
+        self._active_pix_key_payees_by_account = {
+            account.account_id: tuple(
+                candidate
+                for candidate in self._active_payees_by_account[account.account_id]
+                if candidate.account_id in self._active_pix_key_accounts
+            )
+            for account in self._active_accounts
+        }
+        self._active_cards_by_customer = {
+            customer_id: tuple(
+                card
+                for card in customer_cards
+                if card.status == "ACTIVE" and card.expires_at > self.start
+            )
+            for customer_id, customer_cards in self.cards_by_customer.items()
+        }
+        self._eligible_rails_by_customer: dict[str, tuple[PaymentRail, ...]] = {}
+        self._profile_time_cache: dict[str, ProfileTimeCache] = {}
+        self._profile_merchant_cache: dict[
+            str, tuple[tuple[Merchant, ...], tuple[float, ...]] | None
+        ] = {}
+        self._profile_device_cache: dict[str, tuple[str, ...]] = {}
+        self._profile_median_cache: dict[str, float] = {}
+        self._allowed_months = frozenset(config.behavior.travel_period_months)
+        self._holiday_dates = frozenset(config.behavior.holiday_dates)
+        self._merchant_active_hours = frozenset(config.behavior.merchant_active_hours)
         self._days = self._simulation_days()
         self._valid_hours_by_day = self._build_valid_hours_by_day()
         self._card_max_delay_seconds = config.card_lifecycle.maximum_delay_seconds
@@ -197,6 +265,37 @@ class PaymentGenerator:
             if calibration is not None and calibration.enabled
             else None
         )
+        self._calibrated_amount_quantiles = self._resolve_calibrated_amount_quantiles()
+        self._calibrated_seasonality_weights = self._resolve_calibrated_seasonality_weights()
+
+    def _resolve_calibrated_amount_quantiles(self) -> tuple[float, ...]:
+        if (
+            self.calibration is None
+            or not self.calibration.enabled
+            or self.calibration.profile is None
+            or "amount_distribution" not in self.config.calibration.summary_names
+        ):
+            return ()
+        distribution = next(
+            (item for item in self.calibration.profile.distributions if item.name == "amount"),
+            None,
+        )
+        return tuple(distribution.quantiles) if distribution and distribution.quantiles else ()
+
+    def _resolve_calibrated_seasonality_weights(self) -> tuple[float, ...]:
+        if (
+            self.calibration is None
+            or not self.calibration.enabled
+            or self.calibration.profile is None
+            or "seasonality" not in self.config.calibration.summary_names
+        ):
+            return ()
+        seasonality = next(
+            (item for item in self.calibration.profile.summaries if item.name == "seasonality"),
+            None,
+        )
+        values = seasonality.parameters.get("hour_weights") if seasonality else None
+        return tuple(cast(tuple[float, ...], values)) if values else ()
 
     def _stable_run_id(self) -> str:
         # Lifecycle settings must not change the base payment stream ID.
@@ -204,6 +303,7 @@ class PaymentGenerator:
             self.config,
             include_card_lifecycle=False,
             include_pix_lifecycle=False,
+            include_scale_execution=False,
         )
         return f"SIM-{stable_hash[:16]}"
 
@@ -226,49 +326,41 @@ class PaymentGenerator:
     def _eligible_profiles(
         self, profiles: tuple[BehaviorProfile, ...]
     ) -> tuple[BehaviorProfile, ...]:
-        eligible = tuple(
-            profile
-            for profile in profiles
-            if profile.customer_id in self.accounts_by_customer and self._available_rails(profile)
-        )
+        eligible_profiles: list[BehaviorProfile] = []
+        for profile in profiles:
+            available_rails = self._available_rails(profile)
+            if profile.customer_id not in self.accounts_by_customer or not available_rails:
+                continue
+            self._eligible_rails_by_customer[profile.customer_id] = available_rails
+            self._build_profile_cache(profile)
+            eligible_profiles.append(profile)
+        eligible = tuple(eligible_profiles)
         if self.config.payments.daily_target and not eligible:
             raise ValueError("payment generation requires at least one customer with an account")
         return eligible
 
     def _available_rails(self, profile: BehaviorProfile) -> tuple[PaymentRail, ...]:
-        configured = tuple(
-            rail for rail, weight in self.config.payments.rails.items() if weight > 0
-        )
         available: list[PaymentRail] = []
-        for rail in configured:
-            if (
-                rail == "CARD"
-                and any(
-                    card.status == "ACTIVE" and card.expires_at > self.start
-                    for card in self.cards_by_customer.get(profile.customer_id, ())
-                )
-                and self.merchants
-            ):
+        customer_accounts = self._active_accounts_by_customer.get(profile.customer_id, ())
+        customer_cards = self._active_cards_by_customer.get(profile.customer_id, ())
+        has_pix_key = any(
+            account.account_id in self.pix_keys_by_account for account in customer_accounts
+        )
+        for rail in self._configured_rails:
+            if rail == "CARD" and customer_cards and self.merchants:
                 available.append(rail)
             elif (
                 rail in ("PIX", "ACCOUNT_TRANSFER")
-                and any(
-                    account.status == "ACTIVE"
-                    for account in self.accounts_by_customer.get(profile.customer_id, ())
-                )
-                and (
-                    rail == "ACCOUNT_TRANSFER"
-                    or any(
-                        account.account_id in self.pix_keys_by_account
-                        for account in self.accounts_by_customer[profile.customer_id]
-                    )
-                )
+                and customer_accounts
+                and (rail == "ACCOUNT_TRANSFER" or has_pix_key)
             ):
                 available.append(rail)
         return tuple(available)
 
     def _choose_rail(self, profile: BehaviorProfile, rng: Random) -> PaymentRail:
-        available = self._available_rails(profile)
+        available = self._eligible_rails_by_customer.get(profile.customer_id)
+        if available is None:
+            available = self._available_rails(profile)
         if not available:
             raise ValueError("payment generation has no configured rail with required entities")
         weights = tuple(
@@ -282,68 +374,119 @@ class PaymentGenerator:
         )
         return _weighted_choice(rng, available, weights)
 
-    def _sample_time(self, profile: BehaviorProfile, rng: Random) -> datetime:
+    def _build_profile_cache(self, profile: BehaviorProfile) -> None:
+        """Build immutable lookup data used by every payment for a profile."""
+
+        profile_id = profile.behavior_profile_id
+        if profile_id in self._profile_time_cache:
+            return
+
         active_hours = tuple(hour for hour, weight in enumerate(profile.hour_weights) if weight > 0)
-        behavior = self.config.behavior
-        allowed_months = set(behavior.travel_period_months)
-        holiday_dates = set(behavior.holiday_dates)
-        day_candidates = tuple(
-            current_day
-            for current_day in self._days
-            if self._valid_hours_by_day[current_day] and current_day.month in allowed_months
-        )
-        day_weights = []
-        for current_day in day_candidates:
+        day_candidates: list[date] = []
+        day_weights: list[float] = []
+        valid_hours_by_day: dict[date, tuple[int, ...]] = {}
+        hour_weights_by_day: dict[date, tuple[float, ...]] = {}
+        for current_day in self._days:
+            valid_hours = self._valid_hours_by_day[current_day]
+            if not valid_hours or current_day.month not in self._allowed_months:
+                continue
             weight = profile.weekday_weights[current_day.weekday()]
             if current_day.day <= 3:
-                weight *= behavior.beginning_of_month_weight
+                weight *= self.config.behavior.beginning_of_month_weight
             if current_day.day >= 28:
-                weight *= behavior.end_of_month_weight
-            if current_day.day in behavior.payday_days:
-                weight *= behavior.payday_weight
-            if current_day.isoformat() in holiday_dates:
-                weight *= behavior.holiday_weight
+                weight *= self.config.behavior.end_of_month_weight
+            if current_day.day in self.config.behavior.payday_days:
+                weight *= self.config.behavior.payday_weight
+            if current_day.isoformat() in self._holiday_dates:
+                weight *= self.config.behavior.holiday_weight
             weight *= sum(
                 profile.hour_weights[hour]
-                for hour in self._valid_hours_by_day[current_day]
-                if hour in behavior.merchant_active_hours
+                for hour in valid_hours
+                if hour in self._merchant_active_hours
             )
+            day_candidates.append(current_day)
             day_weights.append(weight)
+            selected_hours = tuple(
+                hour
+                for hour in valid_hours
+                if hour in active_hours and hour in self._merchant_active_hours
+            )
+            selected_hours = selected_hours or valid_hours
+            selected_weights = tuple(profile.hour_weights[hour] for hour in selected_hours)
+            if (
+                self._calibrated_seasonality_weights
+                and sum(self._calibrated_seasonality_weights[hour] for hour in selected_hours) > 0
+            ):
+                selected_weights = tuple(
+                    self._calibrated_seasonality_weights[hour]
+                    * max(profile.hour_weights[hour], 0.01)
+                    for hour in selected_hours
+                )
+            valid_hours_by_day[current_day] = selected_hours
+            hour_weights_by_day[current_day] = selected_weights
+
+        matching_merchants = tuple(
+            merchant
+            for merchant in self.merchants
+            if merchant.merchant_category_code in profile.merchant_category_preferences
+        )
+        merchant_weights_by_code = dict(
+            zip(
+                profile.merchant_category_preferences,
+                profile.merchant_category_weights,
+                strict=True,
+            )
+        )
+        matching_weights = tuple(
+            merchant_weights_by_code[merchant.merchant_category_code]
+            for merchant in matching_merchants
+        )
+        self._profile_merchant_cache[profile_id] = (
+            (matching_merchants, matching_weights)
+            if matching_merchants and sum(matching_weights) > 0
+            else None
+        )
+        self._profile_device_cache[profile_id] = tuple(
+            device_id
+            for device_id in profile.preferred_device_ids
+            if device_id in self.devices_by_id
+        )
+        median_by_level = {
+            "LOW": 0.35,
+            "MEDIUM": 0.75,
+            "HIGH": 1.2,
+        }
+        self._profile_median_cache[profile_id] = max(
+            self.config.behavior.amount_min,
+            profile.monthly_spending_budget / 30.0 * median_by_level[profile.spending_level],
+        )
+        self._profile_time_cache[profile_id] = (
+            active_hours,
+            tuple(day_candidates),
+            tuple(day_weights),
+            valid_hours_by_day,
+            hour_weights_by_day,
+        )
+
+    def _sample_time(self, profile: BehaviorProfile, rng: Random) -> datetime:
+        if profile.behavior_profile_id not in self._profile_time_cache:
+            self._build_profile_cache(profile)
+        (
+            _,
+            day_candidates,
+            day_weights,
+            valid_hours_by_day,
+            hour_weights_by_day,
+        ) = self._profile_time_cache[profile.behavior_profile_id]
         if not day_candidates:
             seconds = rng.randrange(max(1, int((self.end - self.start).total_seconds())))
             return self.start + timedelta(seconds=seconds)
         if sum(day_weights) <= 0:
-            day_weights = [1.0] * len(day_candidates)
+            day_weights = (1.0,) * len(day_candidates)
 
-        current_day = _weighted_choice(rng, tuple(day_candidates), tuple(day_weights))
-        valid_hours = tuple(
-            hour
-            for hour in self._valid_hours_by_day[current_day]
-            if hour in active_hours and hour in behavior.merchant_active_hours
-        )
-        if not valid_hours:
-            valid_hours = tuple(self._valid_hours_by_day[current_day])
-        hour_weights = tuple(profile.hour_weights[hour] for hour in valid_hours)
-        if (
-            self.calibration is not None
-            and self.calibration.enabled
-            and self.calibration.profile
-            and "seasonality" in self.config.calibration.summary_names
-        ):
-            seasonality = next(
-                (item for item in self.calibration.profile.summaries if item.name == "seasonality"),
-                None,
-            )
-            calibrated_hours = (
-                cast(tuple[float, ...], seasonality.parameters["hour_weights"])
-                if seasonality and "hour_weights" in seasonality.parameters
-                else ()
-            )
-            if calibrated_hours and sum(calibrated_hours[hour] for hour in valid_hours) > 0:
-                hour_weights = tuple(
-                    calibrated_hours[hour] * max(weight, 0.01)
-                    for hour, weight in zip(valid_hours, hour_weights, strict=True)
-                )
+        current_day: date = _weighted_choice(rng, day_candidates, tuple(day_weights))
+        valid_hours = valid_hours_by_day[current_day]
+        hour_weights = hour_weights_by_day[current_day]
         timing_rng = self._calibrated_time_rng or rng
         hour = _weighted_choice(timing_rng, valid_hours, hour_weights)
         event_time = datetime.combine(current_day, time(hour), tzinfo=UTC) + timedelta(
@@ -356,33 +499,20 @@ class PaymentGenerator:
         return event_time
 
     def _sample_amount(self, profile: BehaviorProfile, rng: Random) -> float:
-        if (
-            self.calibration is not None
-            and self.calibration.enabled
-            and self.calibration.profile
-            and "amount_distribution" in self.config.calibration.summary_names
-        ):
-            distribution = next(
-                (item for item in self.calibration.profile.distributions if item.name == "amount"),
-                None,
+        if self._calibrated_amount_quantiles:
+            assert self._calibrated_amount_rng is not None
+            sampled = self._calibrated_amount_rng.choice(self._calibrated_amount_quantiles)
+            return round(
+                min(
+                    self.config.behavior.amount_max,
+                    max(self.config.behavior.amount_min, sampled),
+                ),
+                2,
             )
-            if distribution and distribution.quantiles:
-                assert self._calibrated_amount_rng is not None
-                sampled = self._calibrated_amount_rng.choice(distribution.quantiles)
-                return round(
-                    min(
-                        self.config.behavior.amount_max,
-                        max(self.config.behavior.amount_min, sampled),
-                    ),
-                    2,
-                )
-        daily_budget = profile.monthly_spending_budget / 30.0
-        median_by_level = {
-            "LOW": daily_budget * 0.35,
-            "MEDIUM": daily_budget * 0.75,
-            "HIGH": daily_budget * 1.2,
-        }
-        median = max(self.config.behavior.amount_min, median_by_level[profile.spending_level])
+        median = self._profile_median_cache.get(profile.behavior_profile_id)
+        if median is None:
+            self._build_profile_cache(profile)
+            median = self._profile_median_cache[profile.behavior_profile_id]
         sampled_amount = math.exp(rng.gauss(math.log(median), 0.65))
         bounded_amount = min(
             self.config.behavior.amount_max,
@@ -410,57 +540,23 @@ class PaymentGenerator:
         return min(self._sample_time(profile, rng), latest)
 
     def _merchant(self, profile: BehaviorProfile, rng: Random) -> Merchant:
-        merchants = self.merchants
-        if profile.merchant_category_preferences:
-            preferred = set(profile.merchant_category_preferences)
-            matching = tuple(
-                merchant for merchant in merchants if merchant.merchant_category_code in preferred
-            )
-            if matching:
-                weights_by_code = dict(
-                    zip(
-                        profile.merchant_category_preferences,
-                        profile.merchant_category_weights,
-                        strict=True,
-                    )
-                )
-                weights = tuple(
-                    weights_by_code[merchant.merchant_category_code] for merchant in matching
-                )
-                if sum(weights) > 0:
-                    return _weighted_choice(rng, matching, weights)
-        return rng.choice(merchants)
+        cached = self._profile_merchant_cache.get(profile.behavior_profile_id)
+        if cached is not None:
+            matching, weights = cached
+            return _weighted_choice(rng, matching, weights)
+        return rng.choice(self.merchants)
 
     def _device_id(self, profile: BehaviorProfile, rng: Random) -> str | None:
-        available = tuple(
-            device_id
-            for device_id in profile.preferred_device_ids
-            if device_id in self.devices_by_id
-        )
+        available = self._profile_device_cache.get(profile.behavior_profile_id, ())
         return rng.choice(available) if available else None
 
     def _payee_account(
         self, payer_account_id: str, rng: Random, *, require_pix_key: bool = False
     ) -> Account:
-        alternatives = tuple(
-            account
-            for account in self.accounts
-            if account.account_id != payer_account_id and account.status == "ACTIVE"
-        )
+        alternatives = self._active_payees_by_account.get(payer_account_id, ())
         if require_pix_key:
-            keyed = tuple(
-                account
-                for account in alternatives
-                if account.account_id in self.pix_keys_by_account
-                and any(
-                    key.status == "ACTIVE" for key in self.pix_keys_by_account[account.account_id]
-                )
-            )
-            alternatives = keyed or tuple(
-                account
-                for account in self.accounts
-                if account.status == "ACTIVE" and account.account_id in self.pix_keys_by_account
-            )
+            alternatives = self._active_pix_key_payees_by_account.get(payer_account_id, ())
+            alternatives = alternatives or self._active_pix_accounts
         return rng.choice(alternatives or self.accounts)
 
     def _initiated_at(self, profile: BehaviorProfile, rail: PaymentRail, rng: Random) -> datetime:
@@ -491,8 +587,8 @@ class PaymentGenerator:
     ) -> _PaymentDetails:
         cards = tuple(
             card
-            for card in self.cards_by_customer[profile.customer_id]
-            if card.status == "ACTIVE" and card.expires_at > initiated_at
+            for card in self._active_cards_by_customer[profile.customer_id]
+            if card.expires_at > initiated_at
         )
         if not cards:
             raise ValueError("card payment requires an active, unexpired card")
@@ -547,19 +643,12 @@ class PaymentGenerator:
         amount: float,
         rng: Random,
     ) -> _PaymentDetails:
-        payer_candidates = tuple(
-            account
-            for account in self.accounts_by_customer[profile.customer_id]
-            if account.status == "ACTIVE"
-        )
+        payer_candidates = self._active_accounts_by_customer[profile.customer_id]
         if rail == "PIX":
             keyed_payers = tuple(
                 account
                 for account in payer_candidates
-                if any(
-                    key.status == "ACTIVE"
-                    for key in self.pix_keys_by_account.get(account.account_id, ())
-                )
+                if account.account_id in self._active_pix_key_accounts
             )
             payer_candidates = keyed_payers or payer_candidates
         payer_account = rng.choice(payer_candidates)
@@ -921,24 +1010,31 @@ class PaymentGenerator:
         payments: list[Payment] = []
         events: list[PaymentEvent] = []
         ledger_specs: list[tuple[PaymentEvent, str, str]] = []
-        lifecycle_rng = create_stream_rng(self.config.simulation.seed, "milestone-4:card-lifecycle")
-        pix_lifecycle_rng = create_stream_rng(
-            self.config.simulation.seed, "milestone-5:pix-lifecycle"
+        lifecycle_rng = (
+            create_stream_rng(self.config.simulation.seed, "milestone-4:card-lifecycle")
+            if self.include_lifecycle
+            else None
+        )
+        pix_lifecycle_rng = (
+            create_stream_rng(self.config.simulation.seed, "milestone-5:pix-lifecycle")
+            if self.include_lifecycle
+            else None
         )
         for payment, event in self.iter_generate(profiles):
-            if payment.payment_rail == "CARD":
+            if self.include_lifecycle and payment.payment_rail == "CARD":
+                assert lifecycle_rng is not None
                 payment, payment_events = self._card_lifecycle(payment, event, lifecycle_rng)
-                events.extend(payment_events)
-                ledger_specs.extend(self._ledger_specs(payment, payment_events))
-            elif payment.payment_rail == "PIX":
+            elif self.include_lifecycle and payment.payment_rail == "PIX":
+                assert pix_lifecycle_rng is not None
                 payment, payment_events = self._pix_lifecycle(payment, event, pix_lifecycle_rng)
-                events.extend(payment_events)
-                ledger_specs.extend(self._ledger_specs(payment, payment_events))
             else:
                 payment_events = (event,)
-                events.append(event)
+            events.extend(payment_events)
+            if self.include_ledger:
                 ledger_specs.extend(self._ledger_specs(payment, payment_events))
             payments.append(payment)
         return PaymentDataset(
-            tuple(payments), tuple(events), self._materialize_ledger(ledger_specs)
+            tuple(payments),
+            tuple(events),
+            self._materialize_ledger(ledger_specs) if self.include_ledger else (),
         )

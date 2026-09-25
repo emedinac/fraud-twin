@@ -1,8 +1,13 @@
 """High-level Python API for generating deterministic FraudTwin runs."""
 
 import hashlib
-from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
+import json
+import sqlite3
+import tempfile
+import time
+from collections import Counter
+from collections.abc import Iterable, Iterator, Mapping
+from dataclasses import dataclass, field
 from datetime import timedelta
 from importlib.resources import files
 from pathlib import Path
@@ -20,7 +25,11 @@ from fraudtwin.calibration import (
 )
 from fraudtwin.config import SimulationRunConfig, config_hash, load_config
 from fraudtwin.difficulty import difficulty_metadata
-from fraudtwin.domain import LedgerEntry
+from fraudtwin.domain import (
+    CARD_LIFECYCLE_EVENT_TYPES,
+    PIX_LIFECYCLE_EVENT_TYPES,
+    LedgerEntry,
+)
 from fraudtwin.graph import build_graph
 from fraudtwin.kafka import publisher_from_environment
 from fraudtwin.manifest import RunManifest, create_manifest, write_manifest
@@ -52,6 +61,7 @@ from fraudtwin.simulation.parquet import (
 )
 from fraudtwin.simulation.payments import PaymentGenerator
 from fraudtwin.storage import storage_for
+from fraudtwin.timing import StageMetrics, finish_stage, measure_stage
 
 
 @dataclass(frozen=True)
@@ -62,6 +72,7 @@ class GeneratedData:
     entities: EntityDataset
     behavior: BehaviorDataset
     dataset: PointInTimeDataset | None = None
+    stage_timings: StageMetrics = field(default_factory=dict)
 
     @property
     def run_id(self) -> str:
@@ -98,6 +109,7 @@ class GeneratedRun:
     manifest_path: Path
     dataset_path: Path | None = None
     dataset_manifest_path: Path | None = None
+    stage_timings: StageMetrics = field(default_factory=dict)
 
     @property
     def run_id(self) -> str:
@@ -171,7 +183,7 @@ def _graph_metadata(
         return {}
     metadata: dict[str, object] = {
         "enabled": True,
-        "configuration_hash": config_hash(config),
+        "configuration_hash": config_hash(config, include_scale_execution=False),
         "schema_version": "2",
         "node_count": sum(entities.counts.values()),
         "edge_count": 0,
@@ -420,10 +432,12 @@ def _label_observation_metadata(
     return metadata
 
 
-def _logical_row(table_name: str, row: BaseModel, ordinal: int) -> dict[str, object]:
+def _logical_row(
+    table_name: str, row: BaseModel | Mapping[str, object], ordinal: int
+) -> dict[str, object]:
     """Add the stable routing fields shared by both scale record iterators."""
 
-    values = row.model_dump(mode="json")
+    values = row.model_dump(mode="json") if isinstance(row, BaseModel) else dict(row)
     source_id = next(
         (str(value) for key, value in values.items() if key.endswith("_id") and value),
         f"row-{ordinal:08d}",
@@ -485,6 +499,7 @@ def iter_scale_records(
     entities: EntityDataset,
     *,
     simulation_run_id: str,
+    stage_timings: StageMetrics | None = None,
 ) -> Iterator[dict[str, object]]:
     """Stream canonical entities, profiles, payments, events, and ledger rows.
 
@@ -496,7 +511,8 @@ def iter_scale_records(
     """
 
     behavior_generator = BehaviorGenerator(config, entities, simulation_run_id=simulation_run_id)
-    profiles = behavior_generator.generate_profiles()
+    with measure_stage(stage_timings, "profile_generation"):
+        profiles = behavior_generator.generate_profiles()
 
     def logical_rows(table_name: str, rows: Iterable[BaseModel]) -> Iterator[dict[str, object]]:
         for ordinal, row in enumerate(rows):
@@ -513,48 +529,130 @@ def iter_scale_records(
         entities.devices,
         entities.pix_keys,
         simulation_run_id=simulation_run_id,
+        include_lifecycle=(not config.scale.enabled or "lifecycle" in config.scale.features),
+        include_ledger=(not config.scale.enabled or "ledger" in config.scale.features),
     )
     lifecycle_rng = create_stream_rng(config.simulation.seed, "milestone-4:card-lifecycle")
     pix_lifecycle_rng = create_stream_rng(config.simulation.seed, "milestone-5:pix-lifecycle")
-    balances = {account.account_id: account.ledger_balance for account in entities.accounts}
-    ledger_number = 0
-    for payment, initial_event in payment_generator.iter_generate(profiles):
-        if payment.payment_rail == "CARD":
-            payment, events = payment_generator._card_lifecycle(  # noqa: SLF001
-                payment, initial_event, lifecycle_rng
-            )
-        elif payment.payment_rail == "PIX":
-            payment, events = payment_generator._pix_lifecycle(  # noqa: SLF001
-                payment, initial_event, pix_lifecycle_rng
-            )
-        else:
-            events = (initial_event,)
-        yield from logical_rows("payments", (payment,))
-        yield from logical_rows("payment_events", events)
-        for event, account_id, raw_entry_type in payment_generator._ledger_specs(  # noqa: SLF001
-            payment, events
-        ):
+    include_lifecycle = not config.scale.enabled or "lifecycle" in config.scale.features
+    include_ledger = not config.scale.enabled or "ledger" in config.scale.features
+    payment_stage_started = time.perf_counter()
+    # The compatibility generator exports complete tables in this order:
+    # payments, events, then ledger entries.  Stage those rows on disk while
+    # payments are generated so the streaming path can retain that contract
+    # without retaining all payment objects in memory.
+    with tempfile.TemporaryDirectory(prefix="fraudtwin-scale-") as temporary_dir:
+        temporary_root = Path(temporary_dir)
+        payments_path = temporary_root / "payments.jsonl"
+        events_path = temporary_root / "payment-events.jsonl"
+        ledger_database = sqlite3.connect(temporary_root / "ledger.sqlite")
+        ledger_database.execute(
+            "CREATE TABLE ledger_specs ("
+            "processed_at TEXT NOT NULL, event_id TEXT NOT NULL, account_id TEXT NOT NULL, "
+            "entry_type TEXT NOT NULL, event_json TEXT NOT NULL)"
+        )
+        try:
+            with (
+                payments_path.open("w", encoding="utf-8") as payments_stream,
+                events_path.open("w", encoding="utf-8") as events_stream,
+            ):
+                for payment, initial_event in payment_generator.iter_generate(profiles):
+                    if include_lifecycle and payment.payment_rail == "CARD":
+                        payment, events = payment_generator._card_lifecycle(  # noqa: SLF001
+                            payment, initial_event, lifecycle_rng
+                        )
+                    elif include_lifecycle and payment.payment_rail == "PIX":
+                        payment, events = payment_generator._pix_lifecycle(  # noqa: SLF001
+                            payment, initial_event, pix_lifecycle_rng
+                        )
+                    else:
+                        events = (initial_event,)
+                    payments_stream.write(
+                        json.dumps(payment.model_dump(mode="json"), separators=(",", ":")) + "\n"
+                    )
+                    for event in events:
+                        event_values = event.model_dump(mode="json")
+                        events_stream.write(json.dumps(event_values, separators=(",", ":")) + "\n")
+                    if include_ledger:
+                        for event, account_id, raw_entry_type in payment_generator._ledger_specs(  # noqa: SLF001
+                            payment, events
+                        ):
+                            ledger_database.execute(
+                                "INSERT INTO ledger_specs "
+                                "(processed_at, event_id, account_id, entry_type, event_json) "
+                                "VALUES (?, ?, ?, ?, ?)",
+                                (
+                                    event.processed_at.isoformat(),
+                                    event.event_id,
+                                    account_id,
+                                    raw_entry_type,
+                                    json.dumps(
+                                        event.model_dump(mode="json"), separators=(",", ":")
+                                    ),
+                                ),
+                            )
+                ledger_database.commit()
+        finally:
+            finish_stage(stage_timings, "payments_lifecycle", payment_stage_started)
+
+        with payments_path.open(encoding="utf-8") as payments_stream:
+            for ordinal, line in enumerate(payments_stream):
+                values = json.loads(line)
+                logical = _logical_row("payments", values, ordinal)
+                yield logical
+                payer = logical.get("payer_account_id")
+                payee = logical.get("payee_account_id")
+                if payer and payee and payer != payee:
+                    payment_id = str(logical["payment_id"])
+                    yield {
+                        "logical_id": f"transfer_reconciliation:{payment_id}",
+                        "logical_type": "transfer_reconciliation",
+                        "source_id": payment_id,
+                        "payment_id": payment_id,
+                        "payer_account_id": str(payer),
+                        "payee_account_id": str(payee),
+                        "amount": logical.get("amount"),
+                        "partition_key": str(payee),
+                        "reconciliation": "PAYEE_SIDE",
+                    }
+
+        with events_path.open(encoding="utf-8") as events_stream:
+            for ordinal, line in enumerate(events_stream):
+                yield _logical_row("payment_events", json.loads(line), ordinal)
+
+        balances = {account.account_id: account.ledger_balance for account in entities.accounts}
+        ledger_number = 0
+        cursor = ledger_database.execute(
+            "SELECT event_json, account_id, entry_type FROM ledger_specs "
+            "ORDER BY processed_at, event_id, account_id, entry_type"
+        )
+        for event_json, account_id, raw_entry_type in cursor:
+            event = json.loads(event_json)
             ledger_number += 1
             entry_type = cast(Literal["DEBIT", "CREDIT"], raw_entry_type)
-            delta = event.amount if entry_type == "CREDIT" else -event.amount
+            delta = float(event["amount"]) if entry_type == "CREDIT" else -float(event["amount"])
             balance = round(balances[account_id] + delta, 2)
             if balance < -payment_generator.accounts_by_id[account_id].overdraft_limit:
                 raise ValueError(f"ledger debit exceeds overdraft limit for {account_id}")
             balances[account_id] = balance
-            ledger = LedgerEntry(
-                ledger_entry_id=f"LED-{event.event_id}-{ledger_number:02d}",
-                payment_id=event.payment_id,
-                account_id=account_id,
-                event_id=event.event_id,
-                entry_type=entry_type,
-                amount=event.amount,
-                currency=event.currency,
-                occurred_at=event.event_time,
-                effective_at=event.event_time,
-                posted_at=event.processed_at,
-                balance_after=balance,
+            yield _logical_row(
+                "ledger_entries",
+                LedgerEntry(
+                    ledger_entry_id=f"LED-{event['event_id']}-{ledger_number:02d}",
+                    payment_id=event["payment_id"],
+                    account_id=account_id,
+                    event_id=event["event_id"],
+                    entry_type=entry_type,
+                    amount=event["amount"],
+                    currency=event["currency"],
+                    occurred_at=event["event_time"],
+                    effective_at=event["event_time"],
+                    posted_at=event["processed_at"],
+                    balance_after=balance,
+                ),
+                ledger_number - 1,
             )
-            yield from logical_rows("ledger_entries", (ledger,))
+        ledger_database.close()
 
 
 def iter_scale_run(
@@ -582,6 +680,168 @@ def iter_scale_run(
         raise ValueError("config and simulation_run_id are required with entities")
     assert entities is not None
     yield from iter_scale_records(config, entities, simulation_run_id=simulation_run_id)
+
+
+def _streaming_core_scale_supported(config: SimulationRunConfig) -> bool:
+    """Return whether the bounded core scale producer can preserve all semantics."""
+
+    return (
+        config.scale.enabled
+        and not config.fraud.enabled
+        and not config.labels.enabled
+        and not config.graph.enabled
+        and not config.counterfactual.active
+        and not config.campaign_dynamics.active
+        and not config.stress.active
+        and not config.benchmark.enabled
+        and not config.benchmark.camouflage_active
+        and not config.calibration.enabled
+        and not config.extensions.enabled
+        and config.quality.profile == "clean"
+        and not config.outputs.postgres
+        and not config.outputs.kafka
+        and not config.outputs.iceberg
+        and not (config.dataset.enabled and "pit" in config.scale.features)
+    )
+
+
+def _generate_streaming_core_scale(
+    config: SimulationRunConfig,
+    base_manifest: RunManifest,
+    *,
+    output_dir: str | Path,
+    checkpoint_dir: str | Path | None,
+    stage_timings: StageMetrics,
+) -> GeneratedRun:
+    """Generate core entities/payments directly into bounded scale partitions."""
+
+    plan = resolve_scale_plan(config, run_id=base_manifest.run_id)
+    if plan is None:  # pragma: no cover - guarded by the caller
+        raise ValueError("streaming core generation requires an enabled scale profile")
+    expected_payments = config.payments.daily_target * config.simulation.duration_days
+    if expected_payments < plan.target_payments:
+        raise ValueError(
+            "scale target not met: expected at least "
+            f"{plan.target_payments} payments, realized {expected_payments}"
+        )
+    with measure_stage(stage_timings, "entity_generation"):
+        entities = EntityGenerator(config).generate()
+    entity_counts = dict(entities.counts)
+    entity_counts["behavior_profiles"] = len(entities.customers)
+    event_counts: Counter[str] = Counter()
+    entity_names = set(entities.all_tables())
+    behavior_started = time.perf_counter()
+
+    def counted_records() -> Iterator[dict[str, object]]:
+        try:
+            records = iter_scale_records(
+                config,
+                entities,
+                simulation_run_id=base_manifest.run_id,
+                stage_timings=stage_timings,
+            )
+            for row in records:
+                logical_type = str(row.get("logical_type", ""))
+                if logical_type in entity_names:
+                    entity_counts[logical_type] = entity_counts.get(logical_type, 0) + 1
+                elif logical_type == "payments":
+                    event_counts["payments"] += 1
+                elif logical_type == "payment_events":
+                    event_counts["payment_events"] += 1
+                    event_type = row.get("event_type")
+                    if event_type:
+                        event_counts[str(event_type)] += 1
+                    if event_type in CARD_LIFECYCLE_EVENT_TYPES:
+                        event_counts["card_lifecycle_events"] += 1
+                    if event_type in PIX_LIFECYCLE_EVENT_TYPES:
+                        event_counts["pix_lifecycle_events"] += 1
+                elif logical_type == "ledger_entries":
+                    event_counts["ledger_entries"] += 1
+                yield row
+        finally:
+            finish_stage(stage_timings, "behavior_generation", behavior_started)
+
+    with measure_stage(stage_timings, "scale_serialization"):
+        completions, reconciliation, checkpoint_path = write_scale_partitions(
+            Path(output_dir) / base_manifest.run_id,
+            plan,
+            counted_records(),
+            checkpoint_dir=checkpoint_dir,
+            resolved_configuration=config.model_dump(mode="json"),
+            stage_timings=stage_timings,
+        )
+    stage_timings.setdefault(
+        "fraud_graph_quality",
+        {
+            "elapsed_seconds": 0.0,
+            "peak_rss_mb": stage_timings["scale_serialization"]["peak_rss_mb"],
+        },
+    )
+    run_dir = Path(output_dir) / base_manifest.run_id
+    scale_metadata: dict[str, object] = {
+        "profile": plan.profile,
+        "target_unit": "payments",
+        "target_payments": plan.target_payments,
+        "payments_realized": event_counts.get("payments", 0),
+        "target_met": event_counts.get("payments", 0) >= plan.target_payments,
+        "target_logical_events": plan.target_logical_events,
+        "logical_events_realized": reconciliation.logical_row_count,
+        "shard_count": plan.shard_count,
+        "chunk_size": plan.chunk_size,
+        "worker_count": plan.worker_count,
+        "output_batch_size": plan.output_batch_size,
+        "checkpoint_frequency_chunks": plan.checkpoint_frequency_chunks,
+        "partition_mapping": plan.partition_mapping,
+        "seed_tree_version": plan.seed_tree_version,
+        "configuration_hash": plan.configuration_hash,
+        "features": list(plan.features),
+        "storage_backend": plan.storage_backend,
+        "storage_uri": plan.storage_uri,
+        "state_backend": plan.state_backend,
+        "manifest_version": plan.manifest_version,
+        "execution_mode": "streaming-core",
+        "partitions": [item.model_dump(mode="json") for item in completions],
+        "partition_fingerprints": {item.shard_id: item.fingerprint for item in completions},
+        "checkpoint": str(checkpoint_path),
+        "reconciliation": reconciliation.model_dump(mode="json"),
+        "derived_counts": dict(event_counts),
+    }
+    schema_versions = {
+        **{entity_name: "1" for entity_name in entity_counts},
+        "payments": "2",
+        "payment_events": "5",
+        "ledger_entries": "1",
+    }
+    manifest = base_manifest.model_copy(
+        update={
+            "entity_counts": entity_counts,
+            "event_counts": dict(event_counts),
+            "schema_versions": schema_versions,
+            "fraud_counts": {},
+            "fraud_rates": {},
+            "quality_fault_counts": {},
+            "quality_fault_rates": {},
+            "quality_diagnostics": {},
+            "graph": {},
+            "scale": scale_metadata,
+        }
+    )
+    output_metadata = _output_fingerprints(run_dir)
+    manifest = manifest.model_copy(
+        update={
+            "output_artifacts": output_metadata,
+            "schema_fingerprint": sha256_json(manifest.schema_versions),
+            "output_fingerprint": output_metadata["output_fingerprint"],
+            "file_checksums": output_metadata["file_checksums"],
+        }
+    )
+    manifest_path = write_manifest(manifest, Path(output_dir))
+    return GeneratedRun(
+        manifest=manifest,
+        run_dir=run_dir,
+        manifest_path=manifest_path,
+        stage_timings=stage_timings,
+    )
 
 
 def generate_scale(
@@ -638,6 +898,7 @@ def _scale_metadata(
     write: bool,
     run_id: str,
     checkpoint_dir: str | Path | None,
+    stage_timings: StageMetrics | None = None,
 ) -> dict[str, object] | None:
     plan = resolve_scale_plan(config, run_id=run_id)
     if plan is None:
@@ -672,13 +933,15 @@ def _scale_metadata(
         "execution_mode": "compatibility-materialized",
     }
     if write:
-        completions, reconciliation, checkpoint_path = write_scale_partitions(
-            run_dir,
-            plan,
-            _scale_records(entities, behavior),
-            checkpoint_dir=checkpoint_dir,
-            resolved_configuration=config.model_dump(mode="json"),
-        )
+        with measure_stage(stage_timings, "scale_serialization"):
+            completions, reconciliation, checkpoint_path = write_scale_partitions(
+                run_dir,
+                plan,
+                _scale_records(entities, behavior),
+                checkpoint_dir=checkpoint_dir,
+                resolved_configuration=config.model_dump(mode="json"),
+                stage_timings=stage_timings,
+            )
         metadata.update(
             {
                 "partitions": [item.model_dump(mode="json") for item in completions],
@@ -745,6 +1008,7 @@ def generate(
         else cast(CalibrationProfile | None, profile)
     )
     calibration = resolve_calibration(resolved_config, supplied_profile)
+    stage_timings: StageMetrics = {}
     base_manifest = create_manifest(resolved_config)
     if calibration.enabled:
         resolved_configuration = dict(base_manifest.resolved_configuration)
@@ -759,13 +1023,24 @@ def generate(
                 "resolved_configuration": resolved_configuration,
             }
         )
-    entities = EntityGenerator(resolved_config, calibration).generate()
-    behavior = BehaviorGenerator(
-        resolved_config,
-        entities,
-        simulation_run_id=base_manifest.run_id,
-        calibration=calibration,
-    ).generate()
+    if write and _streaming_core_scale_supported(resolved_config):
+        return _generate_streaming_core_scale(
+            resolved_config,
+            base_manifest,
+            output_dir=output_dir,
+            checkpoint_dir=checkpoint_dir,
+            stage_timings=stage_timings,
+        )
+    with measure_stage(stage_timings, "entity_generation"):
+        entities = EntityGenerator(resolved_config, calibration).generate()
+    with measure_stage(stage_timings, "behavior_generation"):
+        behavior = BehaviorGenerator(
+            resolved_config,
+            entities,
+            simulation_run_id=base_manifest.run_id,
+            calibration=calibration,
+            stage_timings=stage_timings,
+        ).generate()
     scale_plan = resolve_scale_plan(resolved_config, run_id=base_manifest.run_id)
     if write and scale_plan is not None and len(behavior.payments) < scale_plan.target_payments:
         raise ValueError(
@@ -797,7 +1072,8 @@ def generate(
         raise FileExistsError(f"calibrated run artifacts already exist: {run_dir}")
     fresh_output = not run_dir.exists()
     if write and (fresh_output or not resolved_config.scale.enabled):
-        _write_base_outputs(entities, behavior, run_dir)
+        with measure_stage(stage_timings, "serialization"):
+            _write_base_outputs(entities, behavior, run_dir)
 
     scale_metadata = _scale_metadata(
         resolved_config,
@@ -807,6 +1083,7 @@ def generate(
         write=write,
         run_id=base_manifest.run_id,
         checkpoint_dir=checkpoint_dir,
+        stage_timings=stage_timings,
     )
 
     label_observation_metadata = _label_observation_metadata(
@@ -865,13 +1142,17 @@ def generate(
     dataset: PointInTimeDataset | None = None
     dataset_path: Path | None = None
     dataset_manifest_path: Path | None = None
-    if resolved_config.dataset.enabled:
-        dataset = PointInTimeDatasetBuilder(
-            resolved_config,
-            entities,
-            behavior,
-            manifest,
-        ).build()
+    pit_enabled = resolved_config.dataset.enabled and (
+        not resolved_config.scale.enabled or "pit" in resolved_config.scale.features
+    )
+    if pit_enabled:
+        with measure_stage(stage_timings, "pit_dataset"):
+            dataset = PointInTimeDatasetBuilder(
+                resolved_config,
+                entities,
+                behavior,
+                manifest,
+            ).build()
         if write:
             dataset_path, dataset_manifest_path = write_point_in_time_dataset(
                 dataset,
@@ -946,6 +1227,7 @@ def generate(
             entities=entities,
             behavior=behavior,
             dataset=dataset,
+            stage_timings=stage_timings,
         )
 
     manifest_path = write_manifest(manifest, output_root)
@@ -955,6 +1237,7 @@ def generate(
         manifest_path=manifest_path,
         dataset_path=dataset_path,
         dataset_manifest_path=dataset_manifest_path,
+        stage_timings=stage_timings,
     )
 
 

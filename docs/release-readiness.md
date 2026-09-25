@@ -16,7 +16,10 @@ for small runs.
 The following capabilities remain outside the current release's large-scale
 claim until their acceptance evidence is available:
 
-- `generate_scale()` still obtains entity and behavior populations through the compatibility generator before partitioning.
+- The core scale feature set now streams payments, lifecycle events, and ledger
+  entries through bounded on-disk batches; entity and profile populations are
+  still materialized because their lookup state is shared by payment
+  generation.
 - Fraud, workflow, graph, campaign, label, and quality stages still depend on complete in-memory datasets.
 - PIT dataset construction and backtests still materialize feature rows.
 - PostgreSQL, Kafka, and Iceberg scale orchestration has bounded adapter APIs, but the production path is not yet fully chunk-native.
@@ -28,7 +31,7 @@ claim until their acceptance evidence is available:
 ### Scale implementation track
 
 1. Introduce chunk-native entity and profile producers with deterministic ID formulas and shard-local lookup tables.
-2. Generate payments by global ordinal ranges and maintain account balances, relationships, transfer reconciliation, and stage progress in DuckDB.
+2. Extend the bounded payment stream to global ordinal ranges and maintain account balances, relationships, transfer reconciliation, and stage progress in DuckDB.
 3. Convert fraud, workflow, labels, and quality into two-pass streams over immutable plans and payment chunks.
 4. Implement partition-aware graph, PIT, and backtest reducers with bounded windows and external sorting where required.
 5. Connect Kafka, PostgreSQL, and Iceberg sinks directly to chunk iterators and checkpoint each successful batch.

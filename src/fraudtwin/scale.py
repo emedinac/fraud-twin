@@ -6,6 +6,7 @@ contain a second simulation model.
 """
 
 import hashlib
+import heapq
 import importlib.metadata
 import json
 import os
@@ -38,6 +39,7 @@ from fraudtwin.config import (
 )
 from fraudtwin.reproducibility import sha256_json
 from fraudtwin.seed import create_stream_rng
+from fraudtwin.timing import StageMetrics, finish_stage
 
 SEED_TREE_VERSION = "M18-seed-tree-1"
 
@@ -89,6 +91,21 @@ def validate_scale_feature_matrix(config: SimulationRunConfig) -> tuple[ScaleFea
     """Validate optional scale stages before any generation work starts."""
 
     features = config.scale.features
+    enabled_features = set(features)
+    if "entities" not in enabled_features or "behavior" not in enabled_features:
+        raise ValueError("scale features must include entities and behavior")
+    if "payments" not in enabled_features:
+        raise ValueError("scale features must include payments")
+    if "lifecycle" in enabled_features and "payments" not in enabled_features:
+        raise ValueError("scale feature 'lifecycle' requires payments")
+    if "ledger" in enabled_features and "payments" not in enabled_features:
+        raise ValueError("scale feature 'ledger' requires payments")
+    if config.fraud.enabled and "fraud" not in enabled_features:
+        raise ValueError("fraud.enabled requires scale feature 'fraud'")
+    if config.labels.enabled and "labels" not in enabled_features:
+        raise ValueError("labels.enabled requires scale feature 'labels'")
+    if config.graph.enabled and "graph" not in enabled_features:
+        raise ValueError("graph.enabled requires scale feature 'graph'")
     if "graph" in features and not config.graph.enabled:
         raise ValueError("scale feature 'graph' requires graph.enabled")
     if "pit" in features and not config.dataset.enabled:
@@ -441,6 +458,7 @@ def write_scale_benchmark_manifest(
     output_dir: str | Path | None = None,
     claim_scope: str = "laptop-dev-only",
     command: str | None = None,
+    stage_timings: Mapping[str, Mapping[str, float]] | None = None,
 ) -> Path:
     """Write non-deterministic machine evidence separately from run identity."""
 
@@ -477,6 +495,7 @@ def write_scale_benchmark_manifest(
         },
         "git_revision": _git_revision(),
         "resume": dict(resume or {}),
+        "stage_timings": {name: dict(values) for name, values in (stage_timings or {}).items()},
         "recorded_at_epoch": time.time(),
     }
     destination = Path(path)
@@ -602,6 +621,7 @@ def run_scale_benchmark(
         output_dir=result.run_dir,
         command=command
         or "fraudtwin scale-benchmark <scale-enabled-config> --output-dir <run-dir>",
+        stage_timings=result.stage_timings,
     )
 
 
@@ -683,6 +703,7 @@ def write_scale_partitions(
     *,
     checkpoint_dir: str | Path | None = None,
     resolved_configuration: dict[str, Any] | None = None,
+    stage_timings: StageMetrics | None = None,
 ) -> tuple[tuple[PartitionCompletion, ...], ReconciliationResult, Path]:
     """Write deterministic partition/chunk artifacts and a checkpoint.
 
@@ -758,12 +779,20 @@ def write_scale_partitions(
     # committed, so a process interrupted during chunk writing can resume
     # without regenerating or re-spooling the producer input.
     spool_manifest = spool_root / "manifest.json"
+    try:
+        import pyarrow as pa  # type: ignore[import-untyped]
+        import pyarrow.ipc as pa_ipc  # type: ignore[import-untyped]
+    except ImportError:
+        pa = None
+        pa_ipc = None
+    spool_format = "arrow-ipc-v1" if pa is not None else "jsonl-v1"
     spool_identity = {
         "configuration_hash": plan.configuration_hash,
         "seed": plan.seed,
         "seed_tree_version": plan.seed_tree_version,
         "run_id": plan.run_id,
         "shard_count": plan.shard_count,
+        "storage_format": spool_format,
     }
     reused_spool = False
     total_rows = 0
@@ -778,8 +807,11 @@ def write_scale_partitions(
     if spool_manifest.is_file():
         try:
             payload = json.loads(spool_manifest.read_text(encoding="utf-8"))
-            reused_spool = payload.get("identity") == spool_identity and all(
-                (spool_root / f"{item.shard_id}.jsonl").is_file() for item in descriptors
+            spool_files = [str(item) for item in payload.get("spool_files", ())]
+            reused_spool = (
+                payload.get("identity") == spool_identity
+                and bool(spool_files)
+                and all((spool_root / item).is_file() for item in spool_files)
             )
             if reused_spool:
                 total_rows = int(payload["total_rows"])
@@ -812,6 +844,9 @@ def write_scale_partitions(
         )
         for state_name in state_files:
             (spool_root / state_name).unlink(missing_ok=True)
+        for pattern in ("*.jsonl", "*.arrow", "*.empty"):
+            for path in spool_root.glob(pattern):
+                path.unlink(missing_ok=True)
         id_database, state_backend = _connect_state_database(spool_root / "logical-ids.sqlite")
         id_database.execute("CREATE TABLE IF NOT EXISTS logical_ids (logical_id TEXT PRIMARY KEY)")
         ledger_database, ledger_state_backend = _connect_state_database(
@@ -821,10 +856,50 @@ def write_scale_partitions(
             "CREATE TABLE IF NOT EXISTS ledger_state "
             "(account_id TEXT PRIMARY KEY, balance REAL NOT NULL, entries INTEGER NOT NULL)"
         )
-        handles = {
-            item.shard_id: (spool_root / f"{item.shard_id}.jsonl").open("w", encoding="utf-8")
-            for item in descriptors
-        }
+        handles = (
+            {
+                item.shard_id: (spool_root / f"{item.shard_id}.jsonl").open("w", encoding="utf-8")
+                for item in descriptors
+            }
+            if pa is None
+            else {}
+        )
+        arrow_buffers: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        arrow_batch_indices: dict[tuple[str, str], int] = {}
+        arrow_paths: set[str] = set()
+        shard_sequences: dict[str, int] = {item.shard_id: 0 for item in descriptors}
+
+        def flush_arrow(key: tuple[str, str]) -> None:
+            if pa is None or pa_ipc is None:
+                return
+            rows = arrow_buffers.get(key, [])
+            if not rows:
+                return
+            shard_id, logical_type = key
+            batch_index = arrow_batch_indices.get(key, 0)
+            arrow_batch_indices[key] = batch_index + 1
+            path = spool_root / f"{shard_id}--{logical_type}--{batch_index:08d}.arrow"
+            table = pa.Table.from_pylist(rows)
+            writer = pa_ipc.new_file(path, table.schema)
+            writer.write_table(table)
+            writer.close()
+            arrow_paths.add(path.name)
+            arrow_buffers[key] = []
+
+        def append_arrow(row: dict[str, Any]) -> None:
+            partition = str(row["partition_id"])
+            logical_type = "".join(
+                char if char.isalnum() or char in "_-" else "_"
+                for char in str(row.get("logical_type") or "records")
+            )
+            sequence = shard_sequences[partition]
+            shard_sequences[partition] = sequence + 1
+            row["_spool_sequence"] = sequence
+            key = (partition, logical_type)
+            arrow_buffers.setdefault(key, []).append(row)
+            if len(arrow_buffers[key]) >= plan.output_batch_size:
+                flush_arrow(key)
+
         try:
             for record in records:
                 row = dict(record)
@@ -879,22 +954,40 @@ def write_scale_partitions(
                         shard_totals["credit"] += amount
                 if row.get("logical_type") == "transfer_reconciliation":
                     transfer_reconciliation_records += 1
-                handles[row["partition_id"]].write(
-                    json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n"
-                )
+                if pa is None:
+                    handles[row["partition_id"]].write(
+                        json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n"
+                    )
+                else:
+                    append_arrow(row)
                 total_rows += 1
                 if total_rows % 10_000 == 0:
                     id_database.commit()
                     ledger_database.commit()
         finally:
-            for handle in handles.values():
-                handle.close()
+            if pa is None:
+                for handle in handles.values():
+                    handle.close()
+            else:
+                for key in tuple(arrow_buffers):
+                    flush_arrow(key)
+                for item in descriptors:
+                    if not any(name.startswith(f"{item.shard_id}--") for name in arrow_paths):
+                        marker = spool_root / f"{item.shard_id}.empty"
+                        marker.touch()
+                        arrow_paths.add(marker.name)
             id_database.commit()
             id_database.close()
             ledger_database.commit()
             ledger_database.close()
+        spool_files = sorted(
+            path.name
+            for path in spool_root.iterdir()
+            if path.is_file() and (path.suffix in {".jsonl", ".arrow", ".empty"})
+        )
         spool_payload = {
             "identity": spool_identity,
+            "spool_files": spool_files,
             "total_rows": total_rows,
             "ledger_debit_total": str(ledger_debit_total),
             "ledger_credit_total": str(ledger_credit_total),
@@ -988,18 +1081,59 @@ def write_scale_partitions(
             type_chunk_indices[logical_type] = chunk_index + 1
             buffers[logical_type] = []
 
-        if source.exists():
-            with source.open(encoding="utf-8") as stream:
-                for line in stream:
-                    row = json.loads(line)
-                    logical_type = "".join(
-                        char if char.isalnum() or char in "_-" else "_"
-                        for char in str(row.get("logical_type") or "records")
+        def iter_arrow_rows() -> Iterator[dict[str, Any]]:
+            if pa is None or pa_ipc is None:
+                return
+            readers = []
+            iterators = []
+            heap: list[tuple[int, int, dict[str, Any]]] = []
+            try:
+                paths = sorted(spool_root.glob(f"{descriptor.shard_id}--*.arrow"))
+                for index, path in enumerate(paths):
+                    reader = pa_ipc.open_file(path)
+                    readers.append(reader)
+                    iterator = iter(
+                        row
+                        for batch_index in range(reader.num_record_batches)
+                        for row in reader.get_batch(batch_index).to_pylist()
                     )
-                    buffer = buffers.setdefault(logical_type, [])
-                    buffer.append(row)
-                    if len(buffer) >= plan.chunk_size:
-                        flush(logical_type)
+                    iterators.append(iterator)
+                    first = next(iterator, None)
+                    if first is not None:
+                        heapq.heappush(heap, (int(first.pop("_spool_sequence")), index, first))
+                while heap:
+                    _, index, row = heapq.heappop(heap)
+                    yield row
+                    next_row = next(iterators[index], None)
+                    if next_row is not None:
+                        heapq.heappush(
+                            heap,
+                            (int(next_row.pop("_spool_sequence")), index, next_row),
+                        )
+            finally:
+                for reader in readers:
+                    close = getattr(reader, "close", None)
+                    if close is not None:
+                        close()
+
+        def iter_spooled_rows() -> Iterator[dict[str, Any]]:
+            if spool_format == "arrow-ipc-v1":
+                yield from iter_arrow_rows()
+                return
+            if source.exists():
+                with source.open(encoding="utf-8") as stream:
+                    for line in stream:
+                        yield json.loads(line)
+
+        for row in iter_spooled_rows():
+            logical_type = "".join(
+                char if char.isalnum() or char in "_-" else "_"
+                for char in str(row.get("logical_type") or "records")
+            )
+            buffer = buffers.setdefault(logical_type, [])
+            buffer.append(row)
+            if len(buffer) >= plan.chunk_size:
+                flush(logical_type)
         for logical_type in sorted(buffers):
             flush(logical_type)
         partition_fingerprint = aggregate_fingerprint(
@@ -1021,8 +1155,9 @@ def write_scale_partitions(
     completions = [item[0] for item in results]
     chunks = tuple(chunk for _, values in results for chunk in values)
     emitted_rows = sum(item.row_count for item in completions)
-    for spool_file in spool_root.glob("*.jsonl"):
-        spool_file.unlink()
+    for spool_file in spool_root.iterdir():
+        if spool_file.is_file():
+            spool_file.unlink()
     spool_manifest.unlink(missing_ok=True)
     state_files = (
         "logical-ids.sqlite",
@@ -1037,6 +1172,7 @@ def write_scale_partitions(
     # Exact ID reconciliation remains available as a small-run API.  The
     # streaming writer validates completeness by row count and chunk ranges;
     # retaining every ID here would defeat bounded-memory execution.
+    reconciliation_started = time.perf_counter()
     reconciliation = ReconciliationResult(
         logical_row_count=total_rows,
         partition_row_count=emitted_rows,
@@ -1111,6 +1247,7 @@ def write_scale_partitions(
         created_at=datetime.now(UTC),
     )
     checkpoint_path = write_checkpoint(checkpoint_root / "checkpoint.json", checkpoint)
+    finish_stage(stage_timings, "checkpoint_reconciliation", reconciliation_started)
     return tuple(completions), reconciliation, checkpoint_path
 
 

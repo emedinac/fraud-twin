@@ -95,8 +95,11 @@ cross-partition reconciliation results. Use `poetry install -E scale` for the
 optional PyArrow/DuckDB out-of-core tooling.
 
 The compatibility API still materializes canonical entity/behavior objects;
-use `dev` on a laptop. Production 100M/1B executions should wire a streaming
-canonical-row producer to this chunk writer on SSD or S3/MinIO.
+use `dev` on a laptop. The core scale feature set streams payment, lifecycle,
+and ledger rows through bounded batches, while advanced fraud/graph/quality/PIT
+features retain the compatibility materialization boundary. Production
+100M/1B executions still require the remaining out-of-core stages and hardware
+evidence.
 
 The quality benchmark provides `standard-v1-dev` for running the quality protocol against
 the 1,000-payment smoke workload without launching a large benchmark.

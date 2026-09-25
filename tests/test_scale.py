@@ -1,12 +1,15 @@
 """Focused deterministic scale tests (small fixtures only)."""
 
+import json
 from pathlib import Path
+from random import Random
 
 import pytest
 from pydantic import ValidationError
 
 from fraudtwin.config import ScaleConfig, SimulationRunConfig, load_config
 from fraudtwin.generation import (
+    _scale_records,
     generate,
     generate_scale,
     iter_scale_records,
@@ -29,7 +32,9 @@ from fraudtwin.scale import (
     write_scale_benchmark_manifest,
     write_scale_partitions,
 )
+from fraudtwin.simulation import BehaviorGenerator
 from fraudtwin.simulation.generator import EntityGenerator
+from fraudtwin.simulation.payments import PaymentGenerator
 
 
 def _scale_config():
@@ -128,6 +133,15 @@ def test_scale_generation_and_resume_are_reproducible(tmp_path: Path) -> None:
     rows = tuple(iter_partition_rows(first.run_dir))
     assert len(rows) == checkpoint.reconciliation.partition_row_count
     assert checkpoint.completed_chunks
+    assert {
+        "entity_generation",
+        "behavior_generation",
+        "profile_generation",
+        "payments_lifecycle",
+        "fraud_graph_quality",
+        "scale_serialization",
+        "checkpoint_reconciliation",
+    } <= set(first.stage_timings)
     assert tuple(iter_partition_table(first.run_dir, "payments"))
     projected = next(iter_partition_table(first.run_dir, "payments", columns=["logical_id"]))
     assert set(projected) == {"logical_id"}
@@ -143,12 +157,14 @@ def test_scale_benchmark_manifest_records_target_and_host(tmp_path: Path) -> Non
         shard_count=2,
         worker_count=1,
         elapsed_seconds=2.0,
+        stage_timings={"entity_generation": {"elapsed_seconds": 0.5, "peak_rss_mb": 10.0}},
     )
-    payload = destination.read_text(encoding="utf-8")
-    assert '"target_met": true' in payload
-    assert '"throughput_payments_per_second": 5.0' in payload
-    assert '"claim_scope": "laptop-dev-only"' in payload
-    assert '"git_revision"' in payload
+    payload = json.loads(destination.read_text(encoding="utf-8"))
+    assert payload["target_met"] is True
+    assert payload["throughput_payments_per_second"] == 5.0
+    assert payload["claim_scope"] == "laptop-dev-only"
+    assert payload["git_revision"]
+    assert payload["stage_timings"]["entity_generation"]["peak_rss_mb"] == 10.0
 
 
 def test_scale_target_mismatch_is_rejected_before_output(tmp_path: Path) -> None:
@@ -179,11 +195,38 @@ def test_scale_plan_is_typed() -> None:
 def test_streaming_scale_records_preserve_canonical_tables() -> None:
     config = _scale_config()
     entities = EntityGenerator(config).generate()
-    rows = iter_scale_records(config, entities, simulation_run_id="RUN-stream")
-    first_rows = [next(rows) for _ in range(20)]
-    assert {row["logical_type"] for row in first_rows} <= {
-        *entities.all_tables().keys(),
-        "behavior_profiles",
+    reference = generate(config)
+    expected = list(_scale_records(reference.entities, reference.behavior))
+    actual = list(iter_scale_records(config, entities, simulation_run_id=reference.run_id))
+    assert actual == expected
+
+
+def test_payment_lookup_caches_preserve_ordered_candidates() -> None:
+    config = _scale_config()
+    entities = EntityGenerator(config).generate()
+    generator = PaymentGenerator(
+        config,
+        entities.accounts,
+        entities.cards,
+        entities.merchants,
+        entities.devices,
+        entities.pix_keys,
+        simulation_run_id="RUN-cache",
+    )
+    profiles = BehaviorGenerator(config, entities).generate_profiles()
+    eligible = generator._eligible_profiles(profiles)  # noqa: SLF001
+    assert eligible
+    profile = eligible[0]
+    assert (
+        generator._available_rails(profile)
+        == generator._eligible_rails_by_customer[  # noqa: SLF001
+            profile.customer_id
+        ]
+    )
+    assert profile.behavior_profile_id in generator._profile_time_cache  # noqa: SLF001
+    payer = generator.accounts_by_customer[profile.customer_id][0].account_id
+    assert generator._payee_account(payer, Random(1)).account_id in {  # noqa: SLF001
+        account.account_id for account in entities.accounts
     }
 
 
@@ -194,6 +237,59 @@ def test_explicit_scale_api_and_partition_reader(tmp_path: Path) -> None:
         *result.manifest.entity_counts.keys(),
         "behavior_profiles",
     }
+
+
+def test_worker_counts_preserve_canonical_scale_output(tmp_path: Path) -> None:
+    fingerprints = []
+    for workers in (1, 2, 16):
+        config = _scale_config().model_copy(
+            update={"scale": _scale_config().scale.model_copy(update={"worker_count": workers})}
+        )
+        result = generate(
+            config,
+            write=True,
+            output_dir=tmp_path / f"runs-{workers}",
+            checkpoint_dir=tmp_path / f"checkpoint-{workers}",
+        )
+        fingerprints.append(
+            (
+                result.run_id,
+                result.manifest.scenario_config_hash,
+                result.manifest.output_fingerprint,
+                result.manifest.scale["partition_fingerprints"],
+            )
+        )
+    assert len({item[0] for item in fingerprints}) == 1
+    assert len({item[1] for item in fingerprints}) == 1
+    assert len({item[2] for item in fingerprints}) == 1
+    assert len({str(item[3]) for item in fingerprints}) == 1
+
+
+def test_scale_feature_selection_skips_unrequested_expensive_stages() -> None:
+    config = _scale_config().model_copy(
+        update={
+            "scale": _scale_config().scale.model_copy(
+                update={"features": ("entities", "behavior", "payments")}
+            )
+        }
+    )
+    result = generate(config)
+    assert result.dataset is None
+    assert result.behavior.ledger_entries == ()
+    assert len(result.behavior.payment_events) == len(result.behavior.payments)
+
+
+def test_scale_feature_matrix_rejects_enabled_stage_without_feature() -> None:
+    config = _scale_config().model_copy(
+        update={
+            "fraud": _scale_config().fraud.model_copy(update={"enabled": True}),
+            "scale": _scale_config().scale.model_copy(
+                update={"features": ("entities", "behavior", "payments")}
+            ),
+        }
+    )
+    with pytest.raises(ValueError, match="fraud.enabled requires scale feature 'fraud'"):
+        resolve_scale_plan(config)
 
 
 def test_scale_writer_detects_duplicate_ids_without_global_memory(tmp_path: Path) -> None:
