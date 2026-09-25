@@ -1,6 +1,6 @@
 # Release notes
 
-## 0.34.2 — Docs fixes
+## 0.34.2 — Docs fixes and CI checks
 
 - Updated README, API reference, documentation-site, and source-code links for
   the `fraudtwin` repository rename.
