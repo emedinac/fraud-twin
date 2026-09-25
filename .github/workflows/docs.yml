@@ -2,17 +2,8 @@ name: Documentation
 
 on:
   push:
-    branches:
-      - main
     tags:
       - "v*.*.*"
-    paths:
-      - "src/**"
-      - "docs/**"
-      - "README.md"
-      - "pyproject.toml"
-      - "poetry.lock"
-      - ".github/workflows/docs.yml"
   workflow_dispatch:
   schedule:
     - cron: "17 4 * * 0"
@@ -40,8 +31,6 @@ jobs:
         run: poetry install --with docs
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-      - name: Validate documentation assets
-        run: poetry run pytest tests/test_docs.py -o addopts=
       - name: Build strict current documentation
         run: poetry run sphinx-build -E -W -b html docs docs/_build/strict
       - name: Build versioned documentation
@@ -57,19 +46,6 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs/_build/html
-
-  examples:
-    if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-poetry
-        with:
-          python-version: "3.12"
-      - name: Install project
-        run: poetry install
-      - name: Execute representative documentation example
-        run: poetry run pytest tests/test_docs_examples.py -o addopts=
 
   linkcheck:
     if: github.event_name == 'schedule'

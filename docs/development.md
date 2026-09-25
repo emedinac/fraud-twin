@@ -33,7 +33,15 @@ poetry build
 git diff --check
 ```
 
-The repository’s workflow runs on pull requests targeting `main`. Keep the working tree focused and include documentation when behavior or commands change.
+The repository’s checks run only on pull requests targeting `main`; a merged
+commit does not rerun the test suite. Protect `main` with a GitHub ruleset that
+requires those pull-request checks and disallows direct pushes. GitHub Actions
+cannot enforce that restriction by itself.
+
+To publish, push a `vX.Y.Z` tag or merge a commit whose message contains
+exactly one `vX.Y.Z` marker. The latter path creates an annotated tag after the
+package build succeeds. Ordinary pushes to `main` do not consume a runner or
+publish a release.
 
 ## Focused tests
 

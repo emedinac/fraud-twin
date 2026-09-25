@@ -7,10 +7,12 @@ benchmark claims without overstating hardware capacity.
 **Services:** None; GitHub and PyPI publishing are release-time services.<br><br>
 
 A release artifact is trustworthy only when the code, documentation, package,
-and evidence agree. The release workflow verifies the built wheel in a clean
-environment, validates Avro contracts, runs bounded tests, builds strict
-documentation, and attaches the wheel and source distribution to the tagged
-GitHub release before trusted PyPI publication.
+and evidence agree. Pull-request CI runs the test suite before merge. The
+release workflow is activated only by a `vX.Y.Z` tag or a merged commit message
+containing exactly one `vX.Y.Z` marker; it validates the package metadata and
+Avro contracts, verifies the built wheel in a clean environment, builds strict
+documentation, and attaches the wheel and source distribution to the GitHub
+release before trusted PyPI publication.
 
 ## Laptop evidence protocol
 
