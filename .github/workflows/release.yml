@@ -35,7 +35,7 @@ jobs:
               --commit "$GITHUB_SHA" \
               --limit 1 \
               --json status,conclusion \
-              --jq '.[0] | "\(.status) \(.conclusion // \"\")"' || true)"
+              --jq '.[0] | "\(.status) \(.conclusion // "")"' || true)"
             if [[ -z "$ci_state" ]]; then
               sleep 10
               continue
