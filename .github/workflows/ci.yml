@@ -161,7 +161,17 @@ jobs:
           cleanup() {
             docker compose --profile integration --profile streaming --profile lakehouse --profile observability down -v >/dev/null 2>&1 || true
           }
-          trap cleanup EXIT
+          on_exit() {
+            status=$?
+            if [[ "$status" -ne 0 ]]; then
+              docker compose --profile integration --profile streaming --profile lakehouse --profile observability ps -a || true
+              docker compose --profile integration --profile streaming --profile lakehouse --profile observability logs --no-color --tail=200 \
+                postgres kafka schema-registry minio iceberg-rest || true
+            fi
+            cleanup
+            exit "$status"
+          }
+          trap on_exit EXIT
 
           docker compose --profile integration --profile streaming --profile lakehouse up -d \
             postgres kafka schema-registry streaming-topics minio minio-init iceberg-rest
@@ -175,12 +185,12 @@ jobs:
             sleep 2
           done
           if [[ "$postgres_ready" != true ]]; then
-            docker compose ps -a
-            docker compose logs --no-color --tail=120 postgres
+            docker compose --profile integration --profile streaming --profile lakehouse --profile observability ps -a
+            docker compose --profile integration --profile streaming --profile lakehouse --profile observability logs --no-color --tail=120 postgres
             echo "PostgreSQL did not become ready within 300 seconds" >&2
             exit 1
           fi
-          docker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+          echo "PostgreSQL is ready"
 
           for _ in $(seq 1 60); do
             topics="$(docker compose exec -T kafka kafka-topics --bootstrap-server kafka:29092 --list 2>/dev/null || true)"
