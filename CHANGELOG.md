@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.34.4 — Release automation
+
+- Fixed CI status parsing in the tagged release workflow so successful CI can
+  gate package publication.
+
 ## 0.34.3 — Documentation information architecture
 
 - Reorganized the documentation around Tutorials, How-to guides, Explanation,
