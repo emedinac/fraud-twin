@@ -74,11 +74,13 @@ def prepare_site(root: Path) -> None:
         if path.name in {"main", "dev"}:
             continue
         _write_tutorial_aliases(path)
-        versions.append({
-            "name": path.name,
-            "version": path.name,
-            "url": f"https://emedinac.github.io/fraudtwin/{path.name}/",
-        })
+        versions.append(
+            {
+                "name": path.name,
+                "version": path.name,
+                "url": f"https://emedinac.github.io/fraudtwin/{path.name}/",
+            }
+        )
     (root / "version-switcher.json").write_text(
         json.dumps(versions, indent=2) + "\n", encoding="utf-8"
     )
