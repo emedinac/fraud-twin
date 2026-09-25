@@ -21,7 +21,10 @@ COMMIT_SUBJECT_RE = re.compile(
     r'(?:\([^()]+\))?!?:\s+\S.*|Revert "\S.*")$'
 )
 MERGE_COMMIT_SUBJECT_RE = re.compile(
-    r"^Merge (?:branches? '[^']+'(?:, '[^']+')*|remote-tracking branch '[^']+'|pull request #[0-9]+ from \S+)"
+    r"^Merge (?:"
+    r"branches? '[^']+'(?:, '[^']+')*|"
+    r"remote-tracking branch '[^']+'|"
+    r"pull request #[0-9]+ from \S+)"
     r"(?: of \S+)?(?: into \S+)?$"
 )
 PACKAGE_PIN_RE = re.compile(
