@@ -63,6 +63,8 @@ jobs:
           python -m venv /tmp/fraudtwin-wheel
           /tmp/fraudtwin-wheel/bin/pip install dist/*.whl
           /tmp/fraudtwin-wheel/bin/fraudtwin schema validate
+          /tmp/fraudtwin-wheel/bin/fraudtwin config init /tmp/fraudtwin-wheel-config.yaml
+          /tmp/fraudtwin-wheel/bin/fraudtwin config validate /tmp/fraudtwin-wheel-config.yaml
       - name: Diff check
         run: git diff --check
 
