@@ -817,6 +817,22 @@ def resolve_calibration(
                 "manifest_version",
             ):
                 scale_payload.pop(key, None)
+        elif isinstance(scale_payload, dict):
+            # Execution placement and batching do not change generated values;
+            # calibrated identities must remain stable across worker counts.
+            for key in (
+                "shard_count",
+                "chunk_size",
+                "worker_count",
+                "output_batch_size",
+                "checkpoint_frequency_chunks",
+                "partition_mapping",
+                "storage_backend",
+                "storage_uri",
+                "state_backend",
+                "manifest_version",
+            ):
+                scale_payload.pop(key, None)
         calibration_payload = config_payload.get("calibration")
         if isinstance(calibration_payload, dict):
             # A source path is an access detail, not a simulation parameter;

@@ -39,6 +39,8 @@ def test_postgres_operational_smoke(tmp_path: Path) -> None:
     values = base.model_dump(mode="python")
     values["outputs"]["postgres"] = True
     config = type(base).model_validate(values)
+    # Do not use importorskip here: an installed but incomplete psycopg package
+    # must fail with the adapter's actionable remediation message.
     migrate_database()
     result = generate(config, write=True, output_dir=tmp_path / "postgres")
     assert result.manifest.postgres is not None

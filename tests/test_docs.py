@@ -12,6 +12,7 @@ import pytest
 from docutils.parsers.rst import DirectiveError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+PROJECT_VERSION = str(tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"])
 ConfigModelDirective = importlib.import_module("docs._ext.config_schema").ConfigModelDirective
 api_inventory = importlib.import_module("docs._ext.api_inventory")
 prepare_site = importlib.import_module("docs.prepare_site").prepare_site
@@ -440,14 +441,14 @@ def test_representative_offline_tutorial_cells_execute() -> None:
 def test_versioned_site_preparation_creates_latest_and_switcher(tmp_path: Path) -> None:
     (tmp_path / "main").mkdir()
     (tmp_path / "main" / "index.html").write_text("latest", encoding="utf-8")
-    (tmp_path / "v0.34.0").mkdir()
-    (tmp_path / "v0.34.0" / "index.html").write_text("release", encoding="utf-8")
+    (tmp_path / f"v{PROJECT_VERSION}").mkdir()
+    (tmp_path / f"v{PROJECT_VERSION}" / "index.html").write_text("release", encoding="utf-8")
 
     prepare_site(tmp_path)
 
     assert (tmp_path / "latest" / "index.html").read_text(encoding="utf-8") == "latest"
     switcher = json.loads((tmp_path / "version-switcher.json").read_text(encoding="utf-8"))
-    assert [item["version"] for item in switcher] == ["latest", "v0.34.0"]
+    assert [item["version"] for item in switcher] == ["latest", f"v{PROJECT_VERSION}"]
     assert "url=latest/" in (tmp_path / "index.html").read_text(encoding="utf-8")
     api_redirect = (tmp_path / "api.html").read_text(encoding="utf-8")
     assert "url=latest/api.html" in api_redirect

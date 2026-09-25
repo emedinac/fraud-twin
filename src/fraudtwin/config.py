@@ -2292,6 +2292,7 @@ def config_hash(
     include_card_lifecycle: bool = True,
     include_pix_lifecycle: bool = True,
     include_dataset: bool = False,
+    include_scale_execution: bool = True,
 ) -> str:
     """Return a stable SHA-256 hash of the validated configuration.
 
@@ -2305,6 +2306,7 @@ def config_hash(
             include_card_lifecycle=include_card_lifecycle,
             include_pix_lifecycle=include_pix_lifecycle,
             include_dataset=include_dataset,
+            include_scale_execution=include_scale_execution,
         ).encode("utf-8")
     ).hexdigest()
 
@@ -2315,6 +2317,7 @@ def _canonical_config(
     include_card_lifecycle: bool = True,
     include_pix_lifecycle: bool = True,
     include_dataset: bool = True,
+    include_scale_execution: bool = True,
 ) -> str:
     """Serialize configuration once for hashes and deterministic stream IDs."""
 
@@ -2355,6 +2358,22 @@ def _canonical_config(
     # M18 is opt-in; disabled scale controls must preserve legacy identities.
     if not config.scale.enabled:
         payload.pop("scale", None)
+    elif not include_scale_execution:
+        scale_payload = payload.get("scale")
+        if isinstance(scale_payload, dict):
+            for key in (
+                "shard_count",
+                "chunk_size",
+                "worker_count",
+                "output_batch_size",
+                "checkpoint_frequency_chunks",
+                "partition_mapping",
+                "storage_backend",
+                "storage_uri",
+                "state_backend",
+                "manifest_version",
+            ):
+                scale_payload.pop(key, None)
     if not config.extensions.enabled:
         payload.pop("extensions", None)
     # Output sinks are delivery concerns, not generator inputs.  In

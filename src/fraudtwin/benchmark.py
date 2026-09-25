@@ -22,7 +22,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from fraudtwin import __version__
 from fraudtwin.benchmark_packs import (
-    PUBLIC_PACK_VERSION,
     PublicBenchmarkPack,
     _calibration_resource,
     list_public_packs,
@@ -897,7 +896,7 @@ def run_public_benchmark(
         "version": pack.version,
         "identity": pack.identity,
         "definition_fingerprint": pack.fingerprint,
-        "definition_version": PUBLIC_PACK_VERSION,
+        "definition_version": pack.version,
         "generator_compatibility": pack.generator_compatibility,
         "verification": {
             "configuration_hash": pack.resolved_configuration_hash,

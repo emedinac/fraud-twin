@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  actions: read
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-poetry
+        with:
+          python-version: "3.12"
+      - name: Validate release identity
+        run: python .github/scripts/release_policy.py check --tag "${GITHUB_REF_NAME}"
+      - name: Wait for CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 60); do
+            ci_state="$(gh run list \
+              --workflow ci.yml \
+              --commit "$GITHUB_SHA" \
+              --limit 1 \
+              --json status,conclusion \
+              --jq '.[0] | "\(.status) \(.conclusion // \"\")"' || true)"
+            if [[ -z "$ci_state" ]]; then
+              sleep 10
+              continue
+            fi
+            ci_status="${ci_state%% *}"
+            ci_conclusion="${ci_state#* }"
+            if [[ "$ci_status" == "completed" ]]; then
+              if [[ "$ci_conclusion" == "success" ]]; then
+                exit 0
+              fi
+              echo "CI completed with conclusion: $ci_conclusion" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for CI" >&2
+          exit 1
+      - name: Install project
+        run: poetry install
+      - name: Verify release metadata
+        run: |
+          poetry check --strict
+          poetry run fraudtwin schema validate
+          poetry run pytest tests/test_cli.py tests/test_schema.py tests/test_docs.py -o addopts=
+      - name: Build strict documentation
+        run: poetry run sphinx-build -E -W -b html docs /tmp/fraudtwin-release-docs
+      - name: Build distributions
+        run: poetry build
+      - name: Validate distributions
+        run: |
+          python -m pip install --upgrade twine
+          python -m twine check dist/*
+          python -m venv /tmp/fraudtwin-release
+          /tmp/fraudtwin-release/bin/pip install dist/*.whl
+          /tmp/fraudtwin-release/bin/fraudtwin schema validate
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/*"
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/* --generate-notes
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

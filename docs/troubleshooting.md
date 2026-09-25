@@ -16,8 +16,27 @@ poetry install -E ml -E graph
 poetry install -E postgres -E kafka -E lakehouse
 ```
 
-Optional dependency errors usually mean the corresponding extra is missing;
-they do not indicate that the deterministic core is unavailable.
+Optional dependency failures have three distinct causes:
+
+- A missing module means the extra is not installed. Add the matching Poetry
+  extra.
+- A package that imports but lacks `Producer`, `Schema`,
+  `SchemaRegistryClient`, or callable `psycopg.connect` is incomplete. Repair
+  it with `poetry install -E kafka -E postgres`; FraudTwin reports this
+  separately from a missing service.
+- A connection-refused or health-check failure means the client is installed
+  but Kafka, Schema Registry, or PostgreSQL is unavailable.
+
+The base installation remains valid for offline generation and tutorials.
+Verify both optional clients with:
+
+```console
+poetry run python -c \
+  "from confluent_kafka import Producer; from confluent_kafka.schema_registry import Schema, SchemaRegistryClient; print('Kafka extra OK')"
+
+poetry run python -c \
+  "import psycopg; assert callable(psycopg.connect); print('PostgreSQL extra OK')"
+```
 
 ## Configuration validation fails
 

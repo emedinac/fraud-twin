@@ -81,7 +81,7 @@ RUNS_DIR=./runs
 
 poetry run fraudtwin ml backtest "$CONFIG" \
   --run-id "$RUN_ID" \
-  --benchmark-pack configs/benchmarks/m10-minimal-v1.yaml \
+  --benchmark-pack configs/benchmarks/temporal-v1.yaml \
   --output-dir "$RUNS_DIR"
 ```
 
@@ -202,8 +202,9 @@ The v1 record names and parsing-canonical fingerprints are recorded in
 `contracts/avro/registry.yaml`:
 
 The `1.0.0` values in this table are Avro contract versions, not FraudTwin
-package releases. The package and public benchmark-pack release are `0.34.0`;
-contract versions remain independently versioned for compatibility.
+package releases. The public benchmark-pack release remains independently
+versioned from the FraudTwin package release; contract versions are also
+independently versioned for compatibility.
 
 | Subject | Avro record | Version | Canonical SHA-256 |
 | --- | --- | --- | --- |

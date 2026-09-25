@@ -15,6 +15,7 @@ on:
       - ".github/workflows/**"
       - "docker-compose.yml"
       - "observability/**"
+      - ".github/scripts/**"
       - "DEVELOPMENT.md"
       - "docs/workflows.md"
       - "docs/development.md"
@@ -36,6 +37,7 @@ on:
       - ".github/workflows/**"
       - "docker-compose.yml"
       - "observability/**"
+      - ".github/scripts/**"
       - "DEVELOPMENT.md"
       - "docs/workflows.md"
       - "docs/development.md"
@@ -56,13 +58,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Install Poetry
-        run: pipx install poetry
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/setup-poetry
         with:
           python-version: "3.12"
-          cache: poetry
-          cache-dependency-path: poetry.lock
       - name: Install dependencies
         run: poetry install --only main,dev -E postgres -E kafka -E observability
       - name: Ruff lint
@@ -71,6 +69,8 @@ jobs:
         run: poetry run fraudtwin schema validate
       - name: Poetry validation
         run: poetry check --strict
+      - name: Release metadata validation
+        run: python .github/scripts/release_policy.py check
       - name: Observability Compose configuration
         run: |
           GRAFANA_ADMIN_PASSWORD=ci-only-password docker compose --profile observability config --quiet
@@ -111,13 +111,9 @@ jobs:
       FRAUDTWIN_POSTGRES_DSN: postgresql://fraudtwin:fraudtwin@localhost:5432/fraudtwin
     steps:
       - uses: actions/checkout@v4
-      - name: Install Poetry
-        run: pipx install poetry
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/setup-poetry
         with:
           python-version: "3.12"
-          cache: poetry
-          cache-dependency-path: poetry.lock
       - name: Install dependencies
         run: poetry install -E postgres -E kafka -E observability
       - name: Tests
@@ -146,13 +142,9 @@ jobs:
       GRAFANA_ADMIN_PASSWORD: ci-only-password
     steps:
       - uses: actions/checkout@v4
-      - name: Install Poetry
-        run: pipx install poetry
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/setup-poetry
         with:
           python-version: "3.12"
-          cache: poetry
-          cache-dependency-path: poetry.lock
       - name: Install integration dependencies
         run: poetry install --only main,dev -E postgres -E kafka -E lakehouse -E observability
       - name: Run PostgreSQL, Kafka, and Iceberg smoke tests

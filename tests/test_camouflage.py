@@ -77,13 +77,13 @@ def test_neutral_camouflage_keeps_manifest_shape_and_configuration_hash() -> Non
 
 
 def test_camouflage_fixture_validates() -> None:
-    config = load_config(Path("configs/benchmarks/m13-camouflage-v1.yaml"))
+    config = load_config(Path("configs/benchmarks/camouflage-v1.yaml"))
     assert resolve_camouflage(config).enabled
     assert config.stress.families == {}
 
 
 def test_camouflage_fixture_global_strength_changes_generated_summaries() -> None:
-    base = load_config(Path("configs/benchmarks/m13-camouflage-v1.yaml"))
+    base = load_config(Path("configs/benchmarks/camouflage-v1.yaml"))
     low = base.model_copy(
         update={
             "stress": base.stress.model_copy(

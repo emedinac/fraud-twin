@@ -279,7 +279,7 @@ def test_regimes_change_source_history_and_source_identity() -> None:
 
 
 def test_benchmark_pack_rejects_non_semver_versions() -> None:
-    pack = load_benchmark_pack(Path("configs/benchmarks/m10-minimal-v1.yaml"))
+    pack = load_benchmark_pack(Path("configs/benchmarks/temporal-v1.yaml"))
     with pytest.raises(ValidationError, match="semantic"):
         BenchmarkPack.model_validate(pack.model_dump(mode="python") | {"version": "v1"})
 
@@ -293,7 +293,7 @@ def test_backtest_rejects_overlapping_steps_and_invalid_benchmark_windows() -> N
             step_seconds="1d",
         )
 
-    pack = load_benchmark_pack(Path("configs/benchmarks/m10-minimal-v1.yaml"))
+    pack = load_benchmark_pack(Path("configs/benchmarks/temporal-v1.yaml"))
     raw = _benchmark_pack_payload(pack)
     raw["windows"]["train"]["to"] = datetime(2026, 1, 1, 5, 30, tzinfo=UTC)
     with pytest.raises(ValidationError, match="label-maturity gap"):
@@ -326,9 +326,9 @@ def test_regime_label_policy_can_withhold_observed_labels() -> None:
 
 
 def test_benchmark_pack_is_versioned_and_cli_generates_results(tmp_path: Path) -> None:
-    pack = load_benchmark_pack(Path("configs/benchmarks/m10-minimal-v1.yaml"))
+    pack = load_benchmark_pack(Path("configs/benchmarks/temporal-v1.yaml"))
     assert isinstance(pack, BenchmarkPack)
-    assert pack.identity.startswith("fraudtwin-m10-minimal@1.0.0-")
+    assert pack.identity.startswith("fraudtwin-temporal@1.0.0-")
     assert pack.windows.stress is not None
 
     generated = runner.invoke(app, ["generate", str(CONFIG_PATH), "--output-dir", str(tmp_path)])
@@ -343,7 +343,7 @@ def test_benchmark_pack_is_versioned_and_cli_generates_results(tmp_path: Path) -
             "--run-id",
             run_id,
             "--benchmark-pack",
-            "configs/benchmarks/m10-minimal-v1.yaml",
+            "configs/benchmarks/temporal-v1.yaml",
             "--output-dir",
             str(tmp_path),
         ],

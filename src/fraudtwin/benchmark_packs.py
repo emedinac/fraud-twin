@@ -11,7 +11,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from fraudtwin.reproducibility import sha256_json
 
-PUBLIC_PACK_VERSION = "0.34.0"
 PUBLIC_PACK_RESOURCE_DIR = "public_packs"
 PUBLIC_PACK_REFERENCE_RE = re.compile(
     r"^(?P<id>FT-B0[1-8]-(?:STABLE|TEMPORAL|BOUNDARY|CAMOUFLAGE|GRAPH|OBSERVABILITY|CALIBRATED|MIXED))@"

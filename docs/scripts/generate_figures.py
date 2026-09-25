@@ -110,7 +110,7 @@ def _runtime_summary() -> dict[str, object]:
                 )
             )
         scenario_ids = ("F01", "F02", "F03", "F04", "F05")
-        benchmark = load_config(REPOSITORY / "configs" / "benchmarks" / "m13-camouflage-v1.yaml")
+        benchmark = load_config(REPOSITORY / "configs" / "benchmarks" / "camouflage-v1.yaml")
         benchmark_run = generate(benchmark, write=False)
         scenario_counts = tuple(
             sum(

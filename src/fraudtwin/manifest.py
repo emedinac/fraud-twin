@@ -200,7 +200,7 @@ def _git_commit() -> str:
 def create_manifest(config: SimulationRunConfig) -> RunManifest:
     """Create reproducibility metadata for a simulation run."""
 
-    run_hash = config_hash(config)[:16]
+    run_hash = config_hash(config, include_scale_execution=False)[:16]
     start_time = config.simulation.start
     resolved = config.model_dump(mode="json")
     if not config.graph.enabled:
@@ -258,7 +258,7 @@ def create_manifest(config: SimulationRunConfig) -> RunManifest:
         generator_version=__version__,
         git_commit=_git_commit(),
         seed=config.simulation.seed,
-        scenario_config_hash=config_hash(config),
+        scenario_config_hash=config_hash(config, include_scale_execution=False),
         schema_versions={},
         start_time=start_time,
         end_time=start_time + timedelta(days=config.simulation.duration_days),

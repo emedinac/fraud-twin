@@ -58,6 +58,38 @@ class KafkaPublicationError(RuntimeError):
     """Raised when one or more Kafka records fail delivery."""
 
 
+_KAFKA_INSTALL_COMMAND = "poetry install -E kafka"
+
+
+def _missing_kafka_dependency(message: str) -> KafkaConfigurationError:
+    return KafkaConfigurationError(
+        f"{message} Install or repair the optional Kafka extra with: {_KAFKA_INSTALL_COMMAND}"
+    )
+
+
+def _schema_class() -> Any | None:
+    """Return Confluent's Schema class, or None when Kafka is not installed."""
+
+    try:
+        schema_registry = importlib.import_module("confluent_kafka.schema_registry")
+    except ImportError as exc:
+        if isinstance(exc, ModuleNotFoundError) and exc.name in {
+            "confluent_kafka",
+            "confluent_kafka.schema_registry",
+        }:
+            return None
+        raise _missing_kafka_dependency(
+            f"Kafka Schema Registry dependencies could not be imported: {exc}"
+        ) from exc
+    schema_class = getattr(schema_registry, "Schema", None)
+    if not callable(schema_class):
+        raise _missing_kafka_dependency(
+            "The installed confluent-kafka package is incomplete: "
+            "confluent_kafka.schema_registry.Schema is missing or not callable."
+        )
+    return schema_class
+
+
 @dataclass(frozen=True)
 class PublicationRecord:
     """A deterministic, contract-encoded Kafka message."""
@@ -235,15 +267,14 @@ def _register_subject_versions(client: Any, subject: ContractSubject) -> int:
 
 def _register(client: Any, subject: str, schema: Any) -> int:
     try:
-        try:
-            schema_registry = importlib.import_module("confluent_kafka.schema_registry")
-            schema_class = vars(schema_registry)["Schema"]
+        schema_class = _schema_class()
+        if schema_class is None:
+            remote_schema = schema.canonical_form
+        else:
             schema_payload = (
                 schema.to_json() if hasattr(schema, "to_json") else schema.canonical_form
             )
             remote_schema = schema_class(json.dumps(schema_payload, separators=(",", ":")))
-        except ImportError:
-            remote_schema = schema.canonical_form
         registered = client.register_schema(subject, remote_schema)
     except Exception as exc:
         raise KafkaConfigurationError(
@@ -263,8 +294,39 @@ def _dependencies() -> tuple[Any, Any]:
         confluent_kafka = importlib.import_module("confluent_kafka")
         schema_registry = importlib.import_module("confluent_kafka.schema_registry")
     except ImportError as exc:  # pragma: no cover - depends on optional extra
-        raise RuntimeError("Kafka output requires the optional 'kafka' dependency") from exc
-    return vars(confluent_kafka)["Producer"], vars(schema_registry)["SchemaRegistryClient"]
+        if not (
+            isinstance(exc, ModuleNotFoundError)
+            and exc.name in {"confluent_kafka", "confluent_kafka.schema_registry"}
+        ):
+            raise _missing_kafka_dependency(
+                f"Kafka dependencies could not be imported: {exc}"
+            ) from exc
+        raise _missing_kafka_dependency(
+            "Kafka output requires the optional 'kafka' dependency."
+        ) from exc
+
+    missing = [
+        name
+        for name, value in (
+            ("confluent_kafka.Producer", getattr(confluent_kafka, "Producer", None)),
+            (
+                "confluent_kafka.schema_registry.Schema",
+                getattr(schema_registry, "Schema", None),
+            ),
+            (
+                "confluent_kafka.schema_registry.SchemaRegistryClient",
+                getattr(schema_registry, "SchemaRegistryClient", None),
+            ),
+        )
+        if not callable(value)
+    ]
+    if missing:
+        raise _missing_kafka_dependency(
+            "The installed confluent-kafka package is incomplete; missing callable symbols: "
+            + ", ".join(missing)
+            + "."
+        )
+    return confluent_kafka.Producer, schema_registry.SchemaRegistryClient
 
 
 def publisher_from_environment(

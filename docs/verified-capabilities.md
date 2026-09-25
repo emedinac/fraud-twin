@@ -17,7 +17,7 @@ bounded test, runnable command, and inspectable artifact exist together.
 | Kafka contracts/publication | `fraudtwin schema validate` and streaming Compose profile | Avro fingerprints, topic publication, chaos report |
 | PostgreSQL operational mirror | `fraudtwin db migrate` plus clean generation | Relational reconciliation and idempotent run checks |
 | Iceberg materialization | `fraudtwin lakehouse ingest-run` | Bronze/Silver/Gold manifest and snapshots |
-| Bounded scale development path | `configs/scale-dev.yaml` and `fraudtwin scale-benchmark` | Checkpoint, partition fingerprints, laptop evidence; manifest marks the current compatibility-materialized execution mode |
+| Bounded scale development path | `configs/scale-dev.yaml` and `fraudtwin scale-benchmark` | Checkpoint, partition fingerprints, stage timings, and laptop evidence; core payments use the bounded streaming producer while advanced stages remain compatibility-materialized |
 | Spark reference integration | `examples/spark-streaming/spark_streaming.py` | Silver/Gold/late projections and Spark run report |
 | Extension SDK | `fraudtwin.extensions` | Protocol tests and manifest provenance |
 
@@ -26,11 +26,13 @@ bounded test, runnable command, and inspectable artifact exist together.
 The current release verifies deterministic chunking, checkpoint integrity,
 resume behavior, worker-count invariance, and bounded development fixtures. The
 public `iter_scale_records` and partition reader APIs are the preparation for
-the out-of-core producer work, but `generate_scale()` still uses the
-compatibility generator for the source entities and behavior stages. It does
-**not** publish a 100M/1B throughput, memory, or production-scale claim. Those
-claims require the remaining out-of-core stages and hardware evidence outside
-the laptop validation profile.
+the out-of-core producer work, and the core scale feature set now writes
+payments, lifecycle events, and ledger entries through bounded batches while
+preserving the compatibility row contract. Entity/profile materialization and
+advanced fraud, graph, quality, and PIT stages remain bounded development
+paths. It does **not** publish a 100M/1B throughput, memory, or production-scale
+claim. Those claims require the remaining out-of-core stages and hardware
+evidence outside the laptop validation profile.
 
 ## Evidence rule
 
