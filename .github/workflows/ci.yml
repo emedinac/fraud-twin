@@ -44,6 +44,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  static-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install --only main,dev -E postgres -E kafka -E observability
+      - name: Ruff lint
+        run: poetry run ruff check .
+      - name: Avro contract registry
+        run: poetry run fraudtwin schema validate
+      - name: Poetry validation
+        run: poetry check --strict
+      - name: Observability Compose configuration
+        run: |
+          GRAFANA_ADMIN_PASSWORD=ci-only-password docker compose --profile observability config --quiet
+      - name: Ruff format
+        run: poetry run ruff format --check .
+      - name: Mypy
+        run: poetry run mypy src
+      - name: Diff check
+        run: git diff --check
+
   quality:
     runs-on: ubuntu-latest
     services:
@@ -71,19 +98,6 @@ jobs:
         run: pipx install poetry
       - name: Install dependencies
         run: poetry install -E postgres -E kafka -E observability
-      - name: Ruff lint
-        run: poetry run ruff check .
-      - name: Avro contract registry
-        run: poetry run fraudtwin schema validate
-      - name: Poetry validation
-        run: poetry check --strict
-      - name: Observability Compose configuration
-        run: |
-          GRAFANA_ADMIN_PASSWORD=ci-only-password docker compose --profile observability config --quiet
-      - name: Ruff format
-        run: poetry run ruff format --check .
-      - name: Mypy
-        run: poetry run mypy src
       - name: Tests
         run: poetry run pytest
       - name: Prometheus/Grafana integration
@@ -124,8 +138,6 @@ jobs:
           python -m venv /tmp/fraudtwin-wheel
           /tmp/fraudtwin-wheel/bin/pip install dist/*.whl
           /tmp/fraudtwin-wheel/bin/fraudtwin schema validate
-      - name: Diff check
-        run: git diff --check
 
   integration-smoke:
     # External services are intentionally exercised only for pull requests;
@@ -165,12 +177,20 @@ jobs:
           docker compose --profile integration --profile streaming --profile lakehouse up -d \
             postgres kafka schema-registry streaming-topics minio minio-init iceberg-rest
 
-          for _ in $(seq 1 60); do
+          postgres_ready=false
+          for _ in $(seq 1 150); do
             if docker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+              postgres_ready=true
               break
             fi
             sleep 2
           done
+          if [[ "$postgres_ready" != true ]]; then
+            docker compose ps -a
+            docker compose logs --no-color --tail=120 postgres
+            echo "PostgreSQL did not become ready within 300 seconds" >&2
+            exit 1
+          fi
           docker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 
           for _ in $(seq 1 60); do
