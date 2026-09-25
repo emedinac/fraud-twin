@@ -29,10 +29,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # Tag pushes do not start the full CI matrix. Wait for the CI run
+          # produced by the corresponding push to main instead.
           for _ in $(seq 1 60); do
             ci_state="$(gh run list \
               --workflow ci.yml \
               --commit "$GITHUB_SHA" \
+              --event push \
               --limit 1 \
               --json status,conclusion \
               --jq '.[0] | "\(.status) \(.conclusion // "")"' || true)"
