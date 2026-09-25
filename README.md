@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/_static/fraudtwin-mark.svg" alt="FraudTwin logo" width="120">
+  <img src="https://raw.githubusercontent.com/emedinac/fraudtwin/main/docs/_static/fraudtwin-mark.svg" alt="FraudTwin logo" width="120">
 </p>
 
 # FraudTwin
