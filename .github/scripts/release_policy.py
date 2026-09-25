@@ -162,6 +162,19 @@ def bump_release_identity(root: Path, base_root: Path) -> str | None:
     if count != 1:
         raise ValueError("could not update __version__ in src/fraudtwin/__init__.py")
     init_path.write_text(init_text, encoding="utf-8")
+
+    changelog_path = root / "CHANGELOG.md"
+    changelog_text = changelog_path.read_text(encoding="utf-8")
+    changelog_text, count = re.subn(
+        VERSION_HEADING_RE.pattern,
+        lambda match: match.group(0).replace(match.group("version"), target_version, 1),
+        changelog_text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if count != 1:
+        raise ValueError("could not update current CHANGELOG.md release heading")
+    changelog_path.write_text(changelog_text, encoding="utf-8")
     return target_version
 
 
