@@ -94,7 +94,7 @@ addopts = "--cov=fraudtwin --cov-report=term-missing"
 testpaths = ["tests"]
 
 [tool.coverage.report]
-fail_under = 50
+fail_under = 70
 
 [tool.ruff]
 line-length = 100
