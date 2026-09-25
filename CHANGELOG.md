@@ -1,9 +1,11 @@
 # Release notes
 
-## 0.34.5 — Release policy reliability
+## 0.34.6 — Release policy reliability
 
 - Fixed version-policy automation so changelog version updates are committed
   together with the package metadata.
+- Made version policy read-only and restricted package publication to explicit
+  matching version tags, so CI no longer rewrites contributor branches.
 
 ## 0.34.5 — Release policy reliability
 

@@ -20,6 +20,13 @@ COMMIT_SUBJECT_RE = re.compile(
     r"^(?:(?:feat|fix|refactor|perf|docs|test|build|ci|chore|style|revert)"
     r'(?:\([^()]+\))?!?:\s+\S.*|Revert "\S.*")$'
 )
+MERGE_COMMIT_SUBJECT_RE = re.compile(
+    r"^Merge (?:"
+    r"branch(?:es)? '[^']+'(?:, '[^']+')*|"
+    r"remote-tracking branch '[^']+'|"
+    r"pull request #[0-9]+ from \S+)"
+    r"(?: of \S+)?(?: into \S+)?$"
+)
 PACKAGE_PIN_RE = re.compile(
     r"\bfraudtwin(?:==|>=|<=|~=)\s*" r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\b"
 )
@@ -194,12 +201,16 @@ def check_commit_subjects(path: Path) -> None:
     for line_number, subject in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not subject.strip():
             continue
-        if COMMIT_SUBJECT_RE.fullmatch(subject) is None:
+        if (
+            COMMIT_SUBJECT_RE.fullmatch(subject) is None
+            and MERGE_COMMIT_SUBJECT_RE.fullmatch(subject) is None
+        ):
             errors.append(f"{line_number}: {subject}")
     if errors:
         raise ValueError(
             "invalid commit subjects (use feat|fix|refactor|perf|docs|test|build|ci|chore|"
-            "style|revert):\n" + "\n".join(f"- {error}" for error in errors)
+            "style|revert, or a generated merge subject):\n"
+            + "\n".join(f"- {error}" for error in errors)
         )
 
 

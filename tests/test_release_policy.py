@@ -84,7 +84,11 @@ def test_version_policy_requires_a_version_advance(tmp_path: Path) -> None:
 def test_commit_subjects_follow_the_conventional_commit_allowlist(tmp_path: Path) -> None:
     subjects = tmp_path / "subjects.txt"
     subjects.write_text(
-        'feat(cli): add command\nfix: correct output\nRevert "chore: bump version"\n',
+        "feat(cli): add command\n"
+        "fix: correct output\n"
+        'Revert "chore: bump version"\n'
+        "Merge branch 'main' into dev\n"
+        "Merge pull request #28 from emedinac/dev\n",
         encoding="utf-8",
     )
     check_commit_subjects(subjects)
