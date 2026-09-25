@@ -22,9 +22,15 @@ from fraudtwin.calibration import (
     load_reference_data,
     write_calibration_profile,
 )
-from fraudtwin.config import SimulationRunConfig, config_hash, load_config
+from fraudtwin.config import (
+    SimulationRunConfig,
+    _default_config_text,
+    config_hash,
+    load_config,
+)
 from fraudtwin.contracts import ContractValidationError, load_contract_registry
 from fraudtwin.domain import Account, LedgerEntry, Payment, PaymentEvent, validate_ledger
+from fraudtwin.errors import GenerationError
 from fraudtwin.generation import generate as generate_library
 from fraudtwin.generation import generate_scale as generate_scale_library
 from fraudtwin.generation import resume_generation
@@ -67,7 +73,7 @@ from fraudtwin.simulation.parquet import (
 )
 
 app = typer.Typer(help="Synthetic financial-system and fraud digital twin.")
-config_app = typer.Typer(help="Validate simulation configuration.")
+config_app = typer.Typer(help="Create and validate simulation configuration.")
 ml_app = typer.Typer(help="Build local point-in-time ML datasets.")
 app.add_typer(config_app, name="config")
 app.add_typer(ml_app, name="ml")
@@ -645,6 +651,35 @@ def validate_config(
     typer.echo(f"Configuration hash: {config_hash(config)}")
 
 
+@config_app.command("init")
+def init_config(
+    path: Annotated[
+        Path,
+        typer.Argument(help="Destination YAML file for the project-owned template."),
+    ] = Path("config.yaml"),
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Replace an existing file."),
+    ] = False,
+) -> None:
+    """Create a project-owned copy of the packaged minimal configuration."""
+
+    if path.exists() and not force:
+        typer.echo(
+            f"Configuration file already exists: {path}. Use --force to replace it.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_default_config_text(), encoding="utf-8")
+    except OSError as exc:
+        typer.echo(f"Configuration template could not be written: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Configuration template written: {path}")
+    typer.echo(f"Validate it with: fraudtwin config validate {path}")
+
+
 @app.command()
 def generate(
     path: Annotated[Path, typer.Argument(help="YAML configuration file.")],
@@ -697,6 +732,11 @@ def generate(
                     workers=workers,
                     checkpoint_dir=checkpoint_dir,
                 )
+        except GenerationError as exc:
+            if metrics is not None:
+                metrics.record_generator_error()
+            typer.echo(exc.format_report(), err=True)
+            raise typer.Exit(code=1) from exc
         except Exception:
             if metrics is not None:
                 metrics.record_generator_error()

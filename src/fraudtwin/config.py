@@ -2,6 +2,7 @@ import hashlib
 import json
 import math
 from datetime import datetime, timedelta
+from importlib.resources import files
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
@@ -306,7 +307,7 @@ class PixLifecycleConfig(_StrictModel):
 
 
 class FraudScenarioSettings(_StrictModel):
-    """Bounds and prevalence controls shared by one M6 scenario."""
+    """Bounds and campaign-capacity controls for one fraud scenario."""
 
     enabled: bool = True
     weight: Annotated[float, Field(ge=0)] = 1.0
@@ -2284,6 +2285,26 @@ def load_config(
 
         resolve_calibration(config)
     return config
+
+
+def _default_config_text() -> str:
+    """Return the packaged minimal configuration template."""
+
+    return files("fraudtwin").joinpath("defaults", "minimal.yaml").read_text(encoding="utf-8")
+
+
+def load_default_config() -> SimulationRunConfig:
+    """Load and validate FraudTwin's packaged minimal configuration.
+
+    This is the supported starting point for Python applications that want to
+    customize the built-in configuration without depending on the package's
+    internal resource layout.
+    """
+
+    raw_config = yaml.safe_load(_default_config_text())
+    if not isinstance(raw_config, dict):
+        raise ValueError("the built-in minimal configuration must be a mapping")
+    return SimulationRunConfig.model_validate(raw_config)
 
 
 def config_hash(

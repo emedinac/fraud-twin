@@ -228,7 +228,9 @@ class FraudScenarioGenerator:
 
         payment_tuple = tuple(payments)
         event_tuple = tuple(events)
-        ledger = self.payment_generator.materialize_ledger(payment_tuple, event_tuple)
+        ledger = self.payment_generator.materialize_ledger(
+            payment_tuple, event_tuple, stage="fraud payment ledger"
+        )
         return FraudDataset(payment_tuple, event_tuple, ledger, tuple(records))
 
     def _campaign_plan(

@@ -1,4 +1,4 @@
-__version__ = "0.34.6"
+__version__ = "0.34.7"
 
 from fraudtwin.benchmark import (
     PublicBenchmarkPack,
@@ -45,6 +45,7 @@ from fraudtwin.campaign_dynamics import (
     resolve_campaign_dynamics,
     validate_campaign_dynamics,
 )
+from fraudtwin.config import load_default_config
 from fraudtwin.counterfactual import (
     CounterfactualChangeSet,
     CounterfactualDataset,
@@ -74,6 +75,7 @@ from fraudtwin.extensions import (
     PaymentRail,
     discover_extensions,
 )
+from fraudtwin.errors import GenerationError, LedgerCapacityError
 from fraudtwin.generation import (
     GeneratedData,
     GeneratedRun,
@@ -201,6 +203,9 @@ __all__ = [
     "resolve_calibration_configuration",
     "validate_calibration_output",
     "write_calibration_profile",
+    "load_default_config",
+    "GenerationError",
+    "LedgerCapacityError",
     "QualityAdapterMetadata",
     "QualityAdapterRequest",
     "QualityArtifactBundle",

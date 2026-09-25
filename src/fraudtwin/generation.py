@@ -9,11 +9,9 @@ from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
-from importlib.resources import files
 from pathlib import Path
 from typing import Literal, cast, overload
 
-import yaml
 from pydantic import BaseModel
 
 from fraudtwin.calibration import (
@@ -23,13 +21,14 @@ from fraudtwin.calibration import (
     load_calibration_profile,
     resolve_calibration,
 )
-from fraudtwin.config import SimulationRunConfig, config_hash, load_config
+from fraudtwin.config import SimulationRunConfig, config_hash, load_config, load_default_config
 from fraudtwin.difficulty import difficulty_metadata
 from fraudtwin.domain import (
     CARD_LIFECYCLE_EVENT_TYPES,
     PIX_LIFECYCLE_EVENT_TYPES,
     LedgerEntry,
 )
+from fraudtwin.errors import LedgerCapacityError
 from fraudtwin.graph import build_graph
 from fraudtwin.kafka import publisher_from_environment
 from fraudtwin.manifest import RunManifest, create_manifest, write_manifest
@@ -161,11 +160,7 @@ def _resolve_config(
     profile_override: Path | None = None,
 ) -> SimulationRunConfig:
     if config is None:
-        default_config = files("fraudtwin").joinpath("defaults", "minimal.yaml")
-        raw_config = yaml.safe_load(default_config.read_text(encoding="utf-8"))
-        if not isinstance(raw_config, dict):
-            raise ValueError("the built-in minimal configuration must be a mapping")
-        return SimulationRunConfig.model_validate(raw_config)
+        return load_default_config()
     if isinstance(config, SimulationRunConfig):
         return config
     return load_config(Path(config), calibration_profile_override=profile_override)
@@ -631,9 +626,20 @@ def iter_scale_records(
             ledger_number += 1
             entry_type = cast(Literal["DEBIT", "CREDIT"], raw_entry_type)
             delta = float(event["amount"]) if entry_type == "CREDIT" else -float(event["amount"])
-            balance = round(balances[account_id] + delta, 2)
-            if balance < -payment_generator.accounts_by_id[account_id].overdraft_limit:
-                raise ValueError(f"ledger debit exceeds overdraft limit for {account_id}")
+            balance_before = balances[account_id]
+            balance = round(balance_before + delta, 2)
+            account = payment_generator.accounts_by_id[account_id]
+            if balance < -account.overdraft_limit:
+                raise LedgerCapacityError(
+                    stage="streaming payment ledger",
+                    account_id=account_id,
+                    payment_id=str(event["payment_id"]),
+                    event_id=str(event["event_id"]),
+                    debit_amount=float(event["amount"]),
+                    balance_before=balance_before,
+                    balance_after=balance,
+                    overdraft_limit=account.overdraft_limit,
+                )
             balances[account_id] = balance
             yield _logical_row(
                 "ledger_entries",
