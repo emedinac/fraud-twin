@@ -22,7 +22,7 @@ COMMIT_SUBJECT_RE = re.compile(
 )
 MERGE_COMMIT_SUBJECT_RE = re.compile(
     r"^Merge (?:"
-    r"branches? '[^']+'(?:, '[^']+')*|"
+    r"branch(?:es)? '[^']+'(?:, '[^']+')*|"
     r"remote-tracking branch '[^']+'|"
     r"pull request #[0-9]+ from \S+)"
     r"(?: of \S+)?(?: into \S+)?$"
