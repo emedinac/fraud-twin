@@ -165,12 +165,20 @@ jobs:
           docker compose --profile integration --profile streaming --profile lakehouse up -d \
             postgres kafka schema-registry streaming-topics minio minio-init iceberg-rest
 
-          for _ in $(seq 1 60); do
+          postgres_ready=false
+          for _ in $(seq 1 150); do
             if docker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+              postgres_ready=true
               break
             fi
             sleep 2
           done
+          if [[ "$postgres_ready" != true ]]; then
+            docker compose ps -a
+            docker compose logs --no-color --tail=120 postgres
+            echo "PostgreSQL did not become ready within 300 seconds" >&2
+            exit 1
+          fi
           docker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 
           for _ in $(seq 1 60); do
