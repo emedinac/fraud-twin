@@ -1,5 +1,6 @@
 """Focused campaign-dynamics contract tests."""
 
+from importlib.metadata import version as installed_version
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,7 @@ FIXTURE = Path("configs/benchmarks/m15-campaign-dynamics-v1.yaml")
 
 
 def test_campaign_dynamics_is_strict_and_neutral_identity_is_unchanged() -> None:
-    assert __version__ == "0.34.0"
+    assert __version__ == installed_version("fraudtwin")
     base = load_config(Path("configs/minimal.yaml"))
     neutral = base.model_copy(update={"campaign_dynamics": CampaignDynamicsConfig()})
     assert config_hash(base) == config_hash(neutral)

@@ -26,20 +26,33 @@ PACK_IDS = (
 )
 
 
+def _pack_identity(pack_id: str) -> str:
+    return next(pack.identity for pack in list_public_packs() if pack.id == pack_id)
+
+
+def _pack_minor_reference(pack_id: str) -> str:
+    pack = next(pack for pack in list_public_packs() if pack.id == pack_id)
+    major, minor, _ = pack.version.split(".")
+    return f"{pack.id}@{major}.{minor}"
+
+
 def test_public_pack_registry_contains_the_complete_initial_pack_family() -> None:
     packs = list_public_packs()
     assert tuple(pack.id for pack in packs) == PACK_IDS
-    assert all(pack.version == "0.34.0" for pack in packs)
+    assert len({pack.version for pack in packs}) == 1
     assert all(pack.expected_descriptors for pack in packs)
     assert all(pack.expected_fingerprints for pack in packs)
-    assert load_public_pack("FT-B04-CAMOUFLAGE@0.34").identity == "FT-B04-CAMOUFLAGE@0.34.0"
+    assert load_public_pack(_pack_minor_reference("FT-B04-CAMOUFLAGE")).identity == _pack_identity(
+        "FT-B04-CAMOUFLAGE"
+    )
 
 
 @pytest.mark.parametrize("pack_id", PACK_IDS)
 def test_public_pack_runs_match_frozen_goldens(pack_id: str, tmp_path: Path) -> None:
-    result = run_public_benchmark(f"{pack_id}@0.34.0", output_dir=tmp_path)
+    identity = _pack_identity(pack_id)
+    result = run_public_benchmark(identity, output_dir=tmp_path)
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
-    assert manifest["public_pack"]["identity"] == f"{pack_id}@0.34.0"
+    assert manifest["public_pack"]["identity"] == identity
     assert manifest["public_pack"]["verification"]["descriptors_match"] is True
     if pack_id == "FT-B04-CAMOUFLAGE":
         row = result.results[0]
@@ -48,8 +61,9 @@ def test_public_pack_runs_match_frozen_goldens(pack_id: str, tmp_path: Path) -> 
 
 
 def test_public_pack_repeated_executions_are_identical(tmp_path: Path) -> None:
-    first = run_public_benchmark("FT-B08-MIXED@0.34.0", output_dir=tmp_path / "first")
-    second = run_public_benchmark("FT-B08-MIXED@0.34.0", output_dir=tmp_path / "second")
+    identity = _pack_identity("FT-B08-MIXED")
+    first = run_public_benchmark(identity, output_dir=tmp_path / "first")
+    second = run_public_benchmark(identity, output_dir=tmp_path / "second")
     first_manifest = json.loads(first.manifest_path.read_text(encoding="utf-8"))
     second_manifest = json.loads(second.manifest_path.read_text(encoding="utf-8"))
     assert (
@@ -84,7 +98,7 @@ def test_public_pack_cli_describe_and_legacy_generic_command(tmp_path: Path) -> 
 def test_public_pack_verifies_existing_artifact_and_rejects_tampered_descriptors(
     tmp_path: Path,
 ) -> None:
-    result = run_public_benchmark("FT-B01-STABLE@0.34.0", output_dir=tmp_path / "run")
+    result = run_public_benchmark(_pack_identity("FT-B01-STABLE"), output_dir=tmp_path / "run")
     verified = verify_public_benchmark(result.root)
     assert verified["descriptors_match"] is True
 
