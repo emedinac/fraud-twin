@@ -106,12 +106,10 @@ Each layer keeps stable identities and causal timestamps. Operational views
 contain only information available at the selected time; oracle artifacts keep
 the complete explanation for evaluation and audit.
 
-Documentation
--------------
-
 .. toctree::
    :maxdepth: 2
    :caption: Getting started
+   :hidden:
 
    quickstart
    installation
@@ -156,6 +154,7 @@ Documentation
 .. toctree::
    :maxdepth: 1
    :caption: Learn by level
+   :hidden:
 
    levels/beginner
    levels/intermediate
@@ -164,12 +163,14 @@ Documentation
 .. toctree::
    :maxdepth: 1
    :caption: Find by role
+   :hidden:
 
    audiences
 
 .. toctree::
    :maxdepth: 2
    :caption: Guides
+   :hidden:
 
    configuration
    workflows
@@ -192,12 +193,14 @@ Documentation
 .. toctree::
    :maxdepth: 2
    :caption: Concepts
+   :hidden:
 
    concepts
 
 .. toctree::
    :maxdepth: 2
    :caption: Reference
+   :hidden:
 
    api
    configuration-reference
@@ -207,6 +210,7 @@ Documentation
 .. toctree::
    :maxdepth: 1
    :caption: Resources
+   :hidden:
 
    glossary
    troubleshooting

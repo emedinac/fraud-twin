@@ -52,8 +52,8 @@ fraudtwin --help
 ### Repository or contributor installation
 
 ```console
-git clone https://github.com/emedinac/fraud-twin.git
-cd fraud-twin
+git clone https://github.com/emedinac/fraudtwin.git
+cd fraudtwin
 poetry install
 poetry run fraudtwin config validate configs/minimal.yaml
 ```

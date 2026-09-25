@@ -5,13 +5,13 @@
 # FraudTwin
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB.svg?logo=python&logoColor=white)](https://docs.python.org/3/)
-[![Documentation](https://img.shields.io/badge/docs-latest-0B7285.svg)](https://emedinac.github.io/fraud-twin/latest/)
+[![Documentation](https://img.shields.io/badge/docs-latest-0B7285.svg)](https://emedinac.github.io/fraudtwin/latest/)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=github-actions&logoColor=white)](.github/workflows/ci.yml)
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 [![Parquet](https://img.shields.io/badge/output-Apache%20Parquet-50ABF1?logo=apacheparquet&logoColor=white)](https://parquet.apache.org/docs/)
 [![Pydantic](https://img.shields.io/badge/config-Pydantic%202-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 
-Documentation: [main site](https://emedinac.github.io/fraud-twin/)
+Documentation: [main site](https://emedinac.github.io/fraudtwin/)
 
 > A deterministic payment world for building, breaking, and validating fraud systems.
 
@@ -43,27 +43,27 @@ visible instead of silently rewarding them.
 
 ## Quick start
 
-Requirements: Python 3.12+ and Poetry 2.x. See the [installation and support
-matrix](docs/installation.md) for PyPI installs, optional extras, and resource
-expectations.
+Requirements: Python 3.12+. Install the package in an existing project with
+Poetry, or install it directly into a virtual environment with pip:
 
-```bash
-git clone https://github.com/emedinac/fraud-twin.git
-cd fraud-twin
-poetry install
+```console
+# Poetry-managed project
+poetry add fraudtwin
+poetry run fraudtwin --help
 
-# Validate and generate the minimal local run.
-CONFIG=configs/minimal.yaml
-RUNS_DIR=./runs
+# Generate and persist the built-in minimal local run.
+poetry run python -c 'import fraudtwin; run = fraudtwin.generate(write=True, output_dir="runs"); print(f"Run generated: {run.run_id}")'
 
-poetry run fraudtwin config validate "$CONFIG"
-poetry run fraudtwin generate "$CONFIG" --output-dir "$RUNS_DIR"
+# Or a virtual environment managed with pip
+python -m pip install fraudtwin
+fraudtwin --help
+python -c 'import fraudtwin; run = fraudtwin.generate(write=True, output_dir="runs"); print(f"Run generated: {run.run_id}")'
 ```
 
-The command prints an immutable run ID and writes a manifest plus Parquet
-tables. The baseline configuration creates a small payment world with fraud
-disabled. Copy it, enable the fraud and workflow sections, and keep the same
-seed while iterating on a scenario.
+The built-in minimal configuration is validated during generation and writes an
+immutable run manifest plus Parquet tables under `runs/<run-id>/`. For custom
+YAML configurations and repository workflows, see the [installation and support
+matrix](docs/installation.md).
 
 ### Python API
 
@@ -73,18 +73,14 @@ The public API is typed and has two explicit workflows:
 from pathlib import Path
 
 import fraudtwin
-from fraudtwin.config import load_config
-
-config = load_config(Path("configs/minimal.yaml"))
 
 # In-memory: precise IDE autocomplete for entities, behavior, and datasets.
-data = fraudtwin.generate(config)
+data = fraudtwin.generate()
 dataset = data.require_dataset().frame
 print(data.run_id, dataset.shape)
 
 # Persisted: metadata and paths first; load records only when needed.
 run = fraudtwin.generate(
-    config,
     write=True,
     output_dir=Path("runs"),
 )
@@ -131,9 +127,9 @@ notebook directory:
 | [Streaming and Kafka reliability](docs/tutorials/streaming-reliability.md) | Avro contracts, delivery faults, outages, duplicates, and event-time correctness. |
 | [Operations and incident response](docs/tutorials/operations.md) | Checkpoint/resume, data repair, PostgreSQL reconciliation, and lakehouse observability. |
 
-The [versioned documentation site](https://emedinac.github.io/fraud-twin/latest/)
+The [versioned documentation site](https://emedinac.github.io/fraudtwin/latest/)
 contains rendered notebooks, guides, troubleshooting, compatibility notes, and
-the [Python API reference](https://emedinac.github.io/fraud-twin/latest/api.html).
+the [Python API reference](https://emedinac.github.io/fraudtwin/latest/api.html).
 The API reference lists supported public classes and functions with signatures,
 parameters, return types, exceptions, and source links.
 
@@ -187,8 +183,13 @@ Install only what a workflow needs. The base install remains dependency-light.
 | `mlflow`, `serving` | Artifact tracking and the local FastAPI scoring reference service. |
 
 ```bash
-poetry install -E ml -E graph
-poetry install -E kafka -E postgres -E lakehouse -E observability
+# Poetry-managed project
+poetry add fraudtwin --extras ml --extras graph
+poetry add fraudtwin --extras kafka --extras postgres --extras lakehouse --extras observability
+
+# Or with pip
+python -m pip install "fraudtwin[ml,graph]"
+python -m pip install "fraudtwin[kafka,postgres,lakehouse,observability]"
 ```
 
 The optional Spark reference pipeline is documented in

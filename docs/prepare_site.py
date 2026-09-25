@@ -67,7 +67,7 @@ def prepare_site(root: Path) -> None:
         {
             "name": "latest",
             "version": "latest",
-            "url": "https://emedinac.github.io/fraud-twin/latest/",
+            "url": "https://emedinac.github.io/fraudtwin/latest/",
         }
     ]
     for path in candidates:
@@ -78,7 +78,7 @@ def prepare_site(root: Path) -> None:
             {
                 "name": path.name,
                 "version": path.name,
-                "url": f"https://emedinac.github.io/fraud-twin/{path.name}/",
+                "url": f"https://emedinac.github.io/fraudtwin/{path.name}/",
             }
         )
     (root / "version-switcher.json").write_text(

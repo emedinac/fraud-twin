@@ -42,6 +42,9 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
+html_sidebars = {
+    "index": ["sidebar-docs-nav.html"],
+}
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "tutorials/outputs/*"]
 autosummary_generate = True
 autodoc_member_order = "bysource"
@@ -81,10 +84,13 @@ html_logo = "_static/fraudtwin-mark.svg"
 html_favicon = "_static/fraudtwin-mark.svg"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
+# Keep source files available to the documentation build, but do not expose
+# Sphinx's generated "Show Source" link in the published sidebar.
+html_show_sourcelink = False
 _site_version = globals().get("smv_current_version", "latest")
 if _site_version in {"main", "dev"}:
     _site_version = "latest"
-html_baseurl = f"https://emedinac.github.io/fraud-twin/{_site_version}/"
+html_baseurl = f"https://emedinac.github.io/fraudtwin/{_site_version}/"
 html_theme_options = {
     "logo": {"text": "FraudTwin"},
     "navbar_align": "content",
@@ -94,30 +100,23 @@ html_theme_options = {
     "show_nav_level": 2,
     "navigation_with_keys": True,
     "show_version_warning_banner": True,
-    "github_url": "https://github.com/emedinac/fraud-twin",
+    "github_url": "https://github.com/emedinac/fraudtwin",
     "use_edit_page_button": True,
     "announcement": (
         "FraudTwin documentation is versioned. Check the version selector before "
         "copying an API example."
     ),
-    "icon_links": [
-        {
-            "name": "GitHub",
-            "url": "https://github.com/emedinac/fraud-twin",
-            "icon": "fa-brands fa-github",
-        },
-    ],
 }
 if os.environ.get("FRAUDTWIN_VERSIONED_BUILD") and not os.environ.get(
     "FRAUDTWIN_SKIP_VERSION_SWITCHER"
 ):
     html_theme_options["switcher"] = {
-        "json_url": "https://emedinac.github.io/fraud-twin/version-switcher.json",
+        "json_url": "https://emedinac.github.io/fraudtwin/version-switcher.json",
         "version_match": version,
     }
 html_context = {
     "github_user": "emedinac",
-    "github_repo": "fraud-twin",
+    "github_repo": "fraudtwin",
     "github_version": "main",
     "doc_path": "docs",
 }
@@ -154,6 +153,6 @@ def linkcode_resolve(domain: str, info: dict[str, str]) -> str | None:
     if source_ref in {"main", "dev"}:
         source_ref = "main"
     return (
-        "https://github.com/emedinac/fraud-twin/blob/"
+        "https://github.com/emedinac/fraudtwin/blob/"
         f"{source_ref}/{relative.as_posix()}#L{line_number}-L{end_line}"
     )

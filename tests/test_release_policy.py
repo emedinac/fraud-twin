@@ -68,7 +68,10 @@ def test_bump_does_not_repeat_for_an_already_higher_version(tmp_path: Path) -> N
 
 def test_commit_subjects_follow_the_conventional_commit_allowlist(tmp_path: Path) -> None:
     subjects = tmp_path / "subjects.txt"
-    subjects.write_text("feat(cli): add command\nfix: correct output\n", encoding="utf-8")
+    subjects.write_text(
+        'feat(cli): add command\nfix: correct output\nRevert "chore: bump version"\n',
+        encoding="utf-8",
+    )
     check_commit_subjects(subjects)
 
     subjects.write_text("Update CI\n", encoding="utf-8")
