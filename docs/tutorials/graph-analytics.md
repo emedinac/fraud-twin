@@ -22,3 +22,10 @@ service is required.
 **Related:** [graph and benchmark workflows](../graph-and-benchmarks.md).
 
 **Next path:** [Streaming and Kafka reliability](streaming-reliability.md).
+
+```{toctree}
+:hidden:
+
+neo4j-graph-fraud.ipynb
+pyg-graph-model.ipynb
+```

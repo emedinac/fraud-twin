@@ -31,7 +31,7 @@ Start here
 .. grid:: 3
    :gutter: 3
 
-   .. grid-item-card:: Start Here
+   .. grid-item-card:: Quickstart
       :link: quickstart
       :link-type: doc
       :class-card: sd-border-0
@@ -39,61 +39,42 @@ Start here
       Install FraudTwin, create a small run, and learn what the generated
       manifest and Parquet files mean.
 
-   .. grid-item-card:: Beginner
-      :link: levels/beginner
+   .. grid-item-card:: Tutorials
+      :link: tutorials
       :link-type: doc
       :class-card: sd-border-0
 
-      Follow a guided path for Python users who are new to data systems and
-      optional services.
+      Learn FraudTwin through short, executable paths grouped by workflow.
 
-   .. grid-item-card:: Intermediate
-      :link: levels/intermediate
+   .. grid-item-card:: How-to guides
+      :link: how-to
       :link-type: doc
       :class-card: sd-border-0
 
-      Build reproducible datasets, evaluate models, inspect quality, and use
-      graph workflows.
+      Configure runs, build datasets, operate integrations, and solve focused
+      implementation tasks.
 
-   .. grid-item-card:: Expert
-      :link: levels/expert
+   .. grid-item-card:: Explanation
+      :link: concepts
       :link-type: doc
       :class-card: sd-border-0
 
-      Work with contracts, integrations, checkpoints, extensions, operations,
-      and release evidence.
+      Understand determinism, lifecycles, point-in-time data, fraud graphs,
+      and data quality.
 
    .. grid-item-card:: Reference
       :link: api
       :link-type: doc
       :class-card: sd-border-0
 
-      Find the complete Python API, CLI, configuration, and data-contract
-      reference.
+      Look up the Python API, configuration, CLI, and data contracts.
 
-Find your path by role
-----------------------
+Need a guided route?
+--------------------
 
-.. grid:: 3
-   :gutter: 2
-
-   .. grid-item-card:: New users and analysts
-      :link: audiences/new-users
-      :link-type: doc
-
-      Use the beginner route for a local, offline start.
-
-   .. grid-item-card:: Data and ML
-      :link: audiences/data-ml
-      :link-type: doc
-
-      Use the intermediate route for datasets, evaluation, and drift.
-
-   .. grid-item-card:: Engineering and MLOps
-      :link: audiences/engineering-mlops
-      :link-type: doc
-
-      Use the expert route for services, operations, and release boundaries.
+Use :doc:`Choose your path <learning-paths>` if you want a recommended
+starting point based on your goal or experience. It is an onboarding aid, not
+a second documentation hierarchy.
 
 How a run becomes an experiment
 -------------------------------
@@ -107,95 +88,49 @@ contain only information available at the selected time; oracle artifacts keep
 the complete explanation for evaluation and audit.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Getting started
    :hidden:
 
    quickstart
    installation
    learning-paths
-   tutorials
-
-.. toctree::
-   :hidden:
-
-   tutorials/first-generated-run.ipynb
-   tutorials/configure-a-simulation.ipynb
-   tutorials/explore-payments-and-lifecycles.ipynb
-   tutorials/explore-fraud-and-delayed-labels.ipynb
-   tutorials/temporal-payment-lifecycle-visualization.ipynb
-   tutorials/fraud-scenarios-difficulty-benchmarks.ipynb
-   tutorials/ml-feature-distributions-embeddings.ipynb
-   tutorials/from-events-to-ml-dataset.ipynb
-   tutorials/stress-test-fraud-scenarios.ipynb
-   tutorials/build-a-reproducible-fraud-benchmark.ipynb
-   tutorials/train-a-simple-fraud-model.ipynb
-   tutorials/train-and-track-fraud-model.ipynb
-   tutorials/stress-drift-and-camouflage.ipynb
-   tutorials/checkpoint-resume-scale.ipynb
-   tutorials/mlflow-model-promotion.ipynb
-   tutorials/segmented-drift-analysis.ipynb
-   tutorials/neo4j-graph-fraud.ipynb
-   tutorials/pyg-graph-model.ipynb
-   tutorials/avro-kafka-stream.ipynb
-   tutorials/kafka-outage-recovery.ipynb
-   tutorials/schema-evolution-compatibility.ipynb
-   tutorials/operational-lakehouse-observability.ipynb
-   tutorials/lakehouse-observability.ipynb
-   tutorials/scale-checkpoint-resume.ipynb
-   tutorials/data-quality-repair-replay.ipynb
-   tutorials/postgres-persistence-reconciliation.ipynb
-   tutorials/iceberg-time-travel-observability.ipynb
-   tutorials/calibration-and-counterfactuals.ipynb
-   tutorials/campaign-graph-investigation.ipynb
-   tutorials/ml-shift-and-backtesting.ipynb
-   tutorials/scale-reconciliation-and-reproducibility.ipynb
 
 .. toctree::
    :maxdepth: 1
-   :caption: Learn by level
+   :caption: Tutorials
    :hidden:
 
-   levels/beginner
-   levels/intermediate
-   levels/expert
+   tutorials/getting-started
+   tutorials/visualization
+   tutorials/core-workflows
+   tutorials/production-ml
+   tutorials/graph-analytics
+   tutorials/streaming-reliability
+   tutorials/operations
+   tutorials/advanced-experiments
+
+.. toctree::
+   :maxdepth: 2
+   :caption: How-to guides
+   :hidden:
+
+   how-to/build-and-evaluate
+   how-to/integrate-and-serve
+   how-to/operate-and-repair
+   how-to/extend-and-release
 
 .. toctree::
    :maxdepth: 1
-   :caption: Find by role
-   :hidden:
-
-   audiences
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Guides
-   :hidden:
-
-   configuration
-   workflows
-   ml-evaluation
-   model-lifecycle
-   production-serving
-   integrations
-   drift-and-shift
-   kafka-reliability
-   data-quality-incidents
-   graph-and-benchmarks
-   release-readiness
-   architecture
-   verified-capabilities
-   spark-streaming
-   extensions
-   scale-operations
-   release-evidence
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Concepts
+   :caption: Explanation
    :hidden:
 
    concepts
+   concepts/determinism-and-reproducibility
+   concepts/data-model-and-lifecycle
+   concepts/point-in-time-data-and-labels
+   concepts/fraud-graphs-and-data-quality
+   architecture
 
 .. toctree::
    :maxdepth: 2
@@ -206,6 +141,7 @@ the complete explanation for evaluation and audit.
    configuration-reference
    cli
    data-contracts
+   verified-capabilities
 
 .. toctree::
    :maxdepth: 1

@@ -10,6 +10,10 @@
       collapse=theme_collapse_navigation | tobool,
       includehidden=True,
       titles_only=True
+    ) | replace(
+      '<li class="toctree-l0 has-children"><details>',
+      '<li class="toctree-l0 has-children"><details open>',
+      1
     ) -}}
   </div>
 </nav>

@@ -43,7 +43,7 @@ extensions = [
 
 templates_path = ["_templates"]
 html_sidebars = {
-    "index": ["sidebar-docs-nav.html"],
+    "**": ["sidebar-docs-nav.html"],
 }
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "tutorials/outputs/*"]
 autosummary_generate = True

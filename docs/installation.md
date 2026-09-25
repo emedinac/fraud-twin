@@ -142,7 +142,8 @@ See [troubleshooting](troubleshooting.md) for runtime and integration failures.
 
 ## Next
 
-Run the [Quickstart](quickstart.md), then choose the [Beginner path](levels/beginner.md).
+Run the [Quickstart](quickstart.md), then choose your next step with [Choose
+your path](learning-paths.md).
 
 ## Related
 

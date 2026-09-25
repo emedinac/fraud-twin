@@ -22,8 +22,8 @@ See also: :doc:`concepts`, :doc:`configuration`, and :doc:`data-contracts`.
 
 ## Next
 
-Start with the [Beginner path](levels/beginner.md) if a term is new, or open
-the [API reference](api.rst) for its typed definition.
+Start with [Explanation](concepts.md) if a term is new, or open the [API
+reference](api.rst) for its typed definition.
 
 ## Related
 

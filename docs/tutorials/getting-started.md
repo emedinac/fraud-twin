@@ -18,3 +18,12 @@ later tutorials.
 - [Explore fraud and delayed labels](explore-fraud-and-delayed-labels.ipynb)
 
 **Next path:** [Core workflows](core-workflows.md).
+
+```{toctree}
+:hidden:
+
+first-generated-run.ipynb
+configure-a-simulation.ipynb
+explore-payments-and-lifecycles.ipynb
+explore-fraud-and-delayed-labels.ipynb
+```

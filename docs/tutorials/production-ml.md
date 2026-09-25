@@ -24,3 +24,14 @@ local manifest fallback when no tracking server or HTTP process is running.
 - [Measure drift by operational segment](segmented-drift-analysis.ipynb)
 
 **Next path:** [Graph analytics](graph-analytics.md).
+
+```{toctree}
+:hidden:
+
+train-a-simple-fraud-model.ipynb
+train-and-track-fraud-model.ipynb
+stress-drift-and-camouflage.ipynb
+checkpoint-resume-scale.ipynb
+mlflow-model-promotion.ipynb
+segmented-drift-analysis.ipynb
+```

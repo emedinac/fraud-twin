@@ -28,3 +28,14 @@ without Docker.
 incidents](../data-quality-incidents.md), and [production serving](../production-serving.md).
 
 **Next path:** [Advanced experiments](advanced-experiments.md).
+
+```{toctree}
+:hidden:
+
+operational-lakehouse-observability.ipynb
+lakehouse-observability.ipynb
+scale-checkpoint-resume.ipynb
+data-quality-repair-replay.ipynb
+postgres-persistence-reconciliation.ipynb
+iceberg-time-travel-observability.ipynb
+```

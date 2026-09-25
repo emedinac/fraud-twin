@@ -99,6 +99,6 @@ For a smaller custom run, set `fraud.enabled: true` in a copied YAML file. The g
 
 ## Related
 
-- [Beginner path](levels/beginner.md)
+- [Choose your path](learning-paths.md)
 - [Data contracts](data-contracts.rst)
 - [Troubleshooting](troubleshooting.md)
