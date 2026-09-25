@@ -62,6 +62,7 @@ build-backend = "poetry.core.masonry.api"
 packages = [{ include = "fraudtwin", from = "src" }]
 include = [
     "src/fraudtwin/py.typed",
+    "src/fraudtwin/defaults/*.yaml",
     "src/fraudtwin/public_packs/*.yaml",
     "src/fraudtwin/quality_profiles/*.yaml",
     "src/fraudtwin/migrations/*.sql",

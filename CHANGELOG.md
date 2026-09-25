@@ -1,5 +1,22 @@
 # Release notes
 
+## Unreleased — Configuration workflow documentation
+
+- Added a supported `fraudtwin.load_default_config()` Python entry point and
+  `fraudtwin config init` command for creating project-owned YAML files.
+- Expanded configuration documentation with annotated complete files,
+  five-year rolling-window guidance, field-by-intent explanations, scenario
+  recipes, validation troubleshooting, and installed-package workflows.
+- Added a human-readable F01–F05 scenario guide with payment shapes, required
+  entities, mergeable YAML examples, source references, and an explanation of
+  internal M6/M12/M14/M15 feature labels in the API reference.
+- Clarified that fraud `target_rate` and `scenario_count` bound campaign
+  selection rather than directly specifying final fraud-row prevalence, with
+  worked F03/F04 examples and regression coverage for campaign semantics.
+- Added structured generation errors for ledger-capacity failures, including
+  the failing stage, account/payment/event context, running balances, and
+  actionable CLI troubleshooting guidance.
+
 ## 0.34.6 — Release policy reliability
 
 - Fixed version-policy automation so changelog version updates are committed

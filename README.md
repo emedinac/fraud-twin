@@ -54,16 +54,26 @@ poetry run fraudtwin --help
 # Generate and persist the built-in minimal local run.
 poetry run python -c 'import fraudtwin; run = fraudtwin.generate(write=True, output_dir="runs"); print(f"Run generated: {run.run_id}")'
 
+# Create and validate a project-owned configuration.
+poetry run fraudtwin config init config.yaml
+poetry run fraudtwin config validate config.yaml
+poetry run fraudtwin generate config.yaml --output-dir runs
+
 # Or a virtual environment managed with pip
 python -m pip install fraudtwin
 fraudtwin --help
 python -c 'import fraudtwin; run = fraudtwin.generate(write=True, output_dir="runs"); print(f"Run generated: {run.run_id}")'
+fraudtwin config init config.yaml
+fraudtwin config validate config.yaml
+fraudtwin generate config.yaml --output-dir runs
 ```
 
 The built-in minimal configuration is validated during generation and writes an
-immutable run manifest plus Parquet tables under `runs/<run-id>/`. For custom
-YAML configurations and repository workflows, see the [installation and support
-matrix](docs/installation.md).
+immutable run manifest plus Parquet tables under `runs/<run-id>/`. For a
+repeatable project workflow, create a project-owned YAML file with
+`fraudtwin config init`. The [configuration guide](docs/configuration.md)
+explains how to choose between built-in defaults, YAML files, and dynamic
+Python configuration.
 
 ### Python API
 
@@ -86,7 +96,22 @@ run = fraudtwin.generate(
 )
 loaded = run.load_data()
 print(run.run_id, len(loaded.behavior.payments), run.manifest_path)
+
+# Start from the packaged template when values must be calculated in Python.
+config = fraudtwin.load_default_config()
+print(config.simulation.seed)
 ```
+
+Fraud settings are campaign-based: `fraud.target_rate` limits campaign
+selection relative to baseline payments; it is not a promise that the same
+percentage of final payment rows are fraudulent. The built-in scenarios are
+`F01` Card Not Present, `F02` Card Testing, `F03` Account Takeover, `F04`
+Instant-Payment Scam, and `F05` Velocity Attack. F03 creates two transfer
+payments per campaign, F04 creates one PIX payment, and F02/F05 use repeated
+attempts. Card scenarios require active cards. See the
+[scenario guide](docs/configuration.md#what-each-f-scenario-means) and the
+[fraud prevalence examples](docs/configuration.md#choosing-a-target-fraud-prevalence)
+for complete syntax and worked calculations.
 
 Use `GeneratedData.require_dataset()` when the configuration enables a
 point-in-time dataset. Use `GeneratedRun.load_data()` when a persisted run is
