@@ -17,3 +17,12 @@ the old numeric routes remain compatibility redirects in published builds.
 - [Campaign dynamics and observable/oracle graph investigation](campaign-graph-investigation.ipynb)
 - [External predictions, temporal backtesting, and feature shift](ml-shift-and-backtesting.ipynb)
 - [Scale benchmarking, payment reconciliation, and experiment packaging](scale-reconciliation-and-reproducibility.ipynb)
+
+```{toctree}
+:hidden:
+
+calibration-and-counterfactuals.ipynb
+campaign-graph-investigation.ipynb
+ml-shift-and-backtesting.ipynb
+scale-reconciliation-and-reproducibility.ipynb
+```

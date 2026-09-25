@@ -1,5 +1,16 @@
 # Release notes
 
+## 0.34.3 — Documentation information architecture
+
+- Reorganized the documentation around Tutorials, How-to guides, Explanation,
+  Reference, and Resources.
+- Grouped how-to guides by task and expanded the explanation of determinism,
+  reproducibility, architecture, and data boundaries.
+- Preserved legacy level and role URLs as compatibility pages without keeping
+  their duplicate navigation trees.
+- Clarified the nested Python API reference, typed API cookbook, and generated
+  reference pages.
+
 ## 0.34.2 — Docs fixes and CI checks
 
 - Updated README, API reference, documentation-site, and source-code links for

@@ -8,15 +8,14 @@ surface for your work.
 
 FraudTwin is a deterministic synthetic payment world for fraud detection,
 graph analysis, data engineering, and machine-learning experiments. The manual
-is organized by experience level, not by internal project history. Follow one
-route from a first generated run to reproducible evaluation or production-style
-integration work.
+is organized by reader intent: Tutorials, How-to guides, Explanation, and
+Reference. Use the onboarding page when you want help choosing where to begin.
 
 ## Installation
 
 - [Installation and support](installation.md) - install the base package, choose extras, and verify an environment.
 - [Quickstart](quickstart.md) - install FraudTwin and generate your first run.
-- [Learning paths](learning-paths.md) - choose the beginner, intermediate, or expert route.
+- [Choose your path](learning-paths.md) - select the canonical documentation section for your goal.
 - [Python package and CLI](../README.md#quick-start) - choose between the Python API and command-line workflows.
 - Build the documentation with `poetry run sphinx-build -E -W --keep-going -b html docs docs/_build/html`.
 
@@ -50,49 +49,34 @@ filenames and rendered titles explain what each notebook teaches.
 - [Operations and incident response](tutorials/operations.md) - repair, scale, persistence, and observability.
 - [Advanced experiments](tutorials/advanced-experiments.md) - four combined workflows for calibration/interventions, graph investigations, ML shift/backtesting, and scale/reproducibility.
 
-Tutorials remain a separate, notebook-first learning surface. They are linked
-from the level routes but are not rewritten as part of the guide refactor.
+## How-to guides
 
-## Choose your level
+- [Build and evaluate](how-to/build-and-evaluate.md) - configure runs, build datasets, evaluate models, and measure drift.
+- [Integrate and serve](how-to/integrate-and-serve.md) - connect optional services and validate serving or streaming paths.
+- [Operate and repair](how-to/operate-and-repair.md) - handle quality faults, graphs, reconciliation, and bounded scale.
+- [Extend and release](how-to/extend-and-release.md) - publish extensions and prepare release or benchmark evidence.
 
-- [Beginner](levels/beginner.md) - install, generate, inspect, and understand the core model.
-- [Intermediate](levels/intermediate.md) - configure evaluation workflows, quality, ML, and graphs.
-- [Expert](levels/expert.md) - operate integrations, extensions, scale workflows, and release evidence.
+## Explanation
 
-## Find your path by role
+- [Core concepts](concepts.md) - understand determinism, lifecycles, labels, graph provenance, and quality faults.
+- [Determinism and reproducibility](concepts/determinism-and-reproducibility.md) - understand seeds, streams, and fingerprints.
+- [Architecture and trust boundaries](architecture.md) - understand source truth and integration boundaries.
 
-- [New users](audiences/new-users.md)
-- [Data and ML practitioners](audiences/data-ml.md)
-- [Fraud and risk practitioners](audiences/fraud-risk.md)
-- [Engineering and MLOps](audiences/engineering-mlops.md)
-- [Researchers and governance reviewers](audiences/researchers-governance.md)
+## Reference
 
-The role pages are shortcuts into the level routes. They do not duplicate the
-canonical guides.
-
-## Guides and concepts
-
-- [Configuration](configuration.md) - control populations, behavior, payment rails, fraud, labels, calibration, scale, and campaign dynamics.
-- [Data and evaluation workflows](workflows.md) - build point-in-time datasets, replay runs, backtest models, and evaluate predictions.
-- [ML evaluation methodology](ml-evaluation.md) - use leakage-safe temporal splits, metrics, promotion criteria, and rollback checks.
-- [Model lifecycle](model-lifecycle.md) - move from a generated run to tracked artifacts and online scoring.
-- [Production serving](production-serving.md) - run and validate the optional FastAPI reference service.
-- [Integration runbooks](integrations.md) - operate Kafka, PostgreSQL, Iceberg, Neo4j, MLflow, serving, and observability.
-- [Drift and shift](drift-and-shift.md) - distinguish data, domain, concept, and performance drift.
-- [Kafka reliability](kafka-reliability.md) - exercise logical-message loss, retries, duplicates, delays, and reordering.
-- [Data-quality incidents](data-quality-incidents.md) - inject faults, replay windows, and repair projections.
-- [Graph and benchmark workflows](graph-and-benchmarks.md) - export observable and oracle graph views and compare stress levels.
-- [Concepts](concepts.md) - understand determinism, lifecycle events, labels, graph provenance, and quality faults.
-- [Troubleshooting](troubleshooting.md) - resolve installation, configuration, optional dependency, graph, and scale issues.
-- [Migration guides](migration.md) - check compatibility boundaries when moving between releases.
-- [Compatibility and support policy](compatibility.md) - understand stable, optional, and experimental surfaces before upgrading.
-- [Release-readiness roadmap](release-readiness.md) - scale gates and deferred platform integrations.
-- [Architecture and trust boundaries](architecture.md) - source truth, chunked execution, and integration boundaries.
+- [Python API reference](api.rst) - supported objects, workflow APIs, and generated module indexes.
+- [Configuration parameter reference](configuration-reference.rst) - generated tables for configuration sections.
+- [CLI reference](cli.rst) - command groups and workflow entry points.
+- [Data contracts](data-contracts.rst) - generated-run artifacts, grains, and oracle boundaries.
 - [Verified capabilities](verified-capabilities.md) - runnable commands and evidence behind supported workflows.
-- [Spark Structured Streaming](spark-streaming.md) - bounded Kafka/Parquet event-time processing.
-- [Extension SDK](extensions.md) - stable ports, discovery, provenance, and compatibility rules.
-- [Scale operations](scale-operations.md) - checkpointing, resume, storage, and claim boundaries.
-- [Release and benchmark evidence](release-evidence.md) - reproducible laptop evidence and release verification.
+
+## Resources
+
+- [Troubleshooting](troubleshooting.md) - resolve installation and optional dependency issues.
+- [Migration guides](migration.md) - check compatibility boundaries when moving between releases.
+- [Compatibility and support policy](compatibility.md) - understand stable, optional, and experimental surfaces.
+- [Development guide](development.md) - run checks and contribute safely.
+- [References and related work](references.md) - standards, papers, and projects that informed the design.
 
 ## Documentation style
 
@@ -134,8 +118,8 @@ Every run starts with entities and customer behavior, produces legitimate paymen
 
 ## Next
 
-Choose a route from [Learning paths](learning-paths.md), starting with
-[Beginner](levels/beginner.md) if you are new to FraudTwin.
+Choose a route from [Choose your path](learning-paths.md), starting with the
+[Quickstart](quickstart.md) if you are new to FraudTwin.
 
 ## Related
 

@@ -61,7 +61,8 @@ These references informed FraudTwin’s design. The repository does not bundle c
 ## Next
 
 Return to [Architecture](architecture.md) to connect these references to the
-design, or use the [Expert path](levels/expert.md) for implementation routes.
+design, or use [Integrate and serve](how-to/integrate-and-serve.md) for
+implementation routes.
 
 ## Related
 

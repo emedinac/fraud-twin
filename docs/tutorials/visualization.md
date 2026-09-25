@@ -95,3 +95,11 @@ are not categories called “easy” or “hard” on each record.*
 - [Explore ML-ready distributions, correlation, and embeddings](ml-feature-distributions-embeddings.ipynb)
 
 **Next path:** [Getting started](getting-started.md).
+
+```{toctree}
+:hidden:
+
+temporal-payment-lifecycle-visualization.ipynb
+fraud-scenarios-difficulty-benchmarks.ipynb
+ml-feature-distributions-embeddings.ipynb
+```

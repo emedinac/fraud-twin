@@ -1,3 +1,7 @@
+---
+orphan: true
+---
+
 # Tutorials
 
 The tutorials are rendered from the checked-in Jupyter notebooks. Saved
@@ -6,7 +10,8 @@ you can run it locally.
 
 Historical numeric routes are compatibility redirects, not a prescribed
 reading order. Notebook filenames and titles are descriptive; use the category
-pages as the recommended learning path.
+pages as the recommended learning path. The first two paths are the golden
+path; the remaining categories answer specific analysis and platform needs.
 
 Every tutorial follows the same contract: start with a concrete goal, state
 the prerequisites, produce a named run or artifact, and finish with a quick
@@ -16,24 +21,9 @@ description tells you what to look for before you open it.
 ## Learning paths
 
 Choose a path first; each category page contains descriptive notebooks and
-direct download links. Older numeric bookmarks continue to resolve.
-
-If you are unsure where to begin, use [Choose your role](audiences) to map
-your job to a category, workflow guide, and expected artifact.
-
-```{toctree}
-:caption: Tutorial categories
-:maxdepth: 1
-
-tutorials/visualization
-tutorials/getting-started
-tutorials/core-workflows
-tutorials/production-ml
-tutorials/graph-analytics
-tutorials/streaming-reliability
-tutorials/operations
-tutorials/advanced-experiments
-```
+direct download links. Older numeric bookmarks continue to resolve. If you are
+unsure where to begin, start with [Getting started](tutorials/getting-started)
+and continue to [Core workflows](tutorials/core-workflows).
 
 ## Categories at a glance
 

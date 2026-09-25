@@ -17,3 +17,11 @@ baselines, calibration, campaigns, and benchmark comparisons.
 - [Build a Reproducible Fraud Benchmark](build-a-reproducible-fraud-benchmark.ipynb)
 
 **Next path:** [Production ML](production-ml.md).
+
+```{toctree}
+:hidden:
+
+from-events-to-ml-dataset.ipynb
+stress-test-fraud-scenarios.ipynb
+build-a-reproducible-fraud-benchmark.ipynb
+```

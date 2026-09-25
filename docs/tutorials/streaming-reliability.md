@@ -22,3 +22,11 @@ and logical chaos when Docker services are unavailable.
 **Related:** [Kafka reliability](../kafka-reliability.md).
 
 **Next path:** [Operations and incident response](operations.md).
+
+```{toctree}
+:hidden:
+
+avro-kafka-stream.ipynb
+kafka-outage-recovery.ipynb
+schema-evolution-compatibility.ipynb
+```

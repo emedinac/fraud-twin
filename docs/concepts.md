@@ -1,62 +1,62 @@
-# Concepts
+# Core concepts
 
 **Level:** Beginner<br><br>
-**You will:** learn the small set of ideas needed to read a run: identity,<br><br>
-time, lifecycle, labels, and observable versus oracle data.
+**You will:** build a simple mental model of identities, time, lifecycles,
+labels, graphs, and data quality in a generated run.<br><br>
 **Before you start:** the [Quickstart](quickstart.md).<br><br>
-**Services:** None.<br><br>
+**Services:** None.
 
-## Determinism and seed streams
+FraudTwin becomes easier to use once a few ideas are clear. A run is more
+than a collection of rows: it has stable identities, a timeline, operational
+views, and evidence that explains what happened. This section explains the
+model behind the workflows; use the how-to guides when you are ready to act.
 
-FraudTwin derives named random streams from the configured seed. Entity IDs,
-payment identities, timestamps, fraud campaigns, quality faults, graph edges,
-and benchmark transformations remain reproducible without relying on global
-random state. Worker scheduling may change execution order, but it must not
-change logical IDs or recorded fingerprints.
+## Four ideas to keep in mind
 
-## Payment and ledger lifecycle
+### Determinism is part of the model
+
+A configuration and seed produce the same logical identities, events, labels,
+and output fingerprints. FraudTwin uses named random streams for different
+parts of the simulation, so changing one part of a configuration does not
+silently replace every other identity. Worker scheduling can change execution
+order, but it should not change logical IDs or recorded fingerprints.
+
+### A payment is a timeline, not a row
 
 Payments are business identities. Lifecycle events describe authorization,
-capture, clearing, settlement, reversal, refund, return, and chargeback timing.
-The ledger records balanced postings for financial movements; lifecycle events
-are not interchangeable with ledger entries.
+capture, clearing, settlement, reversal, refund, return, and chargeback
+timing. The ledger records balanced financial postings; lifecycle events and
+ledger entries describe related but different facts.
 
-## Observable and oracle data
+### Operational and oracle data answer different questions
 
-The observable view contains only records and relationships a detector could
-know at the selected cutoff. Oracle artifacts retain latent fraud scenario,
-campaign membership, evidence, and future labels for evaluation and audit. Keep
-oracle artifacts out of model features and operational exports.
+The operational view contains only records and relationships a detector could
+know at a selected cutoff. Oracle artifacts retain latent fraud scenarios,
+campaign membership, evidence, and future labels for evaluation and audit.
+Oracle data explains a result, but must not become a model feature by accident.
 
-## Labels and point-in-time safety
+### Quality faults are evidence, not noise
 
-Labels have an availability time, not just a truth value. Dataset construction
-uses the greatest label version available at `prediction_time`; immature or
-missing labels follow the configured unresolved-label policy. This prevents
-future investigations and corrections from becoming training leakage.
+Duplicates, delays, invalid values, outages, schema changes, and spikes are
+intentional test conditions. They are reported in manifests so a workflow can
+detect, quarantine, repair, or replay a known fault without losing provenance.
 
-## Fraud scenarios and stress controls
+## Choose a concept
 
-Fraud scenarios describe the objective of an attack. Hard negatives, difficulty,
-camouflage, dynamic campaigns, and counterfactuals alter how detectable or
-evolvable that objective is without changing the underlying provenance rules.
+- [Data model and lifecycle](concepts/data-model-and-lifecycle.md) — how
+  entities, payments, events, and ledger entries fit together.
+- [Point-in-time data and labels](concepts/point-in-time-data-and-labels.md) —
+  what a detector could know at a given time and how delayed labels work.
+- [Fraud, graphs, and data quality](concepts/fraud-graphs-and-data-quality.md) —
+  how scenarios, graph relationships, and deliberate quality faults are
+  represented for testing.
 
-## Graph provenance and temporal cutoffs
-
-Graph edges derive from payment and event identities. Observable graphs include
-source-supported relationships available at a cutoff; oracle graphs may include
-campaign evidence, hyperedges, and latent membership. Every export should be
-read with its view and time window recorded.
-
-## Data quality and schema evolution
-
-Quality profiles inject explicit faults such as duplicates, delays, invalid
-values, outages, schema changes, and spikes. The fault is intentional and
-reported in manifests; it is not a silent relaxation of the source contract.
+You do not need to memorize every term before using FraudTwin. Start with the
+first page, then return to the others when a workflow calls for them.
 
 ## Next
 
-Try the [Quickstart](quickstart.md), then move to [Configuration](configuration.md).
+Try the [Quickstart](quickstart.md), then read [Data model and lifecycle](concepts/data-model-and-lifecycle.md).
 
 ## Related
 
