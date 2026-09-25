@@ -67,20 +67,18 @@ def prepare_site(root: Path) -> None:
         {
             "name": "latest",
             "version": "latest",
-            "url": "https://emedinac.github.io/fraud-twin/latest/",
+            "url": "https://emedinac.github.io/fraudtwin/latest/",
         }
     ]
     for path in candidates:
         if path.name in {"main", "dev"}:
             continue
         _write_tutorial_aliases(path)
-        versions.append(
-            {
-                "name": path.name,
-                "version": path.name,
-                "url": f"https://emedinac.github.io/fraud-twin/{path.name}/",
-            }
-        )
+        versions.append({
+            "name": path.name,
+            "version": path.name,
+            "url": f"https://emedinac.github.io/fraudtwin/{path.name}/",
+        })
     (root / "version-switcher.json").write_text(
         json.dumps(versions, indent=2) + "\n", encoding="utf-8"
     )
