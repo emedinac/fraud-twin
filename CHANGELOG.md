@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.34.1 — Optional dependency diagnostics and compatibility fixes
+
+- Added actionable validation for incomplete Kafka and PostgreSQL optional
+  client installations.
+- Preserved lazy optional imports so base and offline generation remain usable.
+- Documented optional dependency installation, verification, and service
+  troubleshooting workflows.
+
 ## 0.34.0 — Release-readiness, Spark, extensions, and documentation
 
 - Added the isolated Spark Structured Streaming reference application for

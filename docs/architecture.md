@@ -11,6 +11,10 @@ configuration, seed tree, and generated run manifest. Every integration reads
 that source; integrations do not redefine payment state, fraud truth, or
 point-in-time semantics.
 
+Integration modules remain at their established top-level paths, and Kafka and
+PostgreSQL clients are loaded only when their corresponding output path is
+enabled.
+
 ```text
 validated config + seed
         |

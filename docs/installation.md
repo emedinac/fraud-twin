@@ -58,6 +58,13 @@ poetry install
 poetry run fraudtwin config validate configs/minimal.yaml
 ```
 
+To exercise both service-backed adapters in the repository environment, install
+their optional clients together:
+
+```console
+poetry install -E kafka -E postgres
+```
+
 ## Optional capabilities
 
 | Capability | Install | External service | Intended audience |
@@ -80,6 +87,16 @@ Kafka or PostgreSQL:
 
 ```console
 poetry install -E ml -E mlflow
+```
+
+Verify the optional clients before starting external services:
+
+```console
+poetry run python -c \
+  "from confluent_kafka import Producer; from confluent_kafka.schema_registry import Schema, SchemaRegistryClient; print('Kafka extra OK')"
+
+poetry run python -c \
+  "import psycopg; assert callable(psycopg.connect); print('PostgreSQL extra OK')"
 ```
 
 ## Verify the environment
@@ -117,6 +134,7 @@ workflow; it is an interoperability example, not a capacity benchmark.
 | `No module named fraudtwin` | Wrong interpreter or inactive virtual environment | Run `python -m pip show fraudtwin` and use the same interpreter for the CLI |
 | `No module named sklearn` | Missing ML extra | Install `poetry install -E ml` or `python -m pip install 'fraudtwin[ml]'` |
 | Torch installation is too large or incompatible | Graph extra is platform-sensitive | Use the PyTorch installation guidance for your platform, then install the matching graph extra |
+| Kafka/psycopg symbols are missing after installation | Incomplete optional Python package | Run `poetry install -E kafka -E postgres` and repeat the symbol verification commands |
 | Kafka/PostgreSQL connection refused | Service is not running or DSN is wrong | Start the documented Docker profile and run its health check |
 | Configuration validation fails | Unknown field, invalid range, or incompatible sections | Run `fraudtwin config validate` and fix the first reported field |
 

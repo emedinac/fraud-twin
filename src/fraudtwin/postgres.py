@@ -17,6 +17,7 @@ MIGRATION_PACKAGE = "fraudtwin.migrations"
 SCHEMA_NAME = "fraudtwin"
 SCHEMA_VERSION = "001_operational"
 DSN_ENVIRONMENT = "FRAUDTWIN_POSTGRES_DSN"
+_POSTGRES_INSTALL_COMMAND = "poetry install -E postgres"
 
 
 @dataclass(frozen=True)
@@ -43,8 +44,15 @@ def _psycopg() -> Any:
         import psycopg
     except ImportError as exc:  # pragma: no cover - exercised without the optional extra
         raise RuntimeError(
-            "PostgreSQL output requires the optional 'postgres' dependency (psycopg)"
+            "PostgreSQL output requires the optional 'postgres' dependency (psycopg). "
+            f"Install or repair it with: {_POSTGRES_INSTALL_COMMAND}"
         ) from exc
+    connect = getattr(psycopg, "connect", None)
+    if not callable(connect):
+        raise RuntimeError(
+            "The installed psycopg package is incomplete: psycopg.connect is missing "
+            f"or not callable. Install or repair it with: {_POSTGRES_INSTALL_COMMAND}"
+        )
     return psycopg
 
 
@@ -58,8 +66,9 @@ def _migration_sql() -> str:
 def migrate_database(dsn: str | None = None) -> str:
     """Apply the packaged, ordered PostgreSQL migrations and return the version."""
 
+    resolved_dsn = _dsn(dsn)
     psycopg = _psycopg()
-    with psycopg.connect(_dsn(dsn)) as connection:
+    with psycopg.connect(resolved_dsn) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS public.schema_migrations "
@@ -79,8 +88,9 @@ def migrate_database(dsn: str | None = None) -> str:
 def database_status(dsn: str | None = None) -> tuple[str, ...]:
     """Return applied migration versions without changing the database."""
 
+    resolved_dsn = _dsn(dsn)
     psycopg = _psycopg()
-    with psycopg.connect(_dsn(dsn)) as connection:
+    with psycopg.connect(resolved_dsn) as connection:
         with connection.cursor() as cursor:
             cursor.execute("SELECT version FROM public.schema_migrations ORDER BY version")
             return tuple(str(row[0]) for row in cursor.fetchall())
@@ -89,8 +99,9 @@ def database_status(dsn: str | None = None) -> tuple[str, ...]:
 def ensure_database_ready(dsn: str | None = None) -> None:
     """Fail before file emission when the operational schema is unavailable."""
 
+    resolved_dsn = _dsn(dsn)
     psycopg = _psycopg()
-    with psycopg.connect(_dsn(dsn)) as connection:
+    with psycopg.connect(resolved_dsn) as connection:
         with connection.cursor() as cursor:
             cursor.execute("SELECT to_regclass(%s)", (f"{SCHEMA_NAME}.simulation_runs",))
             if cursor.fetchone()[0] is None:
@@ -272,8 +283,8 @@ def persist_run(
 ) -> PostgresPersistenceResult:
     """Persist one generated run atomically after migrations have been applied."""
 
-    psycopg = _psycopg()
     resolved_dsn = _dsn(dsn)
+    psycopg = _psycopg()
     tables = _rows_for_run(entities, behavior)
     fingerprint = _fingerprint(tables)
     row_counts = {name: len(rows) for name, rows in tables.items()}
@@ -335,11 +346,12 @@ def persist_scale_records(
 
     if batch_size < 1:
         raise ValueError("batch_size must be positive")
+    resolved_dsn = _dsn(dsn)
     psycopg = _psycopg()
     digest = hashlib.sha256()
     counts: dict[str, int] = {}
     batch: list[tuple[str, str, str, str | None, str]] = []
-    with psycopg.connect(_dsn(dsn)) as connection:
+    with psycopg.connect(resolved_dsn) as connection:
         with connection.transaction():
             with connection.cursor() as cursor:
                 cursor.execute(
