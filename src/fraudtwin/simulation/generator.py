@@ -202,26 +202,28 @@ class EntityGenerator:
                     continue
                 entity_id = getattr(record, identifier)
                 typed_entity_type = cast(Literal["CUSTOMER", "ACCOUNT"], entity_type)
-                history.extend((
-                    EntityStateChange(
-                        entity_id=entity_id,
-                        entity_type=typed_entity_type,
-                        from_status="ACTIVE",
-                        to_status="RESTRICTED",
-                        effective_at=transition_at,
-                        system_from=transition_at,
-                        system_to=transition_at + timedelta(microseconds=1),
-                    ),
-                    EntityStateChange(
-                        entity_id=entity_id,
-                        entity_type=typed_entity_type,
-                        from_status="RESTRICTED",
-                        to_status="ACTIVE",
-                        effective_at=transition_at + timedelta(microseconds=1),
-                        system_from=transition_at + timedelta(microseconds=1),
-                        system_to=None,
-                    ),
-                ))
+                history.extend(
+                    (
+                        EntityStateChange(
+                            entity_id=entity_id,
+                            entity_type=typed_entity_type,
+                            from_status="ACTIVE",
+                            to_status="RESTRICTED",
+                            effective_at=transition_at,
+                            system_from=transition_at,
+                            system_to=transition_at + timedelta(microseconds=1),
+                        ),
+                        EntityStateChange(
+                            entity_id=entity_id,
+                            entity_type=typed_entity_type,
+                            from_status="RESTRICTED",
+                            to_status="ACTIVE",
+                            effective_at=transition_at + timedelta(microseconds=1),
+                            system_from=transition_at + timedelta(microseconds=1),
+                            system_to=None,
+                        ),
+                    )
+                )
         endpoints: tuple[NetworkEndpoint, ...] = ()
         ip_campaigns = (
             sum(

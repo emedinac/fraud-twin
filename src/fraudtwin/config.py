@@ -300,18 +300,20 @@ class CardLifecycleConfig(_StrictModel):
     def maximum_delay_seconds(self) -> int:
         """Return the largest possible lifecycle delay before envelope timing."""
 
-        return sum((
-            self.authorization_delay_seconds,
-            self.authorization_delay_seconds,
-            self.capture_delay_seconds,
-            self.clearing_delay_seconds,
-            self.settlement_delay_seconds,
-            self.reversal_delay_seconds,
-            self.refund_delay_seconds,
-            self.chargeback_delay_seconds + self.chargeback_resolution_delay_seconds
-            if self.chargeback_probability > 0
-            else 0,
-        ))
+        return sum(
+            (
+                self.authorization_delay_seconds,
+                self.authorization_delay_seconds,
+                self.capture_delay_seconds,
+                self.clearing_delay_seconds,
+                self.settlement_delay_seconds,
+                self.reversal_delay_seconds,
+                self.refund_delay_seconds,
+                self.chargeback_delay_seconds + self.chargeback_resolution_delay_seconds
+                if self.chargeback_probability > 0
+                else 0,
+            )
+        )
 
 
 class PixLifecycleConfig(_StrictModel):
@@ -334,15 +336,17 @@ class PixLifecycleConfig(_StrictModel):
     def maximum_delay_seconds(self) -> int:
         """Return the longest possible PIX path, including a return."""
 
-        return sum((
-            self.validation_delay_seconds,
-            self.authorization_delay_seconds,
-            self.submission_delay_seconds,
-            max(self.timeout_delay_seconds, self.settlement_delay_seconds),
-            self.receipt_delay_seconds,
-            self.return_request_delay_seconds,
-            self.return_delay_seconds,
-        ))
+        return sum(
+            (
+                self.validation_delay_seconds,
+                self.authorization_delay_seconds,
+                self.submission_delay_seconds,
+                max(self.timeout_delay_seconds, self.settlement_delay_seconds),
+                self.receipt_delay_seconds,
+                self.return_request_delay_seconds,
+                self.return_delay_seconds,
+            )
+        )
 
 
 class FraudScenarioSettings(_StrictModel):
@@ -1326,9 +1330,9 @@ class CounterfactualRequestConfig(_StrictModel):
         return self
 
 
-def _default_counterfactual_dimensions() -> dict[
-    CounterfactualDimension, CounterfactualDimensionConfig
-]:
+def _default_counterfactual_dimensions() -> (
+    dict[CounterfactualDimension, CounterfactualDimensionConfig]
+):
     names: tuple[CounterfactualDimension, ...] = (
         "beneficiary",
         "device",
