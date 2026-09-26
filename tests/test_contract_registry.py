@@ -167,7 +167,7 @@ def test_bundled_registry_validates_and_cli_reports_subjects() -> None:
 
 
 def test_clean_generated_payment_event_round_trips_without_mutating_source() -> None:
-    config = load_config(Path("configs/minimal.yaml"))
+    config = load_config(Path("configs/minimal-v1.yaml"))
     generated = generate(config, write=False)
     event = generated.behavior.payment_events[0]
     original_amount = event.amount

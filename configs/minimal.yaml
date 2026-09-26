@@ -1,112 +1,25 @@
+# Fixes the seed and time window used by this generated run.
 simulation:
   seed: 42
   start: 2026-01-01T00:00:00Z
   duration_days: 1
-  speed: batch
-
+# Sets the sizes of the generated customer, account, and service pools.
 population:
-  customers: 10
-  institutions: 3
-  accounts: 15
-  cards: 12
-  merchants: 3
-  devices: 12
-  pix_keys: 8
-
+  customers: 100
+  institutions: 5
+  accounts: 10
+  cards: 10
+  merchants: 1
+  devices: 5
+# Controls daily payment volume and the share assigned to each rail.
 payments:
-  daily_target: 100
+  daily_target: 10
   rails:
-    CARD: 0.55
-    PIX: 0.30
-    ACCOUNT_TRANSFER: 0.15
-
-behavior:
-  amount_min: 1.00
-  amount_max: 5000.00
-  active_hours:
-    [
-      0,
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      8,
-      9,
-      10,
-      11,
-      12,
-      13,
-      14,
-      15,
-      16,
-      17,
-      18,
-      19,
-      20,
-      21,
-      22,
-      23,
-    ]
-  weekday_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 0.85, 0.70]
-  merchant_preference_count: 3
-  preferred_device_limit: 3
-
-card_lifecycle:
-  authorization_approval_probability: 0.90
-  reversal_probability: 0.05
-  refund_probability: 0.10
-  authorization_delay_seconds: 1
-  capture_delay_seconds: 5
-  clearing_delay_seconds: 30
-  settlement_delay_seconds: 60
-  reversal_delay_seconds: 10
-  refund_delay_seconds: 60
-
-pix_lifecycle:
-  authorization_approval_probability: 0.98
-  rejection_probability: 0.02
-  return_probability: 0.05
-  validation_delay_seconds: 1
-  authorization_delay_seconds: 1
-  submission_delay_seconds: 1
-  settlement_delay_seconds: 1
-  receipt_delay_seconds: 1
-  return_request_delay_seconds: 60
-  return_delay_seconds: 60
-
+    CARD: 1.0
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
 fraud:
   enabled: false
-  target_rate: 0.002
-  scenario_count: 5
-  hard_negative_rate: 1.0
-
-fraud_workflow:
-  enabled: true
-  alert_probability: 1.0
-  case_open_probability: 1.0
-  confirmation_probability: 1.0
-  customer_dispute_probability: 1.0
-  alert_delay_seconds: 60
-  case_open_delay_seconds: 300
-  confirmation_delay_seconds: 86400
-  customer_dispute_delay_seconds: 172800
-  label_delay_seconds: 3600
-
-quality:
-  profile: clean
-
-dataset:
-  enabled: true
-  unresolved_labels: include
-
+  target_rate: 0.0
+# Chooses which generated artifacts and external sinks are written.
 outputs:
   parquet: true
-  postgres: false
-  kafka: false
-  iceberg: false
-
-calibration:
-  enabled: false

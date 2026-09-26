@@ -22,7 +22,7 @@ from fraudtwin.replay import REPLAY_EVENT_SCHEMA, replay_run, write_replay
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 from fraudtwin.simulation.parquet import write_behavior_parquet, write_entity_parquet
 
-CONFIG_PATH = Path("configs/minimal.yaml")
+CONFIG_PATH = Path("configs/minimal-v1.yaml")
 runner = CliRunner()
 
 

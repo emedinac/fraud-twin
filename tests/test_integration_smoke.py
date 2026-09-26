@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def _tiny_config() -> SimulationRunConfig:
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     values = base.model_dump(mode="python")
     values["population"] = {
         "customers": 2,

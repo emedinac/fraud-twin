@@ -14,7 +14,7 @@ Requirements are Python 3.12 and Poetry 2.x:
 
 ```bash
 poetry install
-poetry run fraudtwin config validate configs/minimal.yaml
+poetry run fraudtwin config validate configs/minimal-v1.yaml
 ```
 
 Generated runs belong in the ignored `./runs` directory. Do not commit generated data, credentials, or local environment files.
@@ -71,7 +71,7 @@ Use the narrowest test while iterating, then run the full suite:
 For a generated-run smoke test:
 
 ```bash
-CONFIG=configs/minimal.yaml
+CONFIG=configs/minimal-v1.yaml
 RUN_ID=RUN-...
 RUNS_DIR=./runs
 

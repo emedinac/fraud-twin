@@ -17,7 +17,7 @@ Build the dataset from a persisted run and use `prediction_time` as the
 information boundary:
 
 ```console
-CONFIG=configs/minimal.yaml
+CONFIG=configs/minimal-v1.yaml
 RUN_ID=RUN-...
 RUNS_DIR=./runs
 

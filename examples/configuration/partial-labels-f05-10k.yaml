@@ -1,0 +1,93 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed makes missing and delayed labels reproducible.
+  seed: 2703
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Actor pools support the mixed card-transfer stream.
+  customers: 250
+  institutions: 6
+  accounts: 600
+  cards: 150
+  merchants: 30
+  devices: 200
+  pix_keys: 0
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 250000.0
+  opening_balance_max: 500000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 10000.0
+  transaction_limit_max: 15000.0
+  daily_limit_min: 200000.0
+  daily_limit_max: 400000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Rail weights shape ordinary traffic before fraud injection.
+  daily_target: 680
+  rails:
+    CARD: 0.75
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.25
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 1.0
+  amount_max: 10000.0
+  amount_distribution: uniform
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # F05 attempts create a bounded fraud campaign.
+  enabled: true
+  target_rate: 0.5
+  scenario_count: 160
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F05:
+      enabled: true
+      weight: 1.0
+      count: 160
+      amount_min: 1.0
+      amount_max: 10000.0
+      attempt_count: 20
+
+# Controls how fraud events become alerts, cases, disputes, and labels.
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 0.9
+  customer_dispute_probability: 0.6
+  alert_delay_seconds: 60
+  case_open_delay_seconds: 300
+  confirmation_delay_seconds: 21600
+  customer_dispute_delay_seconds: 43200
+  label_delay_seconds: 3600
+
+# Only a subset receives an operational label.
+labels:
+  # Rates model incomplete, noisy, and corrected observations.
+  enabled: true
+  investigation_rate: 0.8
+  missing_fraud_rate: 0.05
+  preliminary_error_rate: 0.03
+  correction_rate: 0.02
+  confirmation_delay:
+    distribution: lognormal
+    median_seconds: 10800
+    sigma: 0.5
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

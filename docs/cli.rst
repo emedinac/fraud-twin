@@ -24,6 +24,8 @@ Generation and validation
      - Purpose
    * - ``fraudtwin config validate``
      - Validate a YAML configuration before generating data.
+   * - ``fraudtwin config init``
+     - Create a project-owned copy of the packaged minimal YAML template.
    * - ``fraudtwin generate``
      - Generate an in-memory or persisted deterministic run.
    * - ``fraudtwin resume``
@@ -92,8 +94,8 @@ and defaults.
      - Commands
      - Typical output
    * - Configuration
-     - ``config validate``
-     - Validation diagnostics; non-zero exit on invalid YAML
+     - ``config init``, ``config validate``
+     - Project template or validation diagnostics; non-zero exit on invalid YAML
    * - Generation
      - ``generate``, ``resume``, ``replay``, ``validate-ledger``, ``report``
      - Run directory, checkpoint, replay, or manifest report
@@ -134,9 +136,31 @@ Exit behavior
 
 Exit code ``0`` means the requested operation completed and its verification
 checks passed. Invalid configuration, missing files, incompatible schemas, or
-unhealthy optional services return a non-zero exit code and an actionable
-message. Commands do not silently replace an existing run with a different
-configuration. Inspect the manifest and fingerprint before retrying.
+unhealthy optional services, and known generated-state failures return a
+non-zero exit code and an actionable message. Generation failures use the
+following format:
+
+.. code-block:: text
+
+   Generation failed [LEDGER_OVERDRAFT_EXCEEDED]
+
+   Stage: baseline payment ledger
+   Protocol: P01
+   Capacity: C04
+   Account: ACC-000228
+   Payment: PAY-...
+   Event: EVT-...
+   Debit: 537.34
+   Balance before: 345.11
+   Balance after: -192.23
+   Allowed overdraft: 100.00
+
+The report also includes the active ``P##`` protocol, failed ``C##`` capacity,
+what the error means, possible fixes, and a link to the :doc:`troubleshooting`
+guide. Commands do not silently replace an existing
+run with a different configuration. Inspect the manifest and fingerprint
+before retrying. Unexpected programming errors retain their traceback for
+developers.
 
 Examples by audience
 --------------------
@@ -144,12 +168,17 @@ Examples by audience
 .. code-block:: console
 
    # New user: validate and generate a bounded run
-   $ fraudtwin config validate configs/minimal.yaml
-   $ fraudtwin generate configs/minimal.yaml --output-dir runs/quickstart
+   $ fraudtwin config init config.yaml
+   $ fraudtwin config validate config.yaml
+   $ fraudtwin generate config.yaml --output-dir runs/quickstart
+
+   # Repository checkout: use a tracked fixture
+   $ fraudtwin config validate configs/minimal-v1.yaml
+   $ fraudtwin generate configs/minimal-v1.yaml --output-dir runs/quickstart
 
    # Data scientist: create a point-in-time dataset and backtest
-   $ fraudtwin ml build-dataset configs/minimal.yaml --run-id RUN-... --output-dir runs
-   $ fraudtwin ml backtest configs/minimal.yaml --run-id RUN-... --output-dir runs
+   $ fraudtwin ml build-dataset configs/minimal-v1.yaml --run-id RUN-... --output-dir runs
+   $ fraudtwin ml backtest configs/minimal-v1.yaml --run-id RUN-... --output-dir runs
 
    # MLOps engineer: inspect an integration before publishing
    $ fraudtwin db status

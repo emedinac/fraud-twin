@@ -1,9 +1,11 @@
+# Fixes the seed and time window used by this generated run.
 simulation:
   seed: 42
   start: 2026-01-01T00:00:00Z
   duration_days: 365
   speed: batch
 
+# Sets the sizes of the generated customer, account, and service pools.
 population:
   customers: 10000000
   institutions: 100
@@ -13,6 +15,7 @@ population:
   devices: 12000000
   pix_keys: 8000000
 
+# Controls daily payment volume and the share assigned to each rail.
 payments:
   daily_target: 2740000
   rails:
@@ -20,23 +23,28 @@ payments:
     PIX: 0.30
     ACCOUNT_TRANSFER: 0.15
 
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
 fraud:
   enabled: true
   target_rate: 0.002
   scenario_count: 5
   hard_negative_rate: 1.0
 
+# Controls how fraud events become alerts, cases, disputes, and labels.
 fraud_workflow:
   enabled: true
 
+# Controls the data-quality profile and any injected faults or outages.
 quality:
   profile: clean
 
+# Chooses which generated artifacts and external sinks are written.
 outputs:
   parquet: true
   postgres: false
   kafka: false
 
+# Sets payment targets, partitioning, workers, and checkpoint behavior.
 scale:
   profile: billion
   shard_count: 256

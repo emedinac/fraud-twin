@@ -49,3 +49,28 @@
 .config-schema-table th {
   white-space: nowrap;
 }
+
+/* Let the article expand across the available page width on large screens. */
+@media (min-width: 1200px) {
+  .bd-page-width {
+    max-width: 100%;
+  }
+
+  .bd-sidebar-primary {
+    flex: 0 0 18%;
+    width: 18%;
+    max-width: 18%;
+  }
+
+  .bd-main .bd-content .bd-article-container {
+    max-width: 100%;
+  }
+}
+
+/* Keep article content fluid on phones, with a small gutter. */
+@media (max-width: 767.98px) {
+  .bd-main .bd-content .bd-article-container {
+    max-width: 100%;
+    padding-inline: 1rem;
+  }
+}

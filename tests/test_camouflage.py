@@ -12,7 +12,7 @@ from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 
 
 def _fraud_config(strength: float = 0.0) -> SimulationRunConfig:
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     fraud = base.fraud.model_copy(
         update={"enabled": True, "target_rate": 1.0, "scenario_count": 1, "hard_negative_rate": 0.0}
     )
@@ -69,7 +69,7 @@ def test_camouflage_generation_is_deterministic_and_reports_similarity() -> None
 
 
 def test_neutral_camouflage_keeps_manifest_shape_and_configuration_hash() -> None:
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     neutral = base.model_copy(update={"stress": StressConfig()})
     assert create_manifest(base).model_dump(mode="json") == create_manifest(neutral).model_dump(
         mode="json"

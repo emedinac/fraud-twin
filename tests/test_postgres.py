@@ -22,7 +22,7 @@ from fraudtwin.postgres import (
 
 
 def test_postgres_toggle_does_not_change_generator_identity() -> None:
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     values = base.model_dump(mode="python")
     values["outputs"]["postgres"] = True
     mirrored = type(base).model_validate(values)
@@ -97,7 +97,7 @@ def test_insert_uses_each_row_value() -> None:
 )
 def test_postgres_mirror_matches_small_file_run(tmp_path: Path) -> None:
     pytest.importorskip("psycopg")
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     values = base.model_dump(mode="python")
     values["population"] = {
         "customers": 2,

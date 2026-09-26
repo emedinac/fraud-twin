@@ -2,6 +2,7 @@ import hashlib
 import json
 import math
 from datetime import datetime, timedelta
+from importlib.resources import files
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
@@ -116,7 +117,7 @@ class PopulationConfig(_StrictModel):
     cards: Annotated[int, Field(ge=0)]
     merchants: Annotated[int, Field(ge=0)]
     devices: Annotated[int, Field(ge=0)]
-    pix_keys: Annotated[int, Field(ge=0)]
+    pix_keys: Annotated[int, Field(ge=0)] = 0
 
     @model_validator(mode="after")
     def relationships_have_required_pools(self) -> "PopulationConfig":
@@ -130,6 +131,48 @@ class PopulationConfig(_StrictModel):
             raise ValueError("merchants require at least one institution")
         if self.pix_keys and (not self.accounts or not self.customers or not self.institutions):
             raise ValueError("pix_keys require at least one account, customer, and institution")
+        return self
+
+
+class AccountFinancialConfig(_StrictModel):
+    """Initial currency and spendable funding assigned to generated accounts."""
+
+    currency: str = Field(default="BRL", pattern=r"^[A-Z]{3}$")
+    opening_balance_min: float = Field(default=100.0, ge=0)
+    opening_balance_max: float = Field(default=25_000.0, ge=0)
+    credit_limit_min: float = Field(default=0.0, ge=0)
+    credit_limit_max: float = Field(default=50_000.0, ge=0)
+    overdraft_limit_min: float = Field(default=0.0, ge=0)
+    overdraft_limit_max: float = Field(default=5_000.0, ge=0)
+
+    @model_validator(mode="after")
+    def funding_ranges_must_be_ordered(self) -> "AccountFinancialConfig":
+        for name, minimum, maximum in (
+            ("opening balance", self.opening_balance_min, self.opening_balance_max),
+            ("credit limit", self.credit_limit_min, self.credit_limit_max),
+            ("overdraft limit", self.overdraft_limit_min, self.overdraft_limit_max),
+        ):
+            if maximum < minimum:
+                raise ValueError(f"account {name} maximum must be greater than or equal to minimum")
+        return self
+
+
+class CardLimitsConfig(_StrictModel):
+    """Generated card transaction and daily spending limits."""
+
+    transaction_limit_min: float = Field(default=100.0, ge=0)
+    transaction_limit_max: float = Field(default=10_000.0, ge=0)
+    daily_limit_min: float = Field(default=500.0, ge=0)
+    daily_limit_max: float = Field(default=20_000.0, ge=0)
+
+    @model_validator(mode="after")
+    def limit_ranges_must_be_ordered(self) -> "CardLimitsConfig":
+        if self.transaction_limit_max < self.transaction_limit_min:
+            raise ValueError(
+                "card transaction limit maximum must be greater than or equal to minimum"
+            )
+        if self.daily_limit_max < self.daily_limit_min:
+            raise ValueError("card daily limit maximum must be greater than or equal to minimum")
         return self
 
 
@@ -154,6 +197,7 @@ class BehaviorConfig(_StrictModel):
 
     amount_min: float = Field(default=1.0, gt=0)
     amount_max: float = Field(default=5_000.0, gt=0)
+    amount_distribution: Literal["profile", "uniform"] = "profile"
     active_hours: tuple[int, ...] = Field(default=tuple(range(24)), min_length=1)
     weekday_weights: tuple[float, ...] = (
         1.0,
@@ -306,7 +350,7 @@ class PixLifecycleConfig(_StrictModel):
 
 
 class FraudScenarioSettings(_StrictModel):
-    """Bounds and prevalence controls shared by one M6 scenario."""
+    """Bounds and campaign-capacity controls for one fraud scenario."""
 
     enabled: bool = True
     weight: Annotated[float, Field(ge=0)] = 1.0
@@ -341,6 +385,9 @@ class FraudConfig(_StrictModel):
     target_rate: Annotated[float, Field(ge=0, le=1)]
     scenario_count: Annotated[int, Field(ge=0)] = 5
     hard_negative_rate: Annotated[float, Field(ge=0, le=1)] = 1.0
+    scenario_selection: Literal["merge", "explicit"] = Field(
+        default="merge",
+    )
     scenarios: dict[FraudScenarioId, FraudScenarioSettings] = Field(
         default_factory=_default_fraud_scenarios
     )
@@ -350,10 +397,22 @@ class FraudConfig(_StrictModel):
     def fill_missing_scenario_settings(cls, value: Any) -> Any:
         if isinstance(value, dict) and isinstance(value.get("scenarios", {}), dict):
             value = dict(value)
-            value["scenarios"] = {
-                **_default_fraud_scenarios(),
-                **value.get("scenarios", {}),
-            }
+            explicit_scenarios = value.get("scenarios", {})
+            selection = str(value.get("scenario_selection", "merge"))
+            merged_scenarios: dict[FraudScenarioId, FraudScenarioSettings] = {}
+            for scenario_id in FRAUD_SCENARIO_IDS:
+                default_settings = _default_fraud_scenarios()[scenario_id]
+                user_settings = explicit_scenarios.get(scenario_id, {})
+                merged = default_settings.model_dump(mode="python")
+                if scenario_id not in explicit_scenarios:
+                    if selection == "explicit":
+                        merged.update({"enabled": False, "weight": 0.0, "count": 0})
+                    else:
+                        merged.update({"enabled": True, "weight": 1.0, "count": 1})
+                else:
+                    merged.update(user_settings)
+                merged_scenarios[scenario_id] = FraudScenarioSettings(**merged)
+            value["scenarios"] = merged_scenarios
         return value
 
     @model_validator(mode="after")
@@ -1926,6 +1985,14 @@ class SimulationRunConfig(_StrictModel):
 
     simulation: SimulationConfig = Field(description="Clock, seed, duration, and execution speed.")
     population: PopulationConfig = Field(description="Requested entity population sizes.")
+    account_finances: AccountFinancialConfig = Field(
+        default_factory=AccountFinancialConfig,
+        description="Currency and initial account funding and credit capacity.",
+    )
+    card_limits: CardLimitsConfig = Field(
+        default_factory=CardLimitsConfig,
+        description="Generated card transaction and daily spending limits.",
+    )
     payments: PaymentsConfig = Field(description="Payment volume and payment-rail weights.")
     behavior: BehaviorConfig = Field(
         default_factory=BehaviorConfig,
@@ -1952,7 +2019,10 @@ class SimulationRunConfig(_StrictModel):
         default_factory=ScaleConfig,
         description="Optional deterministic sharding, chunking, and checkpoint controls.",
     )
-    quality: QualityConfig = Field(description="Optional deterministic data-quality faults.")
+    quality: QualityConfig = Field(
+        default_factory=QualityConfig,
+        description="Optional deterministic data-quality faults.",
+    )
     outputs: OutputsConfig = Field(description="Parquet and optional sink output policy.")
     kafka: KafkaConfig = Field(
         default_factory=KafkaConfig,
@@ -2016,8 +2086,7 @@ class SimulationRunConfig(_StrictModel):
             or self.fraud_workflow.case_open_probability != 1.0
         ):
             raise ValueError(
-                "labels.enabled makes labels.investigation_rate the sole "
-                "workflow selection control"
+                "labels.enabled makes labels.investigation_rate the sole workflow selection control"
             )
         if (
             self.card_lifecycle.maximum_delay_seconds + CARD_EVENT_ENVELOPE_DELAY_SECONDS
@@ -2286,6 +2355,26 @@ def load_config(
     return config
 
 
+def _default_config_text() -> str:
+    """Return the packaged minimal configuration template."""
+
+    return files("fraudtwin").joinpath("defaults", "minimal-v1.yaml").read_text(encoding="utf-8")
+
+
+def load_default_config() -> SimulationRunConfig:
+    """Load and validate FraudTwin's packaged minimal configuration.
+
+    This is the supported starting point for Python applications that want to
+    customize the built-in configuration without depending on the package's
+    internal resource layout.
+    """
+
+    raw_config = yaml.safe_load(_default_config_text())
+    if not isinstance(raw_config, dict):
+        raise ValueError("the built-in minimal configuration must be a mapping")
+    return SimulationRunConfig.model_validate(raw_config)
+
+
 def config_hash(
     config: SimulationRunConfig,
     *,
@@ -2322,6 +2411,10 @@ def _canonical_config(
     """Serialize configuration once for hashes and deterministic stream IDs."""
 
     payload = config.model_dump(mode="json")
+    if config.account_finances == AccountFinancialConfig():
+        payload.pop("account_finances", None)
+    if config.card_limits == CardLimitsConfig():
+        payload.pop("card_limits", None)
     if not include_card_lifecycle:
         payload.pop("card_lifecycle", None)
     if not include_pix_lifecycle:
@@ -2393,7 +2486,9 @@ def _canonical_config(
     # Keep run identities backward-compatible when newly optional methodology
     # controls remain at their neutral defaults.
     neutral_defaults: dict[str, dict[str, object]] = {
+        "fraud": {"scenario_selection": "merge"},
         "behavior": {
+            "amount_distribution": "profile",
             "spending_level_weights": [0.3, 0.5, 0.2],
             "payday_days": [1, 15],
             "payday_weight": 1.25,

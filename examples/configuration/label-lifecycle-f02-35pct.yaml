@@ -1,0 +1,95 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed and window make label timing repeatable.
+  seed: 3301
+  start: 2026-01-01T00:00:00Z
+  duration_days: 12
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Entity pools support card and transfer activity.
+  customers: 300
+  institutions: 6
+  accounts: 900
+  cards: 240
+  merchants: 42
+  devices: 270
+  pix_keys: 0
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 350000.0
+  opening_balance_max: 750000.0
+  credit_limit_min: 0.0
+  credit_limit_max: 180000.0
+  overdraft_limit_min: 0.0
+  overdraft_limit_max: 30000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 3500.0
+  transaction_limit_max: 18000.0
+  daily_limit_min: 85000.0
+  daily_limit_max: 320000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Mixed rails provide varied cases for investigation.
+  daily_target: 610
+  rails:
+    CARD: 0.7
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.3
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 25.0
+  amount_max: 4800.0
+  amount_distribution: uniform
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # F02 attempts define the campaign volume for this workflow.
+  enabled: true
+  target_rate: 0.35
+  scenario_count: 150
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F02:
+      enabled: true
+      weight: 1.0
+      count: 150
+      amount_min: 250.0
+      amount_max: 4800.0
+
+# Workflow delays control when alerts, cases, and labels appear.
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 0.88
+  customer_dispute_probability: 0.5
+  alert_delay_seconds: 120
+  case_open_delay_seconds: 360
+  confirmation_delay_seconds: 21600
+  customer_dispute_delay_seconds: 43200
+  label_delay_seconds: 3000
+
+# Add incomplete and occasionally corrected investigation labels.
+labels:
+  enabled: true
+  investigation_rate: 0.85
+  missing_fraud_rate: 0.08
+  preliminary_error_rate: 0.03
+  correction_rate: 0.02
+  confirmation_delay:
+    distribution: lognormal
+    median_seconds: 7200
+    sigma: 0.45
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

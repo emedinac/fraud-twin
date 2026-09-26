@@ -22,8 +22,8 @@ Install and run
 .. code-block:: console
 
    $ poetry install
-   $ poetry run fraudtwin config validate configs/minimal.yaml
-   $ poetry run fraudtwin generate configs/minimal.yaml --output-dir ./runs
+   $ poetry run fraudtwin config validate configs/minimal-v1.yaml
+   $ poetry run fraudtwin generate configs/minimal-v1.yaml --output-dir ./runs
 
 Start here
 ----------
@@ -45,6 +45,14 @@ Start here
       :class-card: sd-border-0
 
       Learn FraudTwin through short, executable paths grouped by workflow.
+
+   .. grid-item-card:: Benchmark examples
+      :link: benchmark-configs
+      :link-type: doc
+      :class-card: sd-border-0
+
+      Browse benchmark and example configs by category: minimal, fraud,
+      graph, temporal, and Kafka integration.
 
    .. grid-item-card:: How-to guides
       :link: how-to
@@ -139,6 +147,8 @@ the complete explanation for evaluation and audit.
 
    api
    configuration-reference
+   benchmark-configs
+   vocabulary
    cli
    data-contracts
    verified-capabilities

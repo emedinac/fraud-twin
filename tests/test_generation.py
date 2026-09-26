@@ -9,7 +9,7 @@ from fraudtwin.cli import app
 from fraudtwin.generation import GeneratedData, GeneratedRun
 
 runner = CliRunner()
-CONFIG_PATH = Path("configs/minimal.yaml")
+CONFIG_PATH = Path("configs/minimal-v1.yaml")
 
 
 def test_package_ships_pep561_type_marker() -> None:

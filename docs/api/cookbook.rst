@@ -15,7 +15,7 @@ Generate and load a persisted run
    from fraudtwin import generate
    from fraudtwin.config import load_config
 
-   config = load_config(Path("configs/minimal.yaml"))
+   config = load_config(Path("configs/minimal-v1.yaml"))
    persisted = generate(config, write=True, output_dir=Path("runs/example"))
    data = persisted.load_data()
    print(len(data.entities.customers), len(data.behavior.payments))

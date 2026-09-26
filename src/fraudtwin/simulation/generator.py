@@ -344,7 +344,10 @@ class EntityGenerator:
                 float(cast(float, balance_summary.parameters["maximum"])),
             )
             if balance_summary and "minimum" in balance_summary.parameters
-            else (100.0, 25_000.0)
+            else (
+                self.config.account_finances.opening_balance_min,
+                self.config.account_finances.opening_balance_max,
+            )
         )
         account_types: tuple[AccountType, ...] = (
             "CHECKING",
@@ -364,14 +367,26 @@ class EntityGenerator:
                     customer_id=rng.choice(customers).customer_id,
                     institution_id=rng.choice(institutions).institution_id,
                     account_type=rng.choice(account_types),
-                    currency="BRL",
+                    currency=self.config.account_finances.currency,
                     opening_date=opening,
                     closing_date=None,
                     status="ACTIVE",
-                    credit_limit=round(rng.uniform(0.0, 50_000.0), 2),
+                    credit_limit=round(
+                        rng.uniform(
+                            self.config.account_finances.credit_limit_min,
+                            self.config.account_finances.credit_limit_max,
+                        ),
+                        2,
+                    ),
                     available_balance=balance,
                     ledger_balance=balance,
-                    overdraft_limit=round(rng.uniform(0.0, 5_000.0), 2),
+                    overdraft_limit=round(
+                        rng.uniform(
+                            self.config.account_finances.overdraft_limit_min,
+                            self.config.account_finances.overdraft_limit_max,
+                        ),
+                        2,
+                    ),
                     created_at=opening,
                     updated_at=self.start,
                     valid_from=opening,
@@ -403,8 +418,20 @@ class EntityGenerator:
                     contactless_enabled=True,
                     online_enabled=True,
                     international_enabled=rng.choice((True, False)),
-                    daily_limit=round(rng.uniform(500.0, 20_000.0), 2),
-                    transaction_limit=round(rng.uniform(100.0, 10_000.0), 2),
+                    daily_limit=round(
+                        rng.uniform(
+                            self.config.card_limits.daily_limit_min,
+                            self.config.card_limits.daily_limit_max,
+                        ),
+                        2,
+                    ),
+                    transaction_limit=round(
+                        rng.uniform(
+                            self.config.card_limits.transaction_limit_min,
+                            self.config.card_limits.transaction_limit_max,
+                        ),
+                        2,
+                    ),
                 )
             )
         return tuple(records)

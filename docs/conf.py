@@ -45,7 +45,13 @@ templates_path = ["_templates"]
 html_sidebars = {
     "**": ["sidebar-docs-nav.html"],
 }
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "tutorials/outputs/*"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "tutorials/outputs/*",
+    "_static/images/README.md",
+]
 autosummary_generate = True
 autodoc_member_order = "bysource"
 autodoc_typehints = "description"
@@ -90,7 +96,7 @@ html_show_sourcelink = False
 _site_version = globals().get("smv_current_version", "latest")
 if _site_version in {"main", "dev"}:
     _site_version = "latest"
-html_baseurl = f"https://emedinac.github.io/fraudtwin/{_site_version}/"
+html_baseurl = f"https://emedinac.github.io/fraud-twin/{_site_version}/"
 html_theme_options = {
     "logo": {"text": "FraudTwin"},
     "navbar_align": "content",
@@ -98,9 +104,10 @@ html_theme_options = {
     "navbar_end": ["navbar-icon-links", "theme-switcher"],
     "header_links_before_dropdown": 5,
     "show_nav_level": 2,
+    "show_toc_level": 2,
     "navigation_with_keys": True,
     "show_version_warning_banner": True,
-    "github_url": "https://github.com/emedinac/fraudtwin",
+    "github_url": "https://github.com/emedinac/fraud-twin",
     "use_edit_page_button": True,
     "announcement": (
         "FraudTwin documentation is versioned. Check the version selector before "
@@ -111,12 +118,12 @@ if os.environ.get("FRAUDTWIN_VERSIONED_BUILD") and not os.environ.get(
     "FRAUDTWIN_SKIP_VERSION_SWITCHER"
 ):
     html_theme_options["switcher"] = {
-        "json_url": "https://emedinac.github.io/fraudtwin/version-switcher.json",
+        "json_url": "https://emedinac.github.io/fraud-twin/version-switcher.json",
         "version_match": version,
     }
 html_context = {
     "github_user": "emedinac",
-    "github_repo": "fraudtwin",
+    "github_repo": "fraud-twin",
     "github_version": "main",
     "doc_path": "docs",
 }
@@ -153,6 +160,6 @@ def linkcode_resolve(domain: str, info: dict[str, str]) -> str | None:
     if source_ref in {"main", "dev"}:
         source_ref = "main"
     return (
-        "https://github.com/emedinac/fraudtwin/blob/"
+        "https://github.com/emedinac/fraud-twin/blob/"
         f"{source_ref}/{relative.as_posix()}#L{line_number}-L{end_line}"
     )

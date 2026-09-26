@@ -4,11 +4,17 @@ models:
   - lightgbm
   - xgboost
   - catboost
+# Sets the false-positive-rate operating points for comparisons.
 fixed_fpr: 0.01
+# Sets the recall operating points for comparisons.
 fixed_recall: 0.80
+# Sets the fraction of highest-ranked rows used in ranking metrics.
 ranking_k_fraction: 0.01
+# Chooses which labels are eligible for model evaluation.
 label_policy: exclude_unresolved
+# Freezes randomness used by model baselines.
 random_seed: 42
+# Defines repeatable built-in model presets.
 deterministic_presets:
   single_thread: true
   resampling: none

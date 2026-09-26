@@ -1,7 +1,12 @@
+# Names this versioned benchmark definition.
 id: fraudtwin-temporal
+# Pins the benchmark definition version.
 version: 1.0.0
+# Records the seed of the source simulation being evaluated.
 source_seed: 42
+# Binds this backtest pack to its source configuration.
 source_config_hash: 19652188a1efbe6ccc5b9862e34099fb9fa0f727e83c623b02f0ceddbf75300b
+# Defines chronological train, validation, test, and stress periods.
 windows:
   train:
     from: 2026-01-01T00:00:00Z
@@ -15,9 +20,13 @@ windows:
   stress:
     from: 2026-01-01T18:00:00Z
     to: 2026-01-02T00:00:00Z
+# Chooses which labels are eligible for model evaluation.
 label_policy: exclude
+# Requires labels to mature for this long before use.
 label_maturity_gap_seconds: 1h
+# Holds suite-specific scenario overrides.
 scenario_parameters: {}
+# Lists the evaluation metrics emitted by the backtest.
 metric_definitions:
   - roc_auc
   - pr_auc

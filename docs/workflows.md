@@ -13,7 +13,7 @@ FraudTwin separates generation from analysis. Generate a source run once, then b
 The dataset builder creates historical features and labels using only data that was available at each row’s `prediction_time`:
 
 ```bash
-CONFIG=configs/minimal.yaml
+CONFIG=configs/minimal-v1.yaml
 RUN_ID=RUN-...
 RUNS_DIR=./runs
 
@@ -75,7 +75,7 @@ Use `original_delivery` when the question is about ingestion and processing orde
 Backtests use fixed or expanding training windows and explicit validation, test, stress, and label-maturity boundaries:
 
 ```bash
-CONFIG=configs/minimal.yaml
+CONFIG=configs/minimal-v1.yaml
 RUN_ID=RUN-...
 RUNS_DIR=./runs
 
@@ -133,7 +133,7 @@ the environment, and apply the packaged migrations before enabling the sink:
 poetry install -E postgres
 export FRAUDTWIN_POSTGRES_DSN='postgresql://user:password@localhost:5432/fraudtwin'
 fraudtwin db migrate
-fraudtwin generate configs/minimal.yaml --output-dir runs
+fraudtwin generate configs/minimal-v1.yaml --output-dir runs
 ```
 
 Set `outputs.postgres: true` in the configuration. Keep `outputs.parquet: true`
@@ -160,7 +160,7 @@ environment:
 poetry install -E kafka
 export FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 export FRAUDTWIN_SCHEMA_REGISTRY_URL=http://localhost:8081
-fraudtwin generate configs/minimal.yaml --output-dir runs
+fraudtwin generate configs/minimal-v1.yaml --output-dir runs
 ```
 
 Set `outputs.kafka: true` and keep `quality.profile: clean`. The six topics use
@@ -294,7 +294,7 @@ Run the generator with its temporary scrape endpoint. The endpoint is held
 after completion so Prometheus can collect the final batch values:
 
 ```bash
-fraudtwin generate configs/minimal.yaml --output-dir runs \
+fraudtwin generate configs/minimal-v1.yaml --output-dir runs \
   --metrics-host 0.0.0.0 --metrics-port 9464 --metrics-hold-seconds 15
 ```
 

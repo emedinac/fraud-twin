@@ -52,7 +52,7 @@ def _runtime_summary() -> dict[str, object]:
         from fraudtwin.config import load_config
         from fraudtwin.generation import generate
 
-        base = load_config(REPOSITORY / "configs" / "minimal.yaml")
+        base = load_config(REPOSITORY / "configs" / "minimal-v1.yaml")
         config = base.model_copy(
             update={
                 "simulation": base.simulation.model_copy(update={"duration_days": 10}),

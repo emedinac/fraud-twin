@@ -1,4 +1,4 @@
-__version__ = "0.34.6"
+__version__ = "0.34.7"
 
 from fraudtwin.benchmark import (
     PublicBenchmarkPack,
@@ -45,6 +45,7 @@ from fraudtwin.campaign_dynamics import (
     resolve_campaign_dynamics,
     validate_campaign_dynamics,
 )
+from fraudtwin.config import load_default_config
 from fraudtwin.counterfactual import (
     CounterfactualChangeSet,
     CounterfactualDataset,
@@ -63,6 +64,7 @@ from fraudtwin.difficulty import (
     apply_difficulty,
     resolve_difficulty,
 )
+from fraudtwin.errors import GenerationError, LedgerCapacityError
 from fraudtwin.extensions import (
     BehaviorModel,
     DataFaultInjector,
@@ -176,6 +178,15 @@ from fraudtwin.scale import (
     write_scale_benchmark_manifest,
 )
 from fraudtwin.storage import FsspecScaleStorage, LocalScaleStorage, storage_for
+from fraudtwin.vocabulary import (
+    CAPACITIES,
+    FRAUD_SCENARIOS,
+    PROTOCOLS,
+    VocabularyDefinition,
+    get_capacity,
+    get_protocol,
+    get_scenario,
+)
 
 __all__ = [
     "__version__",
@@ -201,6 +212,16 @@ __all__ = [
     "resolve_calibration_configuration",
     "validate_calibration_output",
     "write_calibration_profile",
+    "load_default_config",
+    "GenerationError",
+    "LedgerCapacityError",
+    "CAPACITIES",
+    "FRAUD_SCENARIOS",
+    "PROTOCOLS",
+    "VocabularyDefinition",
+    "get_capacity",
+    "get_protocol",
+    "get_scenario",
     "QualityAdapterMetadata",
     "QualityAdapterRequest",
     "QualityArtifactBundle",

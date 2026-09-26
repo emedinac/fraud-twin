@@ -1,0 +1,65 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed and date range make comparisons repeatable.
+  seed: 42
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Larger customer pool supports the higher payment volume.
+  customers: 1000
+  institutions: 25
+  accounts: 100
+  cards: 100
+  merchants: 50
+  devices: 100
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 20000000.0
+  opening_balance_max: 20000000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 100000.0
+  transaction_limit_max: 100000.0
+  daily_limit_min: 2000000.0
+  daily_limit_max: 2000000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Baseline card traffic provides the denominator for fraud volume.
+  daily_target: 751
+  rails:
+    CARD: 1.0
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.0
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 0.01
+  amount_max: 100000.0
+  amount_distribution: uniform
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # F01 campaign count sets capacity; target_rate is not a guarantee.
+  enabled: true
+  target_rate: 0.25
+  scenario_count: 830
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F01:
+      enabled: true
+      weight: 1.0
+      count: 830
+      amount_min: 0.01
+      amount_max: 100000.0
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

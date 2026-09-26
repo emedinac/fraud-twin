@@ -13,7 +13,7 @@ from fraudtwin.simulation.parquet import (
     write_behavior_parquet,
 )
 
-CONFIG_PATH = Path("configs/minimal.yaml")
+CONFIG_PATH = Path("configs/minimal-v1.yaml")
 
 
 @cache
@@ -80,6 +80,46 @@ def test_payments_have_stable_order_valid_relationships_and_profile_preferences(
             assert payment.payee_account_id in accounts
         if event.device_id is not None:
             assert event.device_id in profile.preferred_device_ids
+
+
+def test_uniform_amount_distribution_uses_configured_range() -> None:
+    base = load_config(CONFIG_PATH)
+    config = base.model_copy(
+        update={
+            "payments": base.payments.model_copy(
+                update={"rails": {"CARD": 1.0, "PIX": 0.0, "ACCOUNT_TRANSFER": 0.0}}
+            ),
+            "behavior": base.behavior.model_copy(
+                update={
+                    "amount_min": 0.01,
+                    "amount_max": 100_000.0,
+                    "amount_distribution": "uniform",
+                }
+            ),
+            "account_finances": base.account_finances.model_copy(
+                update={
+                    "currency": "USD",
+                    "opening_balance_min": 20_000_000.0,
+                    "opening_balance_max": 20_000_000.0,
+                }
+            ),
+            "card_limits": base.card_limits.model_copy(
+                update={
+                    "transaction_limit_min": 100_000.0,
+                    "transaction_limit_max": 100_000.0,
+                    "daily_limit_min": 2_000_000.0,
+                    "daily_limit_max": 2_000_000.0,
+                }
+            ),
+        }
+    )
+    entities = EntityGenerator(config).generate()
+
+    payments = BehaviorGenerator(config, entities).generate().payments
+
+    assert all(0.01 <= payment.amount <= 100_000.0 for payment in payments)
+    assert max(payment.amount for payment in payments) > 90_000.0
+    assert {payment.currency for payment in payments} == {"USD"}
 
 
 def test_time_of_day_weekday_and_duration_constraints_are_applied() -> None:

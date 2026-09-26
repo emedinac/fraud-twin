@@ -1,9 +1,11 @@
+# Fixes the seed and time window used by this generated run.
 simulation:
   seed: 1313
   start: 2026-01-01T00:00:00Z
   duration_days: 7
   speed: batch
 
+# Sets the sizes of the generated customer, account, and service pools.
 population:
   customers: 120
   institutions: 6
@@ -13,10 +15,12 @@ population:
   devices: 30
   pix_keys: 40
 
+# Controls daily payment volume and the share assigned to each rail.
 payments:
   daily_target: 100
   rails: {CARD: 0.5, PIX: 0.3, ACCOUNT_TRANSFER: 0.2}
 
+# Shapes legitimate activity, including payment size and active periods.
 behavior:
   amount_min: 10.0
   amount_max: 5000.0
@@ -25,12 +29,14 @@ behavior:
   merchant_preference_count: 3
   preferred_device_limit: 3
 
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
 fraud:
   enabled: true
   target_rate: 0.20
   scenario_count: 5
   hard_negative_rate: 0.25
 
+# Controls how fraud events become alerts, cases, disputes, and labels.
 fraud_workflow:
   enabled: true
   alert_probability: 1.0
@@ -38,10 +44,14 @@ fraud_workflow:
   confirmation_probability: 1.0
   customer_dispute_probability: 1.0
 
+# Controls the data-quality profile and any injected faults or outages.
 quality: {profile: clean}
+# Controls point-in-time dataset generation and label handling.
 dataset: {enabled: true, unresolved_labels: include}
+# Chooses which generated artifacts and external sinks are written.
 outputs: {parquet: true, postgres: false, kafka: false}
 
+# Defines shared entities and network structures used by graph scenarios.
 graph:
   enabled: true
   scenarios:
@@ -59,6 +69,7 @@ graph:
     - {type: MERCHANT_CUSTOMER_COMMUNITY, count: 1, customer_count: 3, merchant_count: 2, repeat_count: 2}
     - {type: RANDOM_ALERT_CONTROL, count: 1, member_count: 3, edge_count: 3}
 
+# Adds controlled camouflage or stress conditions to generated behavior.
 stress:
   camouflage: 0.80
   feature_camouflage: 0.85

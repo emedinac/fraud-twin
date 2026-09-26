@@ -8,7 +8,7 @@ Requirements: Python 3.12 and Poetry 2.x.
 
 ```bash
 poetry install
-poetry run fraudtwin config validate configs/minimal.yaml
+poetry run fraudtwin config validate configs/minimal-v1.yaml
 poetry run pytest
 ```
 

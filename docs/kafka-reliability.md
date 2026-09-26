@@ -35,7 +35,7 @@ from fraudtwin.kafka import publication_records
 from fraudtwin.kafka_chaos import KafkaChaosConfig, simulate_delivery
 
 written_run = generate(
-    load_config(Path("configs/minimal.yaml")),
+    load_config(Path("configs/minimal-v1.yaml")),
     write=True,
     output_dir=Path("runs"),
 )

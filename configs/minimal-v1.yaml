@@ -1,9 +1,11 @@
+# Fixes the seed and time window used by this generated run.
 simulation:
   seed: 42
   start: 2026-01-01T00:00:00Z
   duration_days: 1
   speed: batch
 
+# Sets the sizes of the generated customer, account, and service pools.
 population:
   customers: 10
   institutions: 3
@@ -13,6 +15,7 @@ population:
   devices: 12
   pix_keys: 8
 
+# Controls daily payment volume and the share assigned to each rail.
 payments:
   daily_target: 100
   rails:
@@ -20,14 +23,42 @@ payments:
     PIX: 0.30
     ACCOUNT_TRANSFER: 0.15
 
+# Shapes legitimate activity, including payment size and active periods.
 behavior:
   amount_min: 1.00
   amount_max: 5000.00
-  active_hours: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+  active_hours:
+    [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+    ]
   weekday_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 0.85, 0.70]
   merchant_preference_count: 3
   preferred_device_limit: 3
 
+# Sets authorization, capture, settlement, refund, and chargeback behavior.
 card_lifecycle:
   authorization_approval_probability: 0.90
   reversal_probability: 0.05
@@ -39,6 +70,7 @@ card_lifecycle:
   reversal_delay_seconds: 10
   refund_delay_seconds: 60
 
+# Sets PIX validation, settlement, rejection, timeout, and return behavior.
 pix_lifecycle:
   authorization_approval_probability: 0.98
   rejection_probability: 0.02
@@ -51,12 +83,14 @@ pix_lifecycle:
   return_request_delay_seconds: 60
   return_delay_seconds: 60
 
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
 fraud:
   enabled: false
   target_rate: 0.002
   scenario_count: 5
   hard_negative_rate: 1.0
 
+# Controls how fraud events become alerts, cases, disputes, and labels.
 fraud_workflow:
   enabled: true
   alert_probability: 1.0
@@ -69,18 +103,15 @@ fraud_workflow:
   customer_dispute_delay_seconds: 172800
   label_delay_seconds: 3600
 
-quality:
-  profile: clean
-
+# Controls point-in-time dataset generation and label handling.
 dataset:
   enabled: true
   unresolved_labels: include
 
+# Chooses which generated artifacts and external sinks are written.
 outputs:
   parquet: true
   postgres: false
   kafka: false
   iceberg: false
 
-calibration:
-  enabled: false

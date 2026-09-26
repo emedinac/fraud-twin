@@ -1,9 +1,11 @@
+# Fixes the seed and time window used by this generated run.
 simulation:
   seed: 1414
   start: 2026-01-01T00:00:00Z
   duration_days: 7
   speed: batch
 
+# Sets the sizes of the generated customer, account, and service pools.
 population:
   customers: 40
   institutions: 4
@@ -13,10 +15,12 @@ population:
   devices: 30
   pix_keys: 24
 
+# Controls daily payment volume and the share assigned to each rail.
 payments:
   daily_target: 120
   rails: {CARD: 0.50, PIX: 0.30, ACCOUNT_TRANSFER: 0.20}
 
+# Shapes legitimate activity, including payment size and active periods.
 behavior:
   amount_min: 5.00
   amount_max: 5000.00
@@ -25,16 +29,21 @@ behavior:
   merchant_preference_count: 3
   preferred_device_limit: 3
 
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
 fraud:
   enabled: false
   target_rate: 0.0
   scenario_count: 0
   hard_negative_rate: 0.0
 
+# Controls the data-quality profile and any injected faults or outages.
 quality: {profile: clean}
+# Controls point-in-time dataset generation and label handling.
 dataset: {enabled: true, unresolved_labels: include}
+# Chooses which generated artifacts and external sinks are written.
 outputs: {parquet: true, postgres: false, kafka: false}
 
+# Requests alternative trajectories and limits their change budget.
 counterfactual:
   enabled: true
   budget: 2.0

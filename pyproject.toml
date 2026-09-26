@@ -1,6 +1,6 @@
 [project]
 name = "fraudtwin"
-version = "0.34.6"
+version = "0.34.7"
 description = "Fraud emulator for real-world ML and data pipelines"
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
@@ -29,10 +29,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/emedinac/fraudtwin"
-Repository = "https://github.com/emedinac/fraudtwin"
-Documentation = "https://emedinac.github.io/fraudtwin/"
-Issues = "https://github.com/emedinac/fraudtwin/issues"
+Homepage = "https://github.com/emedinac/fraud-twin"
+Repository = "https://github.com/emedinac/fraud-twin"
+Documentation = "https://emedinac.github.io/fraud-twin/"
+Issues = "https://github.com/emedinac/fraud-twin/issues"
 
 [project.scripts]
 fraudtwin = "fraudtwin.cli:main"
@@ -62,6 +62,7 @@ build-backend = "poetry.core.masonry.api"
 packages = [{ include = "fraudtwin", from = "src" }]
 include = [
     "src/fraudtwin/py.typed",
+    "src/fraudtwin/defaults/*.yaml",
     "src/fraudtwin/public_packs/*.yaml",
     "src/fraudtwin/quality_profiles/*.yaml",
     "src/fraudtwin/migrations/*.sql",

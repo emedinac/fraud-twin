@@ -1,0 +1,49 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Small fixed run makes this a quick starting point.
+  seed: 42
+  start: 2021-09-25T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Entity counts define the minimal available card world.
+  customers: 1000
+  institutions: 3
+  accounts: 1000
+  cards: 1000
+  merchants: 25
+  devices: 1000
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # CARD-only mix keeps the example focused.
+  daily_target: 100
+  rails:
+    CARD: 1.0
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.0
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 0.01
+  amount_max: 10.0
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # Explicit selection limits generation to the listed scenario.
+  enabled: true
+  target_rate: 1.0
+  scenario_count: 333
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F01:
+      enabled: true
+      weight: 1.0
+      count: 333
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

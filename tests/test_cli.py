@@ -2,24 +2,47 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from fraudtwin.cli import app
+from fraudtwin.config import load_config
+from fraudtwin.errors import LedgerCapacityError
 
 runner = CliRunner()
 
 
 def test_config_validate_command() -> None:
-    result = runner.invoke(app, ["config", "validate", "configs/minimal.yaml"])
+    result = runner.invoke(app, ["config", "validate", "configs/minimal-v1.yaml"])
 
     assert result.exit_code == 0
     assert "Configuration is valid." in result.stdout
 
 
+def test_config_init_writes_valid_template_without_overwriting(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "nested" / "config.yaml"
+
+    result = runner.invoke(app, ["config", "init", str(path)])
+
+    assert result.exit_code == 0, result.stdout
+    assert path.is_file()
+    assert load_config(path).simulation.seed == 42
+    assert "Configuration template written" in result.stdout
+
+    refused = runner.invoke(app, ["config", "init", str(path)])
+    assert refused.exit_code == 1
+    assert "Use --force to replace it" in refused.stderr
+
+    forced = runner.invoke(app, ["config", "init", str(path), "--force"])
+    assert forced.exit_code == 0, forced.stdout
+
+
 def test_generate_command_writes_manifest(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
-        ["generate", "configs/minimal.yaml", "--output-dir", str(tmp_path)],
+        ["generate", "configs/minimal-v1.yaml", "--output-dir", str(tmp_path)],
     )
 
     assert result.exit_code == 0
@@ -69,6 +92,37 @@ def test_generate_command_writes_manifest(tmp_path: Path) -> None:
     )
     assert ledger_result.exit_code == 0
     assert "Ledger is valid" in ledger_result.stdout
+
+
+def test_generate_command_reports_known_generation_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import fraudtwin.cli as cli
+
+    def fail_generation(*args: object, **kwargs: object) -> None:
+        raise LedgerCapacityError(
+            stage="baseline payment ledger",
+            account_id="ACC-000228",
+            payment_id="PAY-000001",
+            event_id="EVT-000001",
+            debit_amount=537.34,
+            balance_before=345.11,
+            balance_after=-192.23,
+            overdraft_limit=100.0,
+        )
+
+    monkeypatch.setattr(cli, "generate_library", fail_generation)
+    result = runner.invoke(
+        app,
+        ["generate", "configs/minimal-v1.yaml", "--output-dir", str(tmp_path)],
+    )
+
+    assert result.exit_code == 1
+    assert "Generation failed [LEDGER_OVERDRAFT_EXCEEDED]" in result.output
+    assert "Stage: baseline payment ledger" in result.output
+    assert "Account: ACC-000228" in result.output
+    assert "reduce behavior.amount_max" in result.output
+    assert "Traceback" not in result.output
 
 
 def test_kafka_chaos_command_writes_audit_files(tmp_path: Path, monkeypatch) -> None:

@@ -68,7 +68,7 @@ def test_invalid_reference_values_and_formats_fail_before_generation(tmp_path: P
 
 
 def test_calibration_config_is_strict_and_neutral_hash_is_stable() -> None:
-    config = load_config(Path("configs/minimal.yaml"))
+    config = load_config(Path("configs/minimal-v1.yaml"))
     assert not config.calibration.enabled
     raw = config.model_dump(mode="python")
     raw["calibration"]["unknown"] = 1
@@ -85,7 +85,7 @@ def test_cli_calibrate_and_generate_profile(tmp_path: Path) -> None:
         app,
         [
             "generate",
-            "configs/minimal.yaml",
+            "configs/minimal-v1.yaml",
             "--profile",
             str(profile),
             "--output-dir",

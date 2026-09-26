@@ -22,7 +22,7 @@ runner = CliRunner()
 
 @cache
 def _base() -> SimulationRunConfig:
-    return load_config(Path("configs/minimal.yaml"))
+    return load_config(Path("configs/minimal-v1.yaml"))
 
 
 def _fraud_config(level: int = 1, **controls: float) -> SimulationRunConfig:

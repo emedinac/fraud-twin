@@ -48,7 +48,7 @@ class _Producer:
 
 
 def test_kafka_settings_do_not_change_source_identity() -> None:
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     values = base.model_dump(mode="python")
     values["outputs"]["kafka"] = True
     values["kafka"] = {"topic_prefix": "other", "max_events_per_second": 2.0}

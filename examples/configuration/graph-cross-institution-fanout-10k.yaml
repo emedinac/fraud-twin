@@ -1,0 +1,89 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed keeps the graph pattern reproducible.
+  seed: 2704
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Multiple institutions enable cross-institution destinations.
+  customers: 5000
+  institutions: 8
+  accounts: 2500
+  cards: 250
+  merchants: 30
+  devices: 200
+  pix_keys: 0
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 250000.0
+  opening_balance_max: 500000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 10000.0
+  transaction_limit_max: 15000.0
+  daily_limit_min: 200000.0
+  daily_limit_max: 400000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Ordinary card and transfer traffic surrounds fan-out events.
+  daily_target: 725
+  rails:
+    CARD: 0.60
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.40
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 1.0
+  amount_max: 10000.0
+  amount_distribution: uniform
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # F05 attempts complement the configured graph pattern.
+  enabled: true
+  target_rate: 0.5
+  scenario_count: 100
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F05:
+      enabled: true
+      weight: 1.0
+      count: 100
+      amount_min: 100.0
+      amount_max: 10000.0
+      attempt_count: 20
+
+# G04 fans each source transfer across three distinct destinations.
+graph:
+  # Each source sends payments to three distinct institutions or accounts.
+  enabled: true
+  scenarios:
+    - type: FAN_OUT
+      count: 250
+      destination_count: 3
+      min_amount: 2500.0
+      max_amount: 10000.0
+      window_seconds: 3600
+      institution_scope: CROSS_INSTITUTION
+      modifiers: [CROSS_INSTITUTION]
+
+# Controls how fraud events become alerts, cases, disputes, and labels.
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 0.9
+  customer_dispute_probability: 0.5
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

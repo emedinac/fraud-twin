@@ -1,0 +1,57 @@
+# A complete, fixed-date example for a five-year PIX/account-transfer history.
+# Use the Python example in docs/configuration.md when the window should roll
+# relative to the current date.
+
+simulation:
+  # Fixed start and duration define the five-year history.
+  seed: 42
+  start: 2021-01-01T00:00:00Z
+  duration_days: 1826
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # PIX keys support PIX traffic; card entities are not needed here.
+  customers: 1000
+  institutions: 5
+  accounts: 1000
+  # Cards are unnecessary because CARD traffic and card scenarios are disabled.
+  # Card expiration only matters when card-based traffic is part of the run.
+  cards: 0
+  merchants: 25
+  devices: 1000
+  pix_keys: 800
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # The rail weights split six daily payments between PIX and transfers.
+  daily_target: 6
+  rails:
+    CARD: 0.0
+    PIX: 0.75
+    ACCOUNT_TRANSFER: 0.25
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_max: 5.0
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # Fraud is disabled to create a clean baseline history.
+  enabled: false
+  target_rate: 0.002
+
+# Controls the data-quality profile and any injected faults or outages.
+quality:
+  profile: clean
+
+# Controls point-in-time dataset generation and label handling.
+dataset:
+  enabled: false
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true
+  postgres: false
+  kafka: false
+  iceberg: false

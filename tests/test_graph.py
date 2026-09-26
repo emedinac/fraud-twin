@@ -23,7 +23,7 @@ from fraudtwin.simulation.parquet import (
     write_graph_truth,
 )
 
-CONFIG_PATH = Path("configs/minimal.yaml")
+CONFIG_PATH = Path("configs/minimal-v1.yaml")
 runner = CliRunner()
 
 

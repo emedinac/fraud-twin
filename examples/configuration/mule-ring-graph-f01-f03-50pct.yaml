@@ -1,0 +1,112 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed keeps graph and campaign generation repeatable.
+  seed: 3501
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Multiple institutions enable cross-institution graph links.
+  customers: 600
+  institutions: 8
+  accounts: 1400
+  cards: 300
+  merchants: 55
+  devices: 420
+  pix_keys: 0
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 450000.0
+  opening_balance_max: 850000.0
+  credit_limit_min: 0.0
+  credit_limit_max: 180000.0
+  overdraft_limit_min: 0.0
+  overdraft_limit_max: 35000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 4000.0
+  transaction_limit_max: 22000.0
+  daily_limit_min: 90000.0
+  daily_limit_max: 360000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Card and transfer traffic provide two rails for the fraud mix.
+  daily_target: 700
+  rails:
+    CARD: 0.7
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.3
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 25.0
+  amount_max: 5500.0
+  amount_distribution: uniform
+  state_change_probability: 0.02
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # Equal campaign counts split the selected budget across F01/F03.
+  enabled: true
+  target_rate: 0.5
+  scenario_count: 220
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F01:
+      enabled: true
+      weight: 0.5
+      count: 110
+      amount_min: 200.0
+      amount_max: 5000.0
+    F03:
+      enabled: true
+      weight: 0.5
+      count: 110
+      amount_min: 300.0
+      amount_max: 5500.0
+      attempt_count: 12
+
+# Overlays closed rings and cross-institution mule paths.
+graph:
+  enabled: true
+  ring_min_size: 3
+  ring_max_size: 5
+  scenarios:
+    - type: CYCLIC_RING
+      count: 80
+      member_count: 5
+      min_amount: 1200.0
+      max_amount: 5200.0
+      window_seconds: 3600
+    - type: MULE_NETWORK
+      count: 12
+      source_count: 3
+      min_amount: 1500.0
+      max_amount: 5500.0
+      window_seconds: 5400
+      institution_scope: CROSS_INSTITUTION
+      modifiers: [CROSS_INSTITUTION]
+
+# Controls how fraud events become alerts, cases, disputes, and labels.
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 0.9
+  customer_dispute_probability: 0.6
+  alert_delay_seconds: 90
+  case_open_delay_seconds: 300
+  confirmation_delay_seconds: 21600
+  customer_dispute_delay_seconds: 43200
+  label_delay_seconds: 1800
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

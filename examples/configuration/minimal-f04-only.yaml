@@ -1,0 +1,55 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed makes the compact example reproducible.
+  seed: 42
+  start: 2021-09-25T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # PIX keys are present; cards are not needed for this rail mix.
+  customers: 100
+  institutions: 3
+  accounts: 150
+  cards: 0
+  merchants: 25
+  devices: 100
+  pix_keys: 80
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Route all baseline payments through PIX.
+  daily_target: 3
+  rails:
+    CARD: 0.0
+    PIX: 1.0
+    ACCOUNT_TRANSFER: 0.0
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 1.0
+  amount_max: 5.0
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # Select F04 explicitly and leave other fraud types disabled.
+  enabled: true
+  target_rate: 1.0
+  scenario_count: 20
+  hard_negative_rate: 0.0
+  scenarios:
+    F01: { enabled: false, count: 0, weight: 0.0 }
+    F02: { enabled: false, count: 0, weight: 0.0 }
+    F03: { enabled: false, count: 0, weight: 0.0 }
+    F04:
+      enabled: true
+      weight: 1.0
+      count: 20
+      amount_min: 1.0
+      amount_max: 1.0
+    F05: { enabled: false, count: 0, weight: 0.0 }
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

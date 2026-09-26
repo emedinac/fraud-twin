@@ -1,9 +1,11 @@
+# Fixes the seed and time window used by this generated run.
 simulation:
   seed: 1212
   start: 2026-01-01T00:00:00Z
   duration_days: 2
   speed: batch
 
+# Sets the sizes of the generated customer, account, and service pools.
 population:
   customers: 20
   institutions: 3
@@ -13,10 +15,12 @@ population:
   devices: 20
   pix_keys: 16
 
+# Controls daily payment volume and the share assigned to each rail.
 payments:
   daily_target: 100
   rails: {CARD: 0.55, PIX: 0.30, ACCOUNT_TRANSFER: 0.15}
 
+# Shapes legitimate activity, including payment size and active periods.
 behavior:
   amount_min: 1.00
   amount_max: 5000.00
@@ -25,12 +29,14 @@ behavior:
   merchant_preference_count: 3
   preferred_device_limit: 3
 
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
 fraud:
   enabled: true
   target_rate: 1.0
   scenario_count: 5
   hard_negative_rate: 1.0
 
+# Controls how fraud events become alerts, cases, disputes, and labels.
 fraud_workflow:
   enabled: true
   alert_probability: 1.0
@@ -38,10 +44,14 @@ fraud_workflow:
   confirmation_probability: 1.0
   customer_dispute_probability: 1.0
 
+# Controls the data-quality profile and any injected faults or outages.
 quality: {profile: clean}
+# Controls point-in-time dataset generation and label handling.
 dataset: {enabled: true, unresolved_labels: include}
+# Chooses which generated artifacts and external sinks are written.
 outputs: {parquet: true, postgres: false, kafka: false}
 
+# Applies difficulty controls that tune how detectable fraud is.
 benchmark:
   difficulty: 7
   controls:

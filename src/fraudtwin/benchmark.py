@@ -133,7 +133,7 @@ class BenchmarkResult:
 
 
 def _base_values(seed: int) -> dict[str, Any]:
-    raw = yaml.safe_load(files("fraudtwin").joinpath("defaults/minimal.yaml").read_text())
+    raw = yaml.safe_load(files("fraudtwin").joinpath("defaults/minimal-v1.yaml").read_text())
     if not isinstance(raw, dict):
         raise ValueError("built-in minimal configuration must be a mapping")
     values = cast(dict[str, Any], raw)

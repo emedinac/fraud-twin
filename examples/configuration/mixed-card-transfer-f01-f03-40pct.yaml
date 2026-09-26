@@ -1,0 +1,79 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed makes scenario comparisons repeatable.
+  seed: 4203
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Both card and account entities support the mixed rail setup.
+  customers: 600
+  institutions: 6
+  accounts: 850
+  cards: 700
+  merchants: 30
+  devices: 400
+  pix_keys: 0
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 200000.0
+  opening_balance_max: 600000.0
+  credit_limit_min: 0.0
+  credit_limit_max: 200000.0
+  overdraft_limit_min: 0.0
+  overdraft_limit_max: 25000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 2500.0
+  transaction_limit_max: 22000.0
+  daily_limit_min: 60000.0
+  daily_limit_max: 350000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Split baseline traffic between cards and account transfers.
+  daily_target: 380
+  rails:
+    CARD: 0.65
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.35
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 15.0
+  amount_max: 2800.0
+  amount_distribution: uniform
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # Equal weights divide campaigns between F01 and F03.
+  enabled: true
+  target_rate: 0.4
+  scenario_count: 160
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F01:
+      enabled: true
+      weight: 0.5
+      count: 80
+      amount_min: 120.0
+      amount_max: 2200.0
+    F03:
+      enabled: true
+      weight: 0.5
+      count: 80
+      amount_min: 180.0
+      amount_max: 2800.0
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true
+  postgres: false
+  kafka: false
+  iceberg: false

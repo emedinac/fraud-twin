@@ -1,5 +1,8 @@
+# Names this automation so it is identifiable in the project UI.
 name: Setup Python and Poetry
+# Explains the purpose of this reusable action.
 description: Install Poetry and configure Python with dependency caching
+# Declares the values callers can pass into this action.
 inputs:
   python-version:
     description: Python version to install
@@ -9,6 +12,7 @@ inputs:
     description: File used to invalidate the Poetry dependency cache
     required: false
     default: poetry.lock
+# Defines the steps and runtime used by this action.
 runs:
   using: composite
   steps:

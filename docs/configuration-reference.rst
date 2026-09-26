@@ -38,7 +38,7 @@ Use this when learning the lifecycle or checking an installation:
 
       .. code-block:: console
 
-         $ fraudtwin config validate configs/minimal.yaml
+         $ fraudtwin config validate configs/minimal-v1.yaml
 
 Top-level model
 ---------------

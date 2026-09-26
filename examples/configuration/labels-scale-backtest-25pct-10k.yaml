@@ -1,0 +1,102 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  seed: 4110
+  start: 2026-01-01T00:00:00Z
+  duration_days: 30
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  customers: 600
+  institutions: 8
+  accounts: 1400
+  cards: 300
+  merchants: 50
+  devices: 420
+  pix_keys: 0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  daily_target: 1000
+  rails: {CARD: 0.70, ACCOUNT_TRANSFER: 0.30}
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 25.0
+  amount_max: 5500.0
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  enabled: true
+  target_rate: 0.25
+  scenario_count: 180
+  scenario_selection: explicit
+  scenarios:
+    F05: {enabled: true, weight: 1.0, count: 180, attempt_count: 10}
+
+# Controls how fraud events become alerts, cases, disputes, and labels.
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+
+# Sets investigation selection and the timing and error rates of observed labels.
+labels:
+  enabled: true
+  investigation_rate: 0.85
+  missing_fraud_rate: 0.08
+  preliminary_error_rate: 0.03
+  correction_rate: 0.02
+  reopening_rate: 0.01
+  confirmation_delay: {distribution: lognormal, median_seconds: 7200, sigma: 0.45}
+  conditions:
+    - payment_rail: CARD
+      investigation_rate: 0.90
+    - fraud_type: F05
+      delay: {distribution: fixed, median_seconds: 172800, sigma: 0}
+
+# Controls point-in-time dataset generation and label handling.
+dataset:
+  enabled: true
+  start: 2026-01-01T00:00:00Z
+  end: 2026-01-31T00:00:00Z
+  prediction_delay_seconds: 3600
+  label_delay_seconds: 86400
+  unresolved_labels: include
+  splits: {train_fraction: 0.60, validation_fraction: 0.20, test_fraction: 0.20}
+
+# Defines time windows and label maturity rules for backtesting.
+backtest:
+  train_mode: expanding
+  test_window_seconds: 5d
+  label_maturity_gap_seconds: 2d
+  step_seconds: 5d
+  minimum_label_maturity_policy: exclude
+  regimes:
+    - id: quiet-start
+      from: 2026-01-01T00:00:00Z
+      to: 2026-01-16T00:00:00Z
+      prevalence_multiplier: 0.60
+      scenario_mix: {F05: 1.0}
+      payment_rail_mix: {CARD: 0.70, ACCOUNT_TRANSFER: 0.30}
+    - id: elevated-risk
+      from: 2026-01-16T00:00:00Z
+      to: 2026-01-31T00:00:00Z
+      prevalence_multiplier: 1.40
+      scenario_mix: {F05: 1.0}
+      payment_rail_mix: {CARD: 0.70, ACCOUNT_TRANSFER: 0.30}
+
+# Sets payment targets, partitioning, workers, and checkpoint behavior.
+scale:
+  profile: dev
+  target_payments: 1000
+  shard_count: 2
+  chunk_size: 100
+  worker_count: 2
+  output_batch_size: 100
+  checkpoint_frequency_chunks: 1
+  features: [entities, behavior, payments, lifecycle, ledger, fraud, labels, pit, backtest]
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

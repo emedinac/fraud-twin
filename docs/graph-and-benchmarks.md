@@ -77,14 +77,44 @@ Requested and effective strengths, cohort snapshots, constraints, and measured o
 
 Campaign dynamics evolve matching graph campaigns in stable campaign order. Phase snapshots and transitions use isolated per-campaign streams, and derived payments receive reserved IDs with source lineage. Actor joins/leaves, mule and device rotation, cross-rail movement, split/merge mutations, and structural hyperedges remain closed over the oracle graph. Observable graph views use only source-available events; dynamic truth and transition reasons remain oracle-only.
 
-## Choosing a fixture
+## Choosing a fixture by category
+
+The benchmark directory is grouped by functional purpose instead of a single
+flat list. The fastest way to browse them is the category index in
+`configs/benchmarks/README.md`.
+
+### Minimal and baseline
 
 | Fixture | Best for |
 | --- | --- |
-| `temporal-v1.yaml` | Temporal splits, replay, and rolling backtests |
-| `graph-v2.yaml` | Graph structure, observable/oracle views, and exports |
-| `difficulty-v1.yaml` | Boundary-oriented fraud difficulty |
-| `camouflage-v1.yaml` | Feature and relation camouflage |
+| `configs/minimal-v1.yaml` | Clean baseline, installation checks, and first local runs |
+| `configs/benchmarks/temporal-v1.yaml` | Temporal splits, replay, and rolling backtests |
+| `configs/benchmarks/calibration-v1.yaml` | Small deterministic calibration baselines |
+
+### Fraud scenarios and campaign controls
+
+| Fixture | Best for |
+| --- | --- |
+| `configs/benchmarks/campaign-dynamics-v1.yaml` | Campaign evolution and dynamic graph behavior |
+| `configs/benchmarks/counterfactual-v1.yaml` | Counterfactual requests and minimum-change edits |
+| `configs/benchmarks/camouflage-v1.yaml` | Feature and relation camouflage stress |
+| `configs/benchmarks/difficulty-v1.yaml` | Boundary-oriented fraud difficulty |
+
+### Graph and relationship structures
+
+| Fixture | Best for |
+| --- | --- |
+| `configs/benchmarks/graph-v2.yaml` | Observable/oracle graph exports and network structure checks |
+
+The complete graph catalog, including advanced topologies, 50% stress
+fixtures, and controlled experiment variants, is in
+[Graph and relationship structures](benchmark-configs/graph-and-relationship-structures.md).
+
+### Integration and streaming
+
+| Fixture | Best for |
+| --- | --- |
+| `examples/configuration/minimal-f01-kafka-only.yaml` | Minimal service-backed F01 generation with Kafka output only |
 
 Reference calibration can be combined with graph fixtures when the reference
 contains transfer endpoints. Graph calibration contributes aggregate degree and
@@ -179,6 +209,13 @@ The default profile uses the small workload. The immutable
 External generators can be supplied as a `module:factory` adapter or a
 normalized artifact bundle. A capability that is not supplied is reported as
 `N/A`, never as a zero score.
+
+## Benchmark library index
+
+A compact category-oriented index is available in [benchmark-configs.md](benchmark-configs.md).
+It groups the repository examples by minimal baseline, fraud scenario,
+graph/network, temporal, and Kafka integration use cases so they are easier to
+browse than a single flat list.
 
 ## Next
 

@@ -606,7 +606,13 @@ def _campaign_actions(
         (),
         pix_keys,
         simulation_run_id=run_id,
-    ).materialize_ledger(tuple(payments), all_events)
+    ).materialize_ledger(
+        tuple(payments),
+        all_events,
+        stage="campaign dynamics ledger",
+        protocol_id="P04",
+        capacity_id="C04",
+    )
     campaign_update = campaign.model_copy(
         update={"valid_to": end, "participant_ids": tuple(sorted(set(members)))}
     )

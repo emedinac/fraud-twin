@@ -1,17 +1,34 @@
+# Names this versioned benchmark definition.
 id: FT-B02-TEMPORAL
+# Pins the benchmark definition version.
 version: 0.34.0
+# Selects the generator and evaluation suite used by the pack.
 suite: temporal
+# Constrains the package versions that can reproduce this pack.
 generator_compatibility: ">=0.34.0,<0.35.0"
+# Freezes the random seed for reproducible generation.
 seed: 42
+# Identifies the random-stream layout used by this release.
 seed_tree_version: fraudtwin-named-streams-1
+# Freezes the fraud-detectability level used by the suite.
 difficulty: 7
+# Sets the fixed start of the released simulation window.
 simulation_start: 2026-01-01T00:00:00Z
+# Sets the fixed end of the released simulation window.
 simulation_end: 2026-01-13T00:00:00Z
+# Freezes the train, validation, and test cut points.
 split_boundaries: {train_end: 2026-01-08T00:00:00Z, validation_end: 2026-01-10T00:00:00Z, test_end: 2026-01-13T00:00:00Z}
+# Summarizes the fraud and graph scenarios included in the pack.
 scenario_definitions: {fraud: F01-F05 with equal default weights, graph: disabled, campaign_dynamics: disabled}
+# Records the additional stress settings applied by this pack.
 stress_parameters: {}
+# Freezes how synthetic truth becomes observable labels.
 label_observation_policy: {enabled: true, investigation_rate: 0.85, missing_fraud_rate: 0.10, preliminary_error_rate: 0.10, correction_rate: 0.10, reopening_rate: 0.05}
+# Lists the evaluation metrics emitted by the backtest.
 metric_definitions: {pr_auc: average_precision over labelled test rows, recall_at_fixed_fpr: 0.01, f1: validation-selected threshold, detection_delay_seconds: mean test delay, drop_vs_baseline: relative PR-AUC change}
+# Verifies the resolved settings against the released definition.
 resolved_configuration_hash: 25cfd54ca7a4bc54d15b111265ef950a9c2e61f93b4db9eab0730c5174d25401
+# Stores the frozen behavior summary expected from this pack.
 expected_descriptors: {"counterfactual_distance":null,"drift_strength":1.7,"feature_camouflage_score":0,"fraud_prevalence":0.06366459627329192,"graph_coordination_score":0,"investigation_selection_rate":0.78,"label_correction_rate":0.04,"label_delay_distribution":{"count":39,"max_seconds":261957.383036,"median_seconds":95141.720319,"min_seconds":27190.010991},"missing_label_rate":0.28,"reference_fidelity_score":null,"relation_camouflage_score":0,"scenario_coverage":{"configured":["F01","F02","F03","F04","F05"],"realized":["F02","F04","F05"]}}
+# Stores frozen output fingerprints used to detect drift.
 expected_fingerprints: {"dataset":"1c883c7fb40afeea04e34cad07af0c3d85f4cbaf8c3fc5d625b9bb0e27c759e3","descriptors":"3fb34a334e1db2bc5a462aa5dc2e8747223065ea63ec763949bf6785c3514f7d","latent_truth":"3498366689e6c443b0d5313ff5c0fe37d2d07924e3d09c14dbd93b480da4b351","observed_truth":"0547e3b662a6b1f94ef4c67037a1ea79115857cbe7aa6314226e1263e2436aee","source":"65ba8116d00aa76a45b6cfaafc28776b77ed5dd35cabc7aa4ae4569479d5b6c6"}

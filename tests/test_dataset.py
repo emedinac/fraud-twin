@@ -18,7 +18,7 @@ from fraudtwin.ml import (
 )
 from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 
-CONFIG_PATH = Path("configs/minimal.yaml")
+CONFIG_PATH = Path("configs/minimal-v1.yaml")
 runner = CliRunner()
 
 

@@ -38,7 +38,7 @@ from fraudtwin.simulation.payments import PaymentGenerator
 
 
 def _scale_config():
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     return base.model_copy(
         update={
             "scale": ScaleConfig(
@@ -77,11 +77,11 @@ def test_dev_scale_profile_is_bounded() -> None:
 def test_require_scale_plan_narrows_enabled_and_rejects_disabled() -> None:
     assert require_scale_plan(_scale_config()).target_payments == 100
     with pytest.raises(ValueError, match="scale generation is not enabled"):
-        require_scale_plan(load_config(Path("configs/minimal.yaml")))
+        require_scale_plan(load_config(Path("configs/minimal-v1.yaml")))
 
 
 def test_disabled_scale_preserves_legacy_config_hash() -> None:
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     values = base.model_dump(mode="python")
     values["scale"] = {"profile": None}
     assert SimulationRunConfig.model_validate(values).scale.enabled is False
