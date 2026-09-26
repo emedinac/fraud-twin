@@ -43,6 +43,7 @@ from fraudtwin.domain import (
 )
 from fraudtwin.errors import LedgerCapacityError
 from fraudtwin.seed import create_stream_rng
+from fraudtwin.vocabulary import FRAUD_SCENARIOS
 
 _ID_WIDTH = 8
 T = TypeVar("T")
@@ -940,6 +941,8 @@ class PaymentGenerator:
         specs: list[tuple[PaymentEvent, str, str]],
         *,
         stage: str = "payment ledger",
+        protocol_id: str = "P01",
+        capacity_id: str = "C04",
     ) -> tuple[LedgerEntry, ...]:
         """Create stable ledger rows and running balances from account openings."""
 
@@ -960,6 +963,19 @@ class PaymentGenerator:
             balance_before = balances[account_id]
             balance = round(balance_before + delta, 2)
             if balance < -self.accounts_by_id[account_id].overdraft_limit:
+                scenario_id = event.scenario_type
+                active_protocol_id = protocol_id
+                if protocol_id == "P01":
+                    active_protocol_id = next(
+                        (
+                            related_id
+                            for scenario in FRAUD_SCENARIOS
+                            if scenario.id == scenario_id
+                            for related_id in scenario.related_ids
+                            if related_id.startswith("P")
+                        ),
+                        protocol_id,
+                    )
                 raise LedgerCapacityError(
                     stage=stage,
                     account_id=account_id,
@@ -969,6 +985,10 @@ class PaymentGenerator:
                     balance_before=balance_before,
                     balance_after=balance,
                     overdraft_limit=self.accounts_by_id[account_id].overdraft_limit,
+                    protocol_id=active_protocol_id,
+                    capacity_id=capacity_id,
+                    scenario_id=scenario_id,
+                    campaign_id=event.scenario_id,
                 )
             balances[account_id] = balance
             entries.append(
@@ -994,6 +1014,8 @@ class PaymentGenerator:
         events: tuple[PaymentEvent, ...],
         *,
         stage: str = "payment ledger",
+        protocol_id: str = "P01",
+        capacity_id: str = "C04",
     ) -> tuple[LedgerEntry, ...]:
         """Reconcile a complete payment stream, including scenario payments."""
 
@@ -1003,7 +1025,9 @@ class PaymentGenerator:
             payment = payments_by_id.get(event.payment_id)
             if payment is not None:
                 specs.extend(self._ledger_specs(payment, (event,)))
-        return self._materialize_ledger(specs, stage=stage)
+        return self._materialize_ledger(
+            specs, stage=stage, protocol_id=protocol_id, capacity_id=capacity_id
+        )
 
     def iter_generate(
         self, profiles: tuple[BehaviorProfile, ...]

@@ -168,6 +168,34 @@ file. YAML is the recommended format because it supports comments and readable
 multi-line sections. JSON-shaped content is accepted by the YAML parser, but it
 does not provide the same explanation and editing experience.
 
+## F/P/C identifiers
+
+FraudTwin uses a small vocabulary to make configuration and failures easier to
+read:
+
+- `F##` identifies a fraud scenario, such as `F04` (instant-payment-scam).
+- `P##` identifies the protocol that implements a capability or scenario, such
+  as `P08` (the F04 protocol).
+- `C##` identifies a capacity or invariant, such as `C04` (ledger debit
+  capacity).
+
+These are metadata identifiers, not new YAML fields. Keep using `F01`–`F05` in
+`fraud.scenarios`. The complete mapping, defaults, relationships, and failure
+guide is in the [F/P/C vocabulary reference](vocabulary.md).
+
+A useful way to read a diagnostic is:
+
+```text
+Scenario: F04 — instant-payment-scam
+Protocol: P08 — instant-payment-scam-protocol
+Capacity: C04 — ledger-debit-capacity
+```
+
+The default scenario map is an overlay. If `scenarios` is omitted, or only one
+scenario is provided, missing scenarios still receive the built-in defaults:
+`enabled: true`, `weight: 1.0`, and `count: 1`. Explicitly disable the other
+scenario IDs when you need an F04-only run.
+
 ## Configuration at a glance
 
 | Section | Purpose |

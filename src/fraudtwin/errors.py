@@ -26,6 +26,9 @@ class GenerationError(ValueError):
         context: Mapping[str, Any] | None = None,
         hints: Sequence[str] = (),
         docs_url: str = TROUBLESHOOTING_URL,
+        protocol_id: str | None = None,
+        capacity_id: str | None = None,
+        scenario_id: str | None = None,
     ) -> None:
         self.code = code
         self.stage = stage
@@ -34,6 +37,9 @@ class GenerationError(ValueError):
         self.hints = tuple(hints)
         self.suggested_actions = self.hints
         self.docs_url = docs_url
+        self.protocol_id = protocol_id
+        self.capacity_id = capacity_id
+        self.scenario_id = scenario_id
         super().__init__(summary)
 
     def __str__(self) -> str:
@@ -45,6 +51,12 @@ class GenerationError(ValueError):
         """Return the actionable report shown by the command-line interface."""
 
         lines = [f"Generation failed [{self.code}]", "", f"Stage: {self.stage}"]
+        if self.scenario_id is not None:
+            lines.append(f"Scenario: {self.scenario_id}")
+        if self.protocol_id is not None:
+            lines.append(f"Protocol: {self.protocol_id}")
+        if self.capacity_id is not None:
+            lines.append(f"Capacity: {self.capacity_id}")
         for label, value in self.context.items():
             lines.append(f"{label}: {value}")
         lines.extend(["", "What this means:", f"  {self.summary}"])
@@ -65,6 +77,9 @@ class GenerationError(ValueError):
             "hints": list(self.hints),
             "suggested_actions": list(self.suggested_actions),
             "docs_url": self.docs_url,
+            "protocol_id": self.protocol_id,
+            "capacity_id": self.capacity_id,
+            "scenario_id": self.scenario_id,
         }
 
 
@@ -84,6 +99,10 @@ class LedgerCapacityError(GenerationError):
         balance_before: float,
         balance_after: float,
         overdraft_limit: float,
+        protocol_id: str = "P01",
+        capacity_id: str = "C04",
+        scenario_id: str | None = None,
+        campaign_id: str | None = None,
     ) -> None:
         self.account_id = account_id
         self.payment_id = payment_id
@@ -92,6 +111,7 @@ class LedgerCapacityError(GenerationError):
         self.balance_before = balance_before
         self.balance_after = balance_after
         self.overdraft_limit = overdraft_limit
+        self.campaign_id = campaign_id
         self.available_debit_capacity = round(balance_before + overdraft_limit, 2)
         self.invariant = "balance_after >= -overdraft_limit"
         super().__init__(
@@ -116,6 +136,9 @@ class LedgerCapacityError(GenerationError):
                 "increase account capacity",
                 "use a capacity-aware scenario",
             ),
+            protocol_id=protocol_id,
+            capacity_id=capacity_id,
+            scenario_id=scenario_id,
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -133,6 +156,7 @@ class LedgerCapacityError(GenerationError):
                 "overdraft_limit": self.overdraft_limit,
                 "available_debit_capacity": self.available_debit_capacity,
                 "invariant": self.invariant,
+                "campaign_id": self.campaign_id,
             }
         )
         return result

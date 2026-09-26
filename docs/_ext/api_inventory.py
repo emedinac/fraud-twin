@@ -46,6 +46,7 @@ PUBLIC_MODULES = tuple(
             "fraudtwin.simulation.graph_planner",
             "fraudtwin.simulation",
             "fraudtwin.storage",
+            "fraudtwin.vocabulary",
         )
     )
 )
@@ -84,6 +85,7 @@ MODULE_PURPOSES = {
     "fraudtwin.scale": "Partition planning, checkpoints, and scale iteration.",
     "fraudtwin.simulation": "Simulation scenario composition and generation controls.",
     "fraudtwin.storage": "Local and fsspec-backed scale storage.",
+    "fraudtwin.vocabulary": "Stable scenario, protocol, and capacity identifiers.",
 }
 
 MODULE_STATUSES = {

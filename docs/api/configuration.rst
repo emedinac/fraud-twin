@@ -53,21 +53,20 @@ F04 requires eligible PIX accounts and keys. See the detailed
 :doc:`/configuration` scenario guide for the complete field meanings and
 mergeable examples.
 
-Feature labels
---------------
+F/P/C identifiers
+-----------------
 
-Advanced documentation and manifests may also use labels such as ``M6``,
-``M12``, ``M14``, and ``M15``. These are release or feature milestones, not
-values to place under ``fraud.scenarios``:
+FraudTwin uses ``F##`` for fraud scenarios, ``P##`` for generation protocols,
+and ``C##`` for capacities and generation constraints. ``F04`` identifies the
+instant-payment-scam scenario; ``P08`` identifies the protocol that implements
+it; and ``C04`` identifies the ledger debit capacity that can stop materialization.
+These identifiers are metadata and do not replace YAML keys or change run
+hashes. See :doc:`/vocabulary` for the complete tables, defaults, relationships,
+and examples.
 
-* ``M6`` is the core fraud campaign workflow.
-* ``M12`` is fraud difficulty and scenario similarity.
-* ``M14`` is counterfactual generation.
-* ``M15`` is campaign dynamics and evolving campaigns.
-
-Configure those capabilities through their own top-level sections, such as
-``difficulty``, ``counterfactual``, and ``campaign_dynamics``. Use ``F01`` to
-``F05`` when selecting one of the five built-in payment-fraud stories.
+The protocol lookup accepts legacy milestone aliases: M6 maps to P01, M12 to
+P02, M14 to P03, and M15 to P04. Existing configuration and manifest fields
+keep their names.
 
 ``hard_negative_rate`` adds legitimate lookalike records and does not increase
 true fraud. Source records, observed labels, and point-in-time dataset rows
@@ -75,12 +74,31 @@ must be measured separately. See the complete
 ``examples/configuration/f04-half-fraud.yaml`` example and the
 :doc:`/configuration` guide for worked calculations.
 
+Vocabulary API
+--------------
+
+The stable metadata vocabulary is available without loading a YAML file. Use
+``F##`` identifiers for scenarios, ``P##`` identifiers for protocols, and
+``C##`` identifiers for capacities:
+
+.. autosummary::
+   :nosignatures:
+
+   fraudtwin.vocabulary.get_scenario
+   fraudtwin.vocabulary.get_protocol
+   fraudtwin.vocabulary.get_capacity
+
+The public registries are ``fraudtwin.FRAUD_SCENARIOS``,
+``fraudtwin.PROTOCOLS``, and ``fraudtwin.CAPACITIES``. They describe names,
+relationships, default settings, and compatibility aliases.
+
 Generation errors
 ------------------
 
 Known failures raised while materializing a valid configuration are exposed as
 typed ``ValueError`` subclasses. Catch ``fraudtwin.errors.GenerationError`` in
-applications and inspect ``error.code`` and ``error.stage``. Ledger failures
+applications and inspect ``error.code``, ``error.stage``, ``error.protocol_id``,
+``error.capacity_id``, and ``error.scenario_id`` (metadata can be ``None``). Ledger failures
 are represented by ``fraudtwin.errors.LedgerCapacityError`` and include the
 affected account, payment, event, debit amount, running balances, and
 overdraft limit. The CLI prints the same information in an actionable report;

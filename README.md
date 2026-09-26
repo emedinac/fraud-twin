@@ -109,6 +109,8 @@ percentage of final payment rows are fraudulent. The built-in scenarios are
 Instant-Payment Scam, and `F05` Velocity Attack. F03 creates two transfer
 payments per campaign, F04 creates one PIX payment, and F02/F05 use repeated
 attempts. Card scenarios require active cards. See the
+[F/P/C vocabulary reference](docs/vocabulary.md) for the scenario IDs,
+protocol relationships, defaults, and capacity failure explanations. See the
 [scenario guide](docs/configuration.md#what-each-f-scenario-means) and the
 [fraud prevalence examples](docs/configuration.md#choosing-a-target-fraud-prevalence)
 for complete syntax and worked calculations.

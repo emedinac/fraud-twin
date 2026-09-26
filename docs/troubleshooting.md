@@ -65,6 +65,8 @@ and suggested fixes. For example:
 Generation failed [LEDGER_OVERDRAFT_EXCEEDED]
 
 Stage: baseline payment ledger
+Protocol: P01
+Capacity: C04
 Account: ACC-000228
 Payment: PAY-...
 Event: EVT-...
@@ -75,7 +77,10 @@ Allowed overdraft: 100.00
 ```
 
 The stage tells you whether the failure happened while creating baseline,
-fraud, graph, camouflage, campaign-dynamics, or streaming records. The
+fraud, graph, camouflage, campaign-dynamics, or streaming records. `P##`
+identifies the active generation protocol and `C##` identifies the failed
+capacity or invariant. Currently, structured capacity errors report `C04`
+(ledger debit capacity); see the [vocabulary reference](vocabulary.md). The
 account, payment, and event identify the first failing ledger operation. No
 manifest is available when generation stops before run materialization.
 
@@ -86,8 +91,11 @@ an amount to make an invalid ledger pass. For an account, the permitted debit
 boundary is:
 
 ```text
-available debit capacity = opening ledger balance + overdraft limit
+available debit capacity = running ledger balance + overdraft limit
 ```
+
+The running balance starts at the opening ledger balance and includes prior
+credits and debits in posting order.
 
 `behavior.amount_max` limits one payment; it does not limit the total amount
 spent by an account across a long simulation. Many individually valid payments
@@ -114,7 +122,8 @@ not involved when the failure stage is `baseline payment ledger`.
 
 Retry only after correcting the field or capacity named by the report. Python
 callers can catch `fraudtwin.errors.GenerationError` and inspect `error.code`,
-`error.stage`, and the typed diagnostic attributes. Unexpected programming
+`error.stage`, `error.protocol_id`, `error.capacity_id`, `error.scenario_id`,
+and the typed diagnostic attributes. Unexpected programming
 errors remain tracebacks so they can be reported to developers.
 
 ## Labels are missing or unresolved

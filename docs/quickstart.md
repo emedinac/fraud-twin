@@ -136,7 +136,9 @@ generator supports five built-in stories:
   `attempt_count` and `window_seconds`.
 
 Card scenarios require active cards. F03 requires account relationships, and
-F04 requires PIX-capable accounts and PIX keys. `fraud.target_rate` is a
+F04 requires PIX-capable accounts and PIX keys. Capacity identifiers such as
+`C04` (ledger debit capacity) explain generation failures after configuration
+validation; see the [vocabulary reference](vocabulary.md). `fraud.target_rate` is a
 campaign budget, not a guarantee that the same percentage of final payment
 rows will be fraudulent; see the worked
 [fraud prevalence examples](configuration.md#choosing-a-target-fraud-prevalence).

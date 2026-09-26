@@ -139,6 +139,7 @@ the complete explanation for evaluation and audit.
 
    api
    configuration-reference
+   vocabulary
    cli
    data-contracts
    verified-capabilities

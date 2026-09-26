@@ -145,6 +145,8 @@ following format:
    Generation failed [LEDGER_OVERDRAFT_EXCEEDED]
 
    Stage: baseline payment ledger
+   Protocol: P01
+   Capacity: C04
    Account: ACC-000228
    Payment: PAY-...
    Event: EVT-...
@@ -153,8 +155,9 @@ following format:
    Balance after: -192.23
    Allowed overdraft: 100.00
 
-The report also includes what the error means, possible fixes, and a link to
-the :doc:`troubleshooting` guide. Commands do not silently replace an existing
+The report also includes the active ``P##`` protocol, failed ``C##`` capacity,
+what the error means, possible fixes, and a link to the :doc:`troubleshooting`
+guide. Commands do not silently replace an existing
 run with a different configuration. Inspect the manifest and fingerprint
 before retrying. Unexpected programming errors retain their traceback for
 developers.

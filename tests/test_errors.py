@@ -88,6 +88,7 @@ def test_low_balance_failure_reports_the_first_payment_context() -> None:
         low_generator.materialize_ledger((payment,), (event,), stage="baseline payment ledger")
 
     error = raised.value
+    assert error.protocol_id == "P01"
     assert error.account_id == payment.payer_account_id
     assert error.payment_id == payment.payment_id
     assert error.event_id == event.event_id
@@ -96,3 +97,71 @@ def test_low_balance_failure_reports_the_first_payment_context() -> None:
     assert error.balance_after == -payment.amount
     assert error.overdraft_limit == 0.0
     assert error.stage == "baseline payment ledger"
+
+
+@pytest.mark.parametrize(
+    ("scenario_id", "protocol_id", "expected_protocol"),
+    [
+        ("F04", "P01", "P08"),
+        ("F04", "P02", "P02"),
+        ("F04", "P04", "P04"),
+        ("MULE_NETWORK", "P01", "P01"),
+    ],
+)
+def test_scenario_ledger_failure_reports_scenario_protocol(
+    scenario_id: str, protocol_id: str, expected_protocol: str
+) -> None:
+    config = load_config(Path("configs/minimal.yaml"))
+    config = config.model_copy(
+        update={
+            "payments": config.payments.model_copy(
+                update={
+                    "daily_target": 1,
+                    "rails": {"CARD": 0.0, "PIX": 0.0, "ACCOUNT_TRANSFER": 1.0},
+                }
+            )
+        }
+    )
+    entities = EntityGenerator(config).generate()
+    profiles = BehaviorGenerator(config, entities).generate_profiles()
+    generator = PaymentGenerator(
+        config,
+        entities.accounts,
+        entities.cards,
+        entities.merchants,
+        entities.devices,
+        entities.pix_keys,
+        include_lifecycle=False,
+        include_ledger=False,
+    )
+    payment, event = next(generator.iter_generate(profiles))
+    scenario_event = event.model_copy(
+        update={"scenario_type": scenario_id, "scenario_id": "campaign-1"}
+    )
+    low_accounts = tuple(
+        account.model_copy(update={"ledger_balance": 0.0, "overdraft_limit": 0.0})
+        if account.account_id == payment.payer_account_id
+        else account
+        for account in entities.accounts
+    )
+    low_generator = PaymentGenerator(
+        config,
+        low_accounts,
+        entities.cards,
+        entities.merchants,
+        entities.devices,
+        entities.pix_keys,
+        include_lifecycle=False,
+        include_ledger=False,
+    )
+
+    with pytest.raises(LedgerCapacityError) as raised:
+        low_generator.materialize_ledger(
+            (payment,), (scenario_event,), stage="fraud payment ledger", protocol_id=protocol_id
+        )
+
+    error = raised.value
+    assert error.scenario_id == scenario_id
+    assert error.protocol_id == expected_protocol
+    assert error.as_dict()["campaign_id"] == "campaign-1"
+    assert error.capacity_id == "C04"

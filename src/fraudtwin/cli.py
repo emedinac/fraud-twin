@@ -79,8 +79,8 @@ app.add_typer(config_app, name="config")
 app.add_typer(ml_app, name="ml")
 graph_app = typer.Typer(help="Build deterministic temporal graph views.")
 app.add_typer(graph_app, name="graph")
-counterfactual_app = typer.Typer(help="Generate deterministic M14 counterfactual sidecars.")
-campaign_app = typer.Typer(help="Evolve deterministic M15 campaign sidecars.")
+counterfactual_app = typer.Typer(help="Generate deterministic P03 counterfactual sidecars.")
+campaign_app = typer.Typer(help="Evolve deterministic P04 campaign sidecars.")
 app.add_typer(counterfactual_app, name="counterfactual")
 app.add_typer(campaign_app, name="campaign")
 benchmark_app = typer.Typer(help="Run generic M20 suites or immutable M21 public packs.")
@@ -796,13 +796,13 @@ def calibrate(
 
 @campaign_app.command("evolve")
 def evolve_campaign_command(
-    config_path: Annotated[Path, typer.Option("--config", help="M15 configuration YAML file.")],
+    config_path: Annotated[Path, typer.Option("--config", help="P04 configuration YAML file.")],
     source_run_id: Annotated[str, typer.Option("--source-run-id", help="Static source run ID.")],
     output_dir: Annotated[
         Path, typer.Option("--output-dir", help="Directory containing the source run.")
     ] = Path("runs"),
 ) -> None:
-    """Append an M15 sidecar to a compatible clean static graph run."""
+    """Append a P04 sidecar to a compatible clean static graph run."""
 
     config = _load_or_exit(config_path)
     source_dir = output_dir / source_run_id
@@ -810,13 +810,15 @@ def evolve_campaign_command(
         entities, behavior, source_manifest = load_generated_run(source_dir)
         source_config = SimulationRunConfig.model_validate(source_manifest.resolved_configuration)
         if source_config.campaign_dynamics.active or source_config.stress.active:
-            raise ValueError("standalone M15 requires a source run without M13/M15")
+            raise ValueError(
+                "standalone P04 requires a source run without active camouflage or P04"
+            )
         if config.stress.active:
-            raise ValueError("standalone M15 does not accept active M13 camouflage")
+            raise ValueError("standalone P04 does not accept active camouflage")
         if source_config.quality.profile != "clean" or config.quality.profile != "clean":
-            raise ValueError("standalone M15 requires clean quality output")
+            raise ValueError("standalone P04 requires clean quality output")
         if not config.campaign_dynamics.active or not source_config.graph.enabled:
-            raise ValueError("standalone M15 requires enabled campaign dynamics and graph source")
+            raise ValueError("standalone P04 requires enabled campaign dynamics and graph source")
         source_values = source_config.model_dump(mode="json")
         requested_values = config.model_dump(mode="json")
         for section in (
@@ -831,7 +833,7 @@ def evolve_campaign_command(
             "quality",
         ):
             if source_values.get(section) != requested_values.get(section):
-                raise ValueError(f"standalone M15 base configuration mismatch in {section}")
+                raise ValueError(f"standalone P04 base configuration mismatch in {section}")
         graph_dataset = GraphFraudDataset(
             behavior.payments,
             behavior.payment_events,
@@ -860,13 +862,13 @@ def evolve_campaign_command(
 
 @counterfactual_app.command("generate")
 def generate_counterfactual_command(
-    config_path: Annotated[Path, typer.Option("--config", help="M14 configuration YAML file.")],
+    config_path: Annotated[Path, typer.Option("--config", help="P03 configuration YAML file.")],
     source_run_id: Annotated[str, typer.Option("--source-run-id", help="Baseline source run ID.")],
     output_dir: Annotated[
         Path, typer.Option("--output-dir", help="Directory containing the source run.")
     ] = Path("runs"),
 ) -> None:
-    """Append M14 counterfactuals to a legitimate-only generated run."""
+    """Append P03 counterfactuals to a legitimate-only generated run."""
 
     config = _load_or_exit(config_path)
     source_dir = output_dir / source_run_id
@@ -874,9 +876,12 @@ def generate_counterfactual_command(
         entities, behavior, source_manifest = load_generated_run(source_dir)
         source_config = SimulationRunConfig.model_validate(source_manifest.resolved_configuration)
         if source_config.fraud.enabled or source_config.graph.enabled:
-            raise ValueError("standalone M14 requires a source run with M6 and M11 disabled")
+            raise ValueError(
+                "standalone P03 requires a source run with "
+                "fraud.enabled=false and graph.enabled=false"
+            )
         if not config.counterfactual.active:
-            raise ValueError("standalone M14 requires counterfactual.enabled=true")
+            raise ValueError("standalone P03 requires counterfactual.enabled=true")
         source_values = source_config.model_dump(mode="json")
         requested_values = config.model_dump(mode="json")
         for section in (
@@ -888,7 +893,7 @@ def generate_counterfactual_command(
             "pix_lifecycle",
         ):
             if source_values.get(section) != requested_values.get(section):
-                raise ValueError(f"standalone M14 base configuration mismatch in {section}")
+                raise ValueError(f"standalone P03 base configuration mismatch in {section}")
         from fraudtwin.counterfactual import generate_counterfactuals as generate_cf
         from fraudtwin.simulation.payments import PaymentDataset
 

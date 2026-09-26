@@ -178,6 +178,15 @@ from fraudtwin.scale import (
     write_scale_benchmark_manifest,
 )
 from fraudtwin.storage import FsspecScaleStorage, LocalScaleStorage, storage_for
+from fraudtwin.vocabulary import (
+    CAPACITIES,
+    FRAUD_SCENARIOS,
+    PROTOCOLS,
+    VocabularyDefinition,
+    get_capacity,
+    get_protocol,
+    get_scenario,
+)
 
 __all__ = [
     "__version__",
@@ -206,6 +215,13 @@ __all__ = [
     "load_default_config",
     "GenerationError",
     "LedgerCapacityError",
+    "CAPACITIES",
+    "FRAUD_SCENARIOS",
+    "PROTOCOLS",
+    "VocabularyDefinition",
+    "get_capacity",
+    "get_protocol",
+    "get_scenario",
     "QualityAdapterMetadata",
     "QualityAdapterRequest",
     "QualityArtifactBundle",

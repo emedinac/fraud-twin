@@ -800,7 +800,11 @@ def transform_generated_data(
         entities.pix_keys,
     )
     updated_ledger = payment_generator.materialize_ledger(
-        updated_payments, updated_events, stage="camouflage ledger"
+        updated_payments,
+        updated_events,
+        stage="camouflage ledger",
+        protocol_id="P02",
+        capacity_id="C04",
     )
     true_records = tuple(record for record in updated_records if record.fraud_truth)
     metadata = {

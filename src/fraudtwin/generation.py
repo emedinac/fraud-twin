@@ -639,6 +639,10 @@ def iter_scale_records(
                     balance_before=balance_before,
                     balance_after=balance,
                     overdraft_limit=account.overdraft_limit,
+                    protocol_id="P01",
+                    capacity_id="C04",
+                    scenario_id=event.get("scenario_type"),
+                    campaign_id=event.get("scenario_id"),
                 )
             balances[account_id] = balance
             yield _logical_row(
