@@ -1,5 +1,10 @@
+# Purpose: prometheus configuration for FraudTwin.
+# Reproducibility: Keep these values fixed when comparing runs.
+# Editing: Change only the settings needed for the intended scenario.
+# Pins the Grafana provisioning API version.
 apiVersion: 1
 
+# Configures Grafana connections to metric data sources.
 datasources:
   - name: Prometheus
     type: prometheus

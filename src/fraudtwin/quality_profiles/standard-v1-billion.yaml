@@ -1,7 +1,12 @@
+# Names this versioned quality profile.
 profile_id: standard-v1-billion
+# Pins the quality-profile schema version.
 profile_version: "1"
+# Identifies the benchmark protocol this profile follows.
 protocol_version: M22-quality-1
+# Chooses the workload size used for the quality run.
 scale_size: billion
+# Lists the immutable benchmark packs included in this profile.
 public_packs:
   - FT-B01-STABLE@0.34.0
   - FT-B02-TEMPORAL@0.34.0

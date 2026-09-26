@@ -11,7 +11,7 @@ bounded test, runnable command, and inspectable artifact exist together.
 
 | Capability | Runnable surface | Evidence |
 | --- | --- | --- |
-| Deterministic local generation | `fraudtwin generate configs/minimal.yaml` | Run manifest, Parquet tables, fingerprints, ledger checks |
+| Deterministic local generation | `fraudtwin generate configs/minimal-v1.yaml` | Run manifest, Parquet tables, fingerprints, ledger checks |
 | Point-in-time ML data | `fraudtwin ml build-dataset` | Dataset manifest and leakage tests |
 | Fraud stress benchmarks | `fraudtwin benchmark run FT-B04-CAMOUFLAGE@0.34.0` | Pack manifest, descriptors, model metrics |
 | Kafka contracts/publication | `fraudtwin schema validate` and streaming Compose profile | Avro fingerprints, topic publication, chaos report |

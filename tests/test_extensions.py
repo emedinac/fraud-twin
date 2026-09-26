@@ -44,7 +44,7 @@ def test_selected_extension_provenance_is_manifested(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(
         extension_module, "discover_extensions", lambda: ExtensionRegistry((extension,))
     )
-    values = load_config(Path("configs/minimal.yaml")).model_dump(mode="python")
+    values = load_config(Path("configs/minimal-v1.yaml")).model_dump(mode="python")
     values["extensions"] = {"enabled": True, "selected": ("example.fraud",)}
     from fraudtwin.config import SimulationRunConfig
 
@@ -63,7 +63,7 @@ def test_disabled_extensions_do_not_discover_entry_points(monkeypatch: pytest.Mo
         raise AssertionError("extension discovery should be disabled")
 
     monkeypatch.setattr(extension_module, "discover_extensions", fail_discovery)
-    config = load_config(Path("configs/minimal.yaml"))
+    config = load_config(Path("configs/minimal-v1.yaml"))
     manifest = create_manifest(config)
     assert manifest.extensions == []
 
@@ -82,7 +82,7 @@ def test_enabled_extension_discovery_errors_are_not_suppressed(
         "discover_extensions",
         fail_discovery,
     )
-    values = load_config(Path("configs/minimal.yaml")).model_dump(mode="python")
+    values = load_config(Path("configs/minimal-v1.yaml")).model_dump(mode="python")
     values["extensions"] = {"enabled": True, "selected": ("example.fraud",)}
     config = SimulationRunConfig.model_validate(values)
     with pytest.raises(TypeError, match="invalid extension"):
@@ -99,7 +99,7 @@ def test_enabled_extension_import_errors_are_not_suppressed(
         raise ImportError("broken extension")
 
     monkeypatch.setattr(extension_module, "discover_extensions", fail_discovery)
-    values = load_config(Path("configs/minimal.yaml")).model_dump(mode="python")
+    values = load_config(Path("configs/minimal-v1.yaml")).model_dump(mode="python")
     values["extensions"] = {"enabled": True, "selected": ("example.fraud",)}
     config = SimulationRunConfig.model_validate(values)
     with pytest.raises(ImportError, match="broken extension"):

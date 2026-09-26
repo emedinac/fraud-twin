@@ -18,7 +18,7 @@ runner = CliRunner()
 
 
 def _config() -> object:
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     return base.model_copy(
         update={
             "counterfactual": CounterfactualConfig(
@@ -47,7 +47,7 @@ def test_counterfactual_configuration_is_strict_and_alias_conflicts_are_rejected
 
 
 def test_counterfactual_neutral_configuration_preserves_manifest_identity() -> None:
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     neutral = base.model_copy(update={"counterfactual": CounterfactualConfig()})
     assert create_manifest(base).model_dump(mode="json") == create_manifest(neutral).model_dump(
         mode="json"
@@ -103,14 +103,14 @@ def test_counterfactual_infeasible_budget_is_recorded_without_partial_output() -
 def test_counterfactual_standalone_cli_writes_append_only_sidecar(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
-        ["generate", "configs/minimal.yaml", "--output-dir", str(tmp_path)],
+        ["generate", "configs/minimal-v1.yaml", "--output-dir", str(tmp_path)],
     )
     assert result.exit_code == 0, result.stdout
     manifest_path = next(tmp_path.glob("RUN-*/manifest.json"))
     run_id = manifest_path.parent.name
     config_path = tmp_path / "m14.yaml"
     config_path.write_text(
-        Path("configs/minimal.yaml").read_text(encoding="utf-8")
+        Path("configs/minimal-v1.yaml").read_text(encoding="utf-8")
         + "\n"
         + "counterfactual:\n"
         + "  enabled: true\n"

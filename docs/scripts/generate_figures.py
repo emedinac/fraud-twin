@@ -52,7 +52,7 @@ def _runtime_summary() -> dict[str, object]:
         from fraudtwin.config import load_config
         from fraudtwin.generation import generate
 
-        base = load_config(REPOSITORY / "configs" / "minimal.yaml")
+        base = load_config(REPOSITORY / "configs" / "minimal-v1.yaml")
         config = base.model_copy(
             update={
                 "simulation": base.simulation.model_copy(update={"duration_days": 10}),
@@ -95,20 +95,16 @@ def _runtime_summary() -> dict[str, object]:
                 break
         for payment in selected_payments:
             related = [event for event in events if event.payment_id == payment.payment_id]
-            timeline.append(
-                (
-                    payment.payment_id,
-                    tuple(
-                        (
-                            round(
-                                (event.event_time - payment.initiated_at).total_seconds() / 60, 2
-                            ),
-                            event.event_type,
-                        )
-                        for event in related[:6]
-                    ),
-                )
-            )
+            timeline.append((
+                payment.payment_id,
+                tuple(
+                    (
+                        round((event.event_time - payment.initiated_at).total_seconds() / 60, 2),
+                        event.event_type,
+                    )
+                    for event in related[:6]
+                ),
+            ))
         scenario_ids = ("F01", "F02", "F03", "F04", "F05")
         benchmark = load_config(REPOSITORY / "configs" / "benchmarks" / "camouflage-v1.yaml")
         benchmark_run = generate(benchmark, write=False)
@@ -426,14 +422,12 @@ def _timeline(
             )
             parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="5" fill="{color}"/>')
     legend_x = WIDTH - RIGHT - 200
-    for index, (label, color) in enumerate(
-        (
-            ("INIT", "#2563eb"),
-            ("AUTH", "#0b7285"),
-            ("SETTLE", "#15803d"),
-            ("REFUND", "#c2410c"),
-        )
-    ):
+    for index, (label, color) in enumerate((
+        ("INIT", "#2563eb"),
+        ("AUTH", "#0b7285"),
+        ("SETTLE", "#15803d"),
+        ("REFUND", "#c2410c"),
+    )):
         x = legend_x + index * 50
         parts.append(f'<circle cx="{x:.1f}" cy="{TOP - 15:.1f}" r="4" fill="{color}"/>')
         parts.append(_text(x + 7, TOP - 11, label, 10))
@@ -491,16 +485,14 @@ def _embedding_points() -> tuple[tuple[float, float, str], ...]:
     for index in range(120):
         fraud = index % 3 == 0
         center = 1.6 if fraud else -1.1
-        features.append(
-            [
-                rng.gauss(center, 0.65),
-                rng.gauss(center * 0.7, 0.8),
-                rng.gauss(0.4 if fraud else -0.2, 0.5),
-                rng.gauss(1.0 if fraud else 0.0, 0.7),
-                rng.gauss(center * 0.4, 0.9),
-                rng.gauss(0.8 if fraud else -0.3, 0.6),
-            ]
-        )
+        features.append([
+            rng.gauss(center, 0.65),
+            rng.gauss(center * 0.7, 0.8),
+            rng.gauss(0.4 if fraud else -0.2, 0.5),
+            rng.gauss(1.0 if fraud else 0.0, 0.7),
+            rng.gauss(center * 0.4, 0.9),
+            rng.gauss(0.8 if fraud else -0.3, 0.6),
+        ])
         colors.append("#c2410c" if fraud else "#2563eb")
     try:
         import numpy as np

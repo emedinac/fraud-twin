@@ -1,7 +1,12 @@
+# Purpose: prometheus configuration for FraudTwin.
+# Reproducibility: Keep these values fixed when comparing runs.
+# Editing: Change only the settings needed for the intended scenario.
+# Sets default Prometheus scrape timing.
 global:
   scrape_interval: 5s
   evaluation_interval: 5s
 
+# Declares the services Prometheus polls for metrics.
 scrape_configs:
   - job_name: fraudtwin-cli
     static_configs:

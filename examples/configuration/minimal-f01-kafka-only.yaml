@@ -1,0 +1,56 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed and short window keep the stream demo repeatable.
+  seed: 42
+  start: 2026-01-01T00:00:00Z
+  duration_days: 1
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Small pools keep the service-backed run easy to inspect.
+  customers: 10
+  institutions: 3
+  accounts: 15
+  cards: 12
+  merchants: 3
+  devices: 12
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Keep the baseline to CARD for this minimal example.
+  daily_target: 10
+  rails:
+    CARD: 1.0
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # Explicit selection enables just one F01 campaign.
+  enabled: true
+  target_rate: 0.5
+  scenario_count: 1
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F01:
+      enabled: true
+      count: 1
+
+# Skip local tables; publish observable events to Kafka.
+dataset:
+  enabled: false
+
+# poetry run fraudtwin generate examples/configuration/minimal-f01-kafka-only.yaml --output-dir runs/minimal-f01-kafka-only
+##### Don't forget to set kafka
+# poetry install -E kafka
+# docker compose --profile streaming up -d
+# export FRAUDTWIN_KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+# export FRAUDTWIN_SCHEMA_REGISTRY_URL=http://localhost:8081
+# poetry run fraudtwin config validate examples/configuration/minimal-f01-kafka-only.yaml
+# docker compose --profile streaming ps
+# docker compose logs streaming-topics --tail=50
+# curl -fsS http://localhost:8081/subjects
+outputs:
+  # Disable local Parquet and publish records only to Kafka.
+  parquet: false
+  kafka: true

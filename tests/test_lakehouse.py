@@ -20,7 +20,7 @@ from fraudtwin.lakehouse import (
 
 
 def test_lakehouse_sink_does_not_change_source_identity() -> None:
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     values = base.model_dump(mode="python")
     values["outputs"]["iceberg"] = True
     values["lakehouse"] = {"include_oracle": True}
@@ -39,7 +39,7 @@ def test_lakehouse_environment_requires_external_catalog(monkeypatch) -> None:
 
 
 def test_batch_materialization_is_deterministic_and_local(tmp_path: Path) -> None:
-    config = load_config(Path("configs/minimal.yaml"))
+    config = load_config(Path("configs/minimal-v1.yaml"))
     first = generate(config, write=True, output_dir=tmp_path / "first")
     second = generate(config, write=True, output_dir=tmp_path / "second")
     first_result = materialize_run(first.run_dir, write_iceberg=False)
@@ -51,11 +51,11 @@ def test_batch_materialization_is_deterministic_and_local(tmp_path: Path) -> Non
 
 
 def test_oracle_records_require_explicit_opt_in(tmp_path: Path) -> None:
-    config_values = load_config(Path("configs/minimal.yaml")).model_dump(mode="python")
+    config_values = load_config(Path("configs/minimal-v1.yaml")).model_dump(mode="python")
     config_values["fraud"]["enabled"] = True
     config_values["population"]["customers"] = 2
     config_values["payments"]["daily_target"] = 2
-    config = type(load_config(Path("configs/minimal.yaml"))).model_validate(config_values)
+    config = type(load_config(Path("configs/minimal-v1.yaml"))).model_validate(config_values)
     result = generate(config, write=True, output_dir=tmp_path / "runs")
     without_oracle = materialize_run(result.run_dir, write_iceberg=False)
     with_oracle = materialize_run(

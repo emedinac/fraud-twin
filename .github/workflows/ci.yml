@@ -1,5 +1,7 @@
+# Names this automation so it is identifiable in the project UI.
 name: CI
 
+# Selects the events that trigger this automation.
 on:
   pull_request:
     branches:
@@ -22,13 +24,16 @@ on:
       - "README.md"
       - "docs/**"
 
+# Limits the repository permissions granted to this workflow.
 permissions:
   contents: read
 
+# Prevents conflicting runs from competing for the same resource.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# Defines the checks and deployment steps run by this workflow.
 jobs:
   static-checks:
     name: Static checks and build
@@ -190,7 +195,7 @@ jobs:
           run_dir="$(mktemp -d)"
           trap 'docker compose --profile observability down >/dev/null 2>&1 || true; rm -rf "$run_dir"' EXIT
           docker compose --profile observability up -d prometheus grafana
-          poetry run fraudtwin generate configs/minimal.yaml \
+          poetry run fraudtwin generate configs/minimal-v1.yaml \
             --output-dir "$run_dir" \
             --metrics-host 0.0.0.0 --metrics-port 9464 --metrics-hold-seconds 12 \
             >"$run_dir/generate.log" &

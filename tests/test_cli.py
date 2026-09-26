@@ -13,7 +13,7 @@ runner = CliRunner()
 
 
 def test_config_validate_command() -> None:
-    result = runner.invoke(app, ["config", "validate", "configs/minimal.yaml"])
+    result = runner.invoke(app, ["config", "validate", "configs/minimal-v1.yaml"])
 
     assert result.exit_code == 0
     assert "Configuration is valid." in result.stdout
@@ -42,7 +42,7 @@ def test_config_init_writes_valid_template_without_overwriting(
 def test_generate_command_writes_manifest(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
-        ["generate", "configs/minimal.yaml", "--output-dir", str(tmp_path)],
+        ["generate", "configs/minimal-v1.yaml", "--output-dir", str(tmp_path)],
     )
 
     assert result.exit_code == 0
@@ -114,7 +114,7 @@ def test_generate_command_reports_known_generation_failure(
     monkeypatch.setattr(cli, "generate_library", fail_generation)
     result = runner.invoke(
         app,
-        ["generate", "configs/minimal.yaml", "--output-dir", str(tmp_path)],
+        ["generate", "configs/minimal-v1.yaml", "--output-dir", str(tmp_path)],
     )
 
     assert result.exit_code == 1

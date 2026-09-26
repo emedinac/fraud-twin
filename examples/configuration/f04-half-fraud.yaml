@@ -7,12 +7,15 @@
 # itself.
 
 simulation:
+  # Fixed dates and seed make the prevalence example reproducible.
   seed: 42
   start: 2021-09-25T00:00:00Z
   duration_days: 1826
   speed: batch
 
+# Sets the sizes of the generated customer, account, and service pools.
 population:
+  # Cards are absent because the payment mix uses PIX only.
   customers: 100
   institutions: 3
   accounts: 150
@@ -21,35 +24,42 @@ population:
   devices: 100
   pix_keys: 80
 
+# Controls daily payment volume and the share assigned to each rail.
 payments:
+  # Three baseline PIX payments per day set the comparison volume.
   daily_target: 3
   rails:
     CARD: 0.0
     PIX: 1.0
     ACCOUNT_TRANSFER: 0.0
 
+# Shapes legitimate activity, including payment size and active periods.
 behavior:
   amount_min: 1.0
   amount_max: 5.0
 
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
 fraud:
+  # F04 creates one payment per campaign; count matches baseline volume.
   enabled: true
   target_rate: 1.0
   scenario_count: 5478
   hard_negative_rate: 0.0
   scenarios:
-    F01: {enabled: false, count: 0}
-    F02: {enabled: false, count: 0}
-    F03: {enabled: false, count: 0}
+    F01: { enabled: false, count: 0 }
+    F02: { enabled: false, count: 0 }
+    F03: { enabled: false, count: 0 }
     F04:
       enabled: true
       weight: 1.0
       count: 5478
       amount_min: 1.0
       amount_max: 1.0
-    F05: {enabled: false, count: 0}
+    F05: { enabled: false, count: 0 }
 
+# Sets investigation selection and the timing and error rates of observed labels.
 labels:
+  # Perfect observation keeps this example focused on true prevalence.
   enabled: true
   investigation_rate: 1.0
   missing_fraud_rate: 0.0
@@ -57,13 +67,16 @@ labels:
   correction_rate: 0.0
   reopening_rate: 0.0
 
+# Controls the data-quality profile and any injected faults or outages.
 quality:
   profile: clean
 
+# Controls point-in-time dataset generation and label handling.
 dataset:
   enabled: false
   unresolved_labels: include
 
+# Chooses which generated artifacts and external sinks are written.
 outputs:
   parquet: true
   postgres: false

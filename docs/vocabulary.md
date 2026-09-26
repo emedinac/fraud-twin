@@ -1,4 +1,4 @@
-# F, P, and C identifiers
+# Fraud, Protocol, and Campaign identifiers
 
 **Level:** Beginner to Intermediate<br><br>
 **You will:** understand the stable IDs used in configuration, diagnostics, and
@@ -109,7 +109,8 @@ own amount bounds; `duration_seconds` defaults to `0`. Settings such as
 The following is a scenario-selection fragment to merge into a complete
 configuration. To generate F04 campaigns, also set `fraud.enabled: true`, a
 positive `fraud.target_rate`, and a sufficient `fraud.scenario_count`. Disable
-every other scenario:
+every other scenario explicitly; when a partial `scenarios` mapping is provided,
+any omitted scenario ID is treated as disabled unless you explicitly include it:
 
 ```yaml
 fraud:
@@ -189,9 +190,9 @@ print(scenario.name, protocol.name, capacity.name)
 Lookups are case-sensitive and raise `KeyError` for unknown identifiers.
 
 The authoritative implementation is
-[`src/fraudtwin/vocabulary.py`](https://github.com/emedinac/fraudtwin/blob/main/src/fraudtwin/vocabulary.py).
+[`src/fraudtwin/vocabulary.py`](https://github.com/emedinac/fraud-twin/blob/main/src/fraudtwin/vocabulary.py).
 Configuration defaults remain authoritative in
-[`src/fraudtwin/config.py`](https://github.com/emedinac/fraudtwin/blob/main/src/fraudtwin/config.py)
+[`src/fraudtwin/config.py`](https://github.com/emedinac/fraud-twin/blob/main/src/fraudtwin/config.py)
 and the packaged default YAML.
 
 ## Next

@@ -7,7 +7,7 @@ from fraudtwin.generation import generate
 
 
 def test_quickstart_configuration_generates_a_reproducible_run() -> None:
-    config = load_config(Path("configs/minimal.yaml"))
+    config = load_config(Path("configs/minimal-v1.yaml"))
 
     first = generate(config, write=False)
     second = generate(config, write=False)

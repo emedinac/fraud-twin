@@ -1,0 +1,80 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed and window make case outcomes repeatable.
+  seed: 42
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Card and merchant pools support repeated card attempts.
+  customers: 100
+  institutions: 5
+  accounts: 500
+  cards: 50
+  merchants: 5
+  devices: 1000
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 5000000.0
+  opening_balance_max: 5000000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 10000.0
+  transaction_limit_max: 10000.0
+  daily_limit_min: 2000000.0
+  daily_limit_max: 2000000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Baseline activity is card-only for a focused case study.
+  daily_target: 500
+  rails:
+    CARD: 1.0
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.0
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 1.0
+  amount_max: 10000.0
+  amount_distribution: uniform
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # Repeated attempts model F02 card testing.
+  enabled: true
+  target_rate: 0.5
+  scenario_count: 250
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F02:
+      enabled: true
+      weight: 1.0
+      count: 250
+      amount_min: 1.0
+      amount_max: 10000.0
+      attempt_count: 20
+
+# Controls how fraud events become alerts, cases, disputes, and labels.
+fraud_workflow:
+  # Set probabilities to one to expose each workflow stage.
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 1.0
+  customer_dispute_probability: 1.0
+  alert_delay_seconds: 60
+  case_open_delay_seconds: 300
+  confirmation_delay_seconds: 86400
+  customer_dispute_delay_seconds: 172800
+  label_delay_seconds: 3600
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

@@ -1,17 +1,22 @@
+# Names this automation so it is identifiable in the project UI.
 name: Version and commit policy
 
+# Selects the events that trigger this automation.
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
 
+# Limits the repository permissions granted to this workflow.
 permissions:
   contents: read
   pull-requests: read
 
+# Prevents conflicting runs from competing for the same resource.
 concurrency:
   group: version-policy-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# Defines the checks and deployment steps run by this workflow.
 jobs:
   validate:
     name: Validate version, changelog, and commits

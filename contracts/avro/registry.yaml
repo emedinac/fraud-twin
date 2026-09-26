@@ -1,6 +1,10 @@
+# Selects the schema format understood by the registry.
 format: avro
+# Pins the registry configuration version.
 registry_version: "1"
+# Sets the compatibility policy applied when registering schemas.
 compatibility: FULL_TRANSITIVE
+# Maps event subjects to their schema and compatibility settings.
 subjects:
   - name: payment-event
     record_name: fraudtwin.events.v1.PaymentEvent

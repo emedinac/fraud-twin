@@ -32,7 +32,7 @@ fraudtwin config validate config.yaml
 ```
 
 The command refuses to overwrite an existing file unless `--force` is supplied.
-From a repository checkout, `configs/minimal.yaml` is the equivalent tracked
+From a repository checkout, `configs/minimal-v1.yaml` is the equivalent tracked
 fixture.
 
 ## Generate a first run
@@ -40,8 +40,8 @@ fixture.
 Validate the configuration before generating data:
 
 ```bash
-poetry run fraudtwin config validate configs/minimal.yaml
-poetry run fraudtwin generate configs/minimal.yaml
+poetry run fraudtwin config validate configs/minimal-v1.yaml
+poetry run fraudtwin generate configs/minimal-v1.yaml
 ```
 
 The command prints a run ID and the output location. To keep generated files in
@@ -50,7 +50,7 @@ the ignored local run area, choose an output directory explicitly:
 ```bash
 RUNS_DIR=./runs
 
-poetry run fraudtwin generate configs/minimal.yaml --output-dir "$RUNS_DIR"
+poetry run fraudtwin generate configs/minimal-v1.yaml --output-dir "$RUNS_DIR"
 ```
 
 The minimal configuration creates 10 customers, 10 behavior profiles, 100 target payments, and the lifecycle events those payments require. Fraud is off by default, which makes the first run a clean baseline.
@@ -65,7 +65,7 @@ from pathlib import Path
 import fraudtwin
 from fraudtwin.config import load_config
 
-config = load_config(Path("configs/minimal.yaml"))
+config = load_config(Path("configs/minimal-v1.yaml"))
 data = fraudtwin.generate(config)
 
 print(data.run_id, len(data.behavior.payments))

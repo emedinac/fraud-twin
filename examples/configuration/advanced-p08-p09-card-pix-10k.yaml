@@ -1,0 +1,113 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed and two-day window make protocol tests repeatable.
+  seed: 2402
+  start: 2026-01-01T00:00:00Z
+  duration_days: 2
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # PIX keys and cards provide actors for both payment rails.
+  customers: 250
+  institutions: 8
+  accounts: 500
+  cards: 100
+  merchants: 40
+  devices: 300
+  pix_keys: 500
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 3000000.0
+  opening_balance_max: 12000000.0
+  credit_limit_min: 0.0
+  credit_limit_max: 20000.0
+  overdraft_limit_min: 0.0
+  overdraft_limit_max: 10000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 5000.0
+  transaction_limit_max: 15000.0
+  daily_limit_min: 300000.0
+  daily_limit_max: 500000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Mix CARD and PIX traffic to exercise both protocols.
+  daily_target: 3400
+  rails:
+    CARD: 0.65
+    PIX: 0.35
+    ACCOUNT_TRANSFER: 0.0
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 1.0
+  amount_max: 10000.0
+  amount_distribution: uniform
+  active_hours:
+    [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+  weekday_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 0.90, 0.80]
+  merchant_preference_count: 4
+  preferred_device_limit: 3
+  state_change_probability: 0.01
+
+# P08/P09: new-beneficiary PIX scam and card velocity burst.
+fraud:
+  # F04 and F05 isolate the two protocol behaviors described above.
+  enabled: true
+  target_rate: 0.5
+  scenario_count: 255
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F04:
+      enabled: true
+      weight: 1.0
+      count: 100
+      amount_min: 1000.0
+      amount_max: 10000.0
+    F05:
+      enabled: true
+      weight: 1.0
+      count: 155
+      amount_min: 100.0
+      amount_max: 10000.0
+      attempt_count: 20
+      window_seconds: 300
+
+# Controls how fraud events become alerts, cases, disputes, and labels.
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 0.85
+  customer_dispute_probability: 0.55
+  alert_delay_seconds: 45
+  case_open_delay_seconds: 240
+  confirmation_delay_seconds: 43200
+  customer_dispute_delay_seconds: 86400
+  label_delay_seconds: 7200
+
+# Sets investigation selection and the timing and error rates of observed labels.
+labels:
+  enabled: true
+  investigation_rate: 0.80
+  missing_fraud_rate: 0.07
+  preliminary_error_rate: 0.025
+  correction_rate: 0.02
+  confirmation_delay:
+    distribution: lognormal
+    median_seconds: 10800
+    sigma: 0.55
+  correction_delay:
+    distribution: fixed
+    median_seconds: 86400
+    sigma: 0.0
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

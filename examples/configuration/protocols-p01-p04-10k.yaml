@@ -1,0 +1,97 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed keeps the protocol feature checks reproducible.
+  seed: 42
+  start: 2026-01-01T00:00:00Z
+  duration_days: 1
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Entity pools support card payments and graph participants.
+  customers: 100
+  institutions: 5
+  accounts: 500
+  cards: 50
+  merchants: 5
+  devices: 1000
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 5000000.0
+  opening_balance_max: 5000000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 10000.0
+  transaction_limit_max: 10000.0
+  daily_limit_min: 2000000.0
+  daily_limit_max: 2000000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Baseline rail mix includes card and account-transfer activity.
+  daily_target: 9978
+  rails:
+    CARD: 0.8
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.2
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 1.0
+  amount_max: 10000.0
+  amount_distribution: uniform
+
+# P01: generate a bounded set of F01 fraud campaigns.
+fraud:
+  # F01 count bounds the selected campaign.
+  enabled: true
+  target_rate: 0.25
+  scenario_count: 5
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F01:
+      enabled: true
+      weight: 1.0
+      count: 5
+      amount_min: 1.0
+      amount_max: 10000.0
+
+# P02: activate difficulty controls.
+benchmark:
+  difficulty: 1
+
+# P03: create one counterfactual F01 trajectory sidecar.
+counterfactual:
+  enabled: true
+  budget: 2.0
+  requests:
+    - { objective: F01, count: 1 }
+
+# P04: evolve one MULE_NETWORK graph campaign.
+graph:
+  enabled: true
+  scenarios:
+    - { type: MULE_NETWORK, count: 1, source_count: 3 }
+
+# Allows a campaign to add or rotate actors as the run progresses.
+campaign_dynamics:
+  # Limit actions so the evolved campaign stays small.
+  enabled: true
+  bindings:
+    - profile: linear
+      allowed_rails: [CARD, ACCOUNT_TRANSFER]
+      max_actions: 4
+      max_actor_joins: 0
+      max_actor_leaves: 0
+      max_mule_rotations: 0
+      max_device_rotations: 0
+      max_splits: 0
+      max_merges: 0
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

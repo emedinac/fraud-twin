@@ -501,6 +501,11 @@ class PaymentGenerator:
         return event_time
 
     def _sample_amount(self, profile: BehaviorProfile, rng: Random) -> float:
+        if self.config.behavior.amount_distribution == "uniform":
+            return round(
+                rng.uniform(self.config.behavior.amount_min, self.config.behavior.amount_max),
+                2,
+            )
         if self._calibrated_amount_quantiles:
             assert self._calibrated_amount_rng is not None
             sampled = self._calibrated_amount_rng.choice(self._calibrated_amount_quantiles)

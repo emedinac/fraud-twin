@@ -1,0 +1,73 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed makes protocol output repeatable.
+  seed: 42
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # PIX keys support new-beneficiary checks; cards support velocity checks.
+  customers: 100
+  institutions: 5
+  accounts: 500
+  cards: 50
+  merchants: 5
+  devices: 1000
+  pix_keys: 500
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 50000000.0
+  opening_balance_max: 50000000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 10000.0
+  transaction_limit_max: 10000.0
+  daily_limit_min: 2000000.0
+  daily_limit_max: 2000000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # CARD and PIX weights activate both payment protocols.
+  daily_target: 500
+  rails:
+    CARD: 0.5
+    PIX: 0.5
+    ACCOUNT_TRANSFER: 0.0
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 1.0
+  amount_max: 10000.0
+  amount_distribution: uniform
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # F04 and F05 counts control the two campaign types.
+  enabled: true
+  target_rate: 0.5
+  scenario_count: 1200
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F04:
+      enabled: true
+      weight: 1.0
+      count: 1000
+      amount_min: 1.0
+      amount_max: 10000.0
+    F05:
+      enabled: true
+      weight: 1.0
+      count: 200
+      amount_min: 1.0
+      amount_max: 10000.0
+      attempt_count: 20
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

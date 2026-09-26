@@ -26,7 +26,7 @@ from fraudtwin.simulation.parquet import (
     write_behavior_parquet,
 )
 
-CONFIG_PATH = Path("configs/minimal.yaml")
+CONFIG_PATH = Path("configs/minimal-v1.yaml")
 runner = CliRunner()
 
 

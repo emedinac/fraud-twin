@@ -1,8 +1,10 @@
+# Fixes the seed and time window used by this generated run.
 simulation:
   seed: 1515
   start: 2026-01-01T00:00:00Z
   duration_days: 7
   speed: batch
+# Sets the sizes of the generated customer, account, and service pools.
 population:
   customers: 120
   institutions: 6
@@ -11,27 +13,35 @@ population:
   merchants: 20
   devices: 30
   pix_keys: 40
+# Controls daily payment volume and the share assigned to each rail.
 payments:
   daily_target: 100
   rails: {CARD: 0.5, PIX: 0.3, ACCOUNT_TRANSFER: 0.2}
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
 fraud:
   enabled: false
   target_rate: 0.002
+# Controls how fraud events become alerts, cases, disputes, and labels.
 fraud_workflow:
   enabled: true
   alert_probability: 1.0
   case_open_probability: 1.0
   confirmation_probability: 1.0
   customer_dispute_probability: 1.0
+# Controls the data-quality profile and any injected faults or outages.
 quality: {profile: clean}
+# Controls point-in-time dataset generation and label handling.
 dataset: {enabled: true, unresolved_labels: include}
+# Chooses which generated artifacts and external sinks are written.
 outputs: {parquet: true, postgres: false, kafka: false}
+# Defines shared entities and network structures used by graph scenarios.
 graph:
   enabled: true
   scenarios:
     - {type: MULE_NETWORK, count: 1, source_count: 3}
     - {type: CYCLIC_RING, count: 1, member_count: 4}
     - {type: DENSE_CAMPAIGN, count: 1, member_count: 4, edge_count: 6}
+# Allows a campaign to add or rotate actors as the run progresses.
 campaign_dynamics:
   enabled: true
   bindings:

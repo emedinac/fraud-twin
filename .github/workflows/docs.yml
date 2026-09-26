@@ -1,5 +1,7 @@
+# Names this automation so it is identifiable in the project UI.
 name: Documentation
 
+# Selects the events that trigger this automation.
 on:
   push:
     tags:
@@ -8,15 +10,18 @@ on:
   schedule:
     - cron: "17 4 * * 0"
 
+# Limits the repository permissions granted to this workflow.
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# Prevents conflicting runs from competing for the same resource.
 concurrency:
   group: pages
   cancel-in-progress: false
 
+# Defines the checks and deployment steps run by this workflow.
 jobs:
   build:
     runs-on: ubuntu-latest

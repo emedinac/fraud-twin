@@ -29,10 +29,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/emedinac/fraudtwin"
-Repository = "https://github.com/emedinac/fraudtwin"
-Documentation = "https://emedinac.github.io/fraudtwin/"
-Issues = "https://github.com/emedinac/fraudtwin/issues"
+Homepage = "https://github.com/emedinac/fraud-twin"
+Repository = "https://github.com/emedinac/fraud-twin"
+Documentation = "https://emedinac.github.io/fraud-twin/"
+Issues = "https://github.com/emedinac/fraud-twin/issues"
 
 [project.scripts]
 fraudtwin = "fraudtwin.cli:main"

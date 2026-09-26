@@ -1,5 +1,10 @@
+# Purpose: provider configuration for FraudTwin.
+# Reproducibility: Keep these values fixed when comparing runs.
+# Editing: Change only the settings needed for the intended scenario.
+# Pins the Grafana provisioning API version.
 apiVersion: 1
 
+# Registers dashboard files that Grafana loads at startup.
 providers:
   - name: FraudTwin
     orgId: 1

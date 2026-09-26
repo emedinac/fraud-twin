@@ -55,13 +55,13 @@ fraudtwin config validate config.yaml
 ### Repository or contributor installation
 
 ```console
-git clone https://github.com/emedinac/fraudtwin.git
+git clone https://github.com/emedinac/fraud-twin.git
 cd fraudtwin
 poetry install
-poetry run fraudtwin config validate configs/minimal.yaml
+poetry run fraudtwin config validate configs/minimal-v1.yaml
 ```
 
-Repository fixtures such as `configs/minimal.yaml` are available after cloning
+Repository fixtures such as `configs/minimal-v1.yaml` are available after cloning
 the source tree. Installed-package users should create their own file with
 `fraudtwin config init config.yaml`; this keeps the configuration visible and
 independent of the package's internal resource layout.
@@ -112,7 +112,7 @@ poetry run python -c \
 Run a bounded generation before starting a long experiment:
 
 ```console
-CONFIG=configs/minimal.yaml
+CONFIG=configs/minimal-v1.yaml
 RUN_ID=RUN-...
 RUNS_DIR=./runs
 

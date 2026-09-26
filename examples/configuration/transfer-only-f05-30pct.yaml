@@ -1,0 +1,67 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed keeps repeated-attempt generation reproducible.
+  seed: 4204
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # No cards or merchants are needed for account transfers.
+  customers: 500
+  institutions: 6
+  accounts: 900
+  cards: 0
+  merchants: 20
+  devices: 250
+  pix_keys: 0
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 500000.0
+  opening_balance_max: 1500000.0
+  credit_limit_min: 0.0
+  credit_limit_max: 200000.0
+  overdraft_limit_min: 0.0
+  overdraft_limit_max: 50000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # All baseline traffic uses the account-transfer rail.
+  daily_target: 330
+  rails:
+    CARD: 0.0
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 1.0
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 25.0
+  amount_max: 5000.0
+  amount_distribution: uniform
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # F05 attempt_count controls repeated attempts per campaign.
+  enabled: true
+  target_rate: 0.3
+  scenario_count: 120
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F05:
+      enabled: true
+      weight: 1.0
+      count: 120
+      amount_min: 500.0
+      amount_max: 5000.0
+      attempt_count: 8
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true
+  postgres: false
+  kafka: false
+  iceberg: false

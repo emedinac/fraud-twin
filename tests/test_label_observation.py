@@ -20,7 +20,7 @@ from fraudtwin.simulation import BehaviorGenerator, EntityGenerator
 
 
 def _enabled_config():
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     fraud = base.fraud.model_copy(update={"enabled": True, "target_rate": 1.0, "scenario_count": 1})
     labels = base.labels.model_copy(
         update={
@@ -36,7 +36,7 @@ def _enabled_config():
 
 
 def test_label_observation_strict_configuration_accepts_compact_delay_and_rejects_unknown() -> None:
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     values = base.model_dump(mode="python")
     values["labels"] = {"enabled": True, "confirmation_delay": "lognormal"}
     config = SimulationRunConfig.model_validate(values)

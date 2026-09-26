@@ -1,3 +1,4 @@
+# Records the upstream reference inputs used to fit this profile.
 dependencies:
 - conditional_weights:
     '5411': 0.75
@@ -5,6 +6,7 @@ dependencies:
   source: merchant_category
   target: amount
   version: '1'
+# Stores fitted aggregate distributions used during generation.
 distributions:
 - maximum: 40.0
   minimum: 10.0
@@ -46,8 +48,11 @@ distributions:
   - 3600.0
   - 3600.0
   version: '1'
+# Names this versioned quality profile.
 profile_id: CAL-2a3593eb1d4b619c45ca
+# Pins the quality-profile schema version.
 profile_version: '1'
+# Records how and from which inputs this profile was produced.
 provenance:
   calibration_version: '1'
   configuration_hash: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
@@ -59,6 +64,7 @@ provenance:
   source_schema_fingerprint: f33b68ffcd262ca5c2f2bac290d7fb808529b6f20a832f8ce15d131c075db7bb
   stream_ids:
   - milestone-16:calibration:fit
+# Contains aggregate reference summaries used by calibration.
 summaries:
 - available: true
   fields:

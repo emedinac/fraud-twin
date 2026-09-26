@@ -43,7 +43,7 @@ def test_ledger_capacity_error_exposes_structured_diagnostics() -> None:
 
 
 def test_low_balance_failure_reports_the_first_payment_context() -> None:
-    config = load_config(Path("configs/minimal.yaml"))
+    config = load_config(Path("configs/minimal-v1.yaml"))
     config = config.model_copy(
         update={
             "payments": config.payments.model_copy(
@@ -111,7 +111,7 @@ def test_low_balance_failure_reports_the_first_payment_context() -> None:
 def test_scenario_ledger_failure_reports_scenario_protocol(
     scenario_id: str, protocol_id: str, expected_protocol: str
 ) -> None:
-    config = load_config(Path("configs/minimal.yaml"))
+    config = load_config(Path("configs/minimal-v1.yaml"))
     config = config.model_copy(
         update={
             "payments": config.payments.model_copy(

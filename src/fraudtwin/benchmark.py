@@ -133,31 +133,27 @@ class BenchmarkResult:
 
 
 def _base_values(seed: int) -> dict[str, Any]:
-    raw = yaml.safe_load(files("fraudtwin").joinpath("defaults/minimal.yaml").read_text())
+    raw = yaml.safe_load(files("fraudtwin").joinpath("defaults/minimal-v1.yaml").read_text())
     if not isinstance(raw, dict):
         raise ValueError("built-in minimal configuration must be a mapping")
     values = cast(dict[str, Any], raw)
     values["simulation"]["seed"] = seed
     values["simulation"]["duration_days"] = 12
-    values["population"].update(
-        {
-            "customers": 80,
-            "accounts": 100,
-            "cards": 80,
-            "merchants": 20,
-            "devices": 50,
-            "pix_keys": 60,
-        }
-    )
+    values["population"].update({
+        "customers": 80,
+        "accounts": 100,
+        "cards": 80,
+        "merchants": 20,
+        "devices": 50,
+        "pix_keys": 60,
+    })
     values["payments"]["daily_target"] = 40
-    values["fraud"].update(
-        {
-            "enabled": True,
-            "target_rate": 0.12,
-            "scenario_count": 5,
-            "hard_negative_rate": 1.0,
-        }
-    )
+    values["fraud"].update({
+        "enabled": True,
+        "target_rate": 0.12,
+        "scenario_count": 5,
+        "hard_negative_rate": 1.0,
+    })
     values["labels"] = {
         "enabled": True,
         "investigation_rate": 0.85,
@@ -166,13 +162,11 @@ def _base_values(seed: int) -> dict[str, Any]:
         "correction_rate": 0.10,
         "reopening_rate": 0.05,
     }
-    values["dataset"].update(
-        {
-            "enabled": True,
-            "unresolved_labels": "include",
-            "label_delay_seconds": 3_600,
-        }
-    )
+    values["dataset"].update({
+        "enabled": True,
+        "unresolved_labels": "include",
+        "label_delay_seconds": 3_600,
+    })
     values["outputs"].update({"parquet": True})
     values["quality"] = {"profile": "clean"}
     return values
@@ -584,13 +578,11 @@ def _run_one(
         dataset_manifest_values = json.loads(generated.dataset_manifest_path.read_text())
     baseline_config = BaselineEvaluationConfig(models=("deterministic_heuristic",))
     all_models = list(
-        dict.fromkeys(
-            (
-                "deterministic_heuristic",
-                *request.models,
-                *(item.metadata.model_id for item in runners),
-            )
-        )
+        dict.fromkeys((
+            "deterministic_heuristic",
+            *request.models,
+            *(item.metadata.model_id for item in runners),
+        ))
     )
     evaluated: list[dict[str, Any]] = []
     lineage: dict[str, Any] = {}

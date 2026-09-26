@@ -39,7 +39,7 @@ implementations explicitly before constructing the workflow. Keep the registry
 snapshot alongside the run manifest so a result can be reproduced later.
 
 The complete external-package example is in
-[`examples/extensions/`](https://github.com/emedinac/fraudtwin/tree/main/examples/extensions).
+[`examples/extensions/`](https://github.com/emedinac/fraud-twin/tree/main/examples/extensions).
 It includes a minimal fault injector and the corresponding `pyproject.toml`
 entry-point declaration to copy into a separately versioned distribution.
 

@@ -1,3 +1,7 @@
+# Purpose: docker compose configuration for FraudTwin.
+# Reproducibility: Keep these values fixed when comparing runs.
+# Editing: Change only the settings needed for the intended scenario.
+# Defines the containers used by the local development stack.
 services:
   postgres:
     image: postgres:16
@@ -139,6 +143,7 @@ services:
       - grafana-data:/var/lib/grafana
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
 
+# Persists local service data across container restarts.
 volumes:
   prometheus-data:
   grafana-data:

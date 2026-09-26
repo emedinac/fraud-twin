@@ -92,7 +92,7 @@ where a file format, release history, or existing command requires them.
 - [Configuration parameter reference](configuration-reference.rst) - generated tables for every major Pydantic configuration section.
 - [CLI reference](cli.rst) - command groups, validation commands, and workflow entry points.
 - [Data contracts](data-contracts.rst) - generated-run artifacts, grains, and oracle boundaries.
-- [Source code on GitHub](https://github.com/emedinac/fraudtwin) - implementation, tests, and issue tracker.
+- [Source code on GitHub](https://github.com/emedinac/fraud-twin) - implementation, tests, and issue tracker.
 
 ## Cheatsheets
 
@@ -109,7 +109,7 @@ where a file format, release history, or existing command requires them.
 
 ## External Resources
 
-- [FraudTwin on GitHub](https://github.com/emedinac/fraudtwin) - source code, tests, issues, and project history.
+- [FraudTwin on GitHub](https://github.com/emedinac/fraud-twin) - source code, tests, issues, and project history.
 - [References and related work](references.md) - standards, handbooks, papers, and projects that informed the design.
 
 ## A useful mental model

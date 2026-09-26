@@ -5,13 +5,12 @@
 # FraudTwin
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB.svg?logo=python&logoColor=white)](https://docs.python.org/3/)
-[![Documentation](https://img.shields.io/badge/docs-latest-0B7285.svg)](https://emedinac.github.io/fraudtwin/latest/)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=github-actions&logoColor=white)](.github/workflows/ci.yml)
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 [![Parquet](https://img.shields.io/badge/output-Apache%20Parquet-50ABF1?logo=apacheparquet&logoColor=white)](https://parquet.apache.org/docs/)
 [![Pydantic](https://img.shields.io/badge/config-Pydantic%202-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 
-Documentation: [main site](https://emedinac.github.io/fraudtwin/)
+Documentation: [main site](https://emedinac.github.io/fraud-twin/)
 
 > A deterministic payment world for building, breaking, and validating fraud systems.
 
@@ -154,9 +153,9 @@ notebook directory:
 | [Streaming and Kafka reliability](docs/tutorials/streaming-reliability.md) | Avro contracts, delivery faults, outages, duplicates, and event-time correctness. |
 | [Operations and incident response](docs/tutorials/operations.md) | Checkpoint/resume, data repair, PostgreSQL reconciliation, and lakehouse observability. |
 
-The [versioned documentation site](https://emedinac.github.io/fraudtwin/latest/)
+The [versioned documentation site](https://emedinac.github.io/fraud-twin/latest/)
 contains rendered notebooks, guides, troubleshooting, compatibility notes, and
-the [Python API reference](https://emedinac.github.io/fraudtwin/latest/api.html).
+the [Python API reference](https://emedinac.github.io/fraud-twin/latest/api.html).
 The API reference lists supported public classes and functions with signatures,
 parameters, return types, exceptions, and source links.
 

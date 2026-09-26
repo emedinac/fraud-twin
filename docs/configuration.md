@@ -97,10 +97,16 @@ run hash whenever the date changes.
 
 ### Use repository fixtures
 
-The repository contains `configs/minimal.yaml` and versioned files under
+The repository contains `configs/minimal-v1.yaml` and versioned files under
 `configs/benchmarks/`. These are useful when working from a source checkout or
 running the project’s tests. They are not the recommended discovery mechanism
 for an installed package; use `fraudtwin config init` instead.
+
+The benchmark directory is organized by feature area. Start with the category
+index in `configs/benchmarks/README.md` to jump to the right minimal example for
+baseline, campaign, graph, temporal, or Kafka publishing scenarios. Each file
+is intentionally small, deterministic, and easy to copy into a project-owned
+config before you customize it.
 
 Do not import `fraudtwin/defaults/minimal.yaml` directly. That is a packaged
 implementation resource. The supported Python entry point is
@@ -130,6 +136,23 @@ population:
   devices: 100
   pix_keys: 80
 
+# Currency and funding ranges for generated accounts.
+account_finances:
+  currency: BRL
+  opening_balance_min: 100.00
+  opening_balance_max: 25000.00
+  credit_limit_min: 0.00
+  credit_limit_max: 50000.00
+  overdraft_limit_min: 0.00
+  overdraft_limit_max: 5000.00
+
+# Transaction and daily caps assigned to generated cards.
+card_limits:
+  transaction_limit_min: 100.00
+  transaction_limit_max: 10000.00
+  daily_limit_min: 500.00
+  daily_limit_max: 20000.00
+
 # Target payment volume and the relative mix of payment rails.
 payments:
   daily_target: 250
@@ -142,6 +165,7 @@ payments:
 behavior:
   amount_min: 1.00
   amount_max: 5000.00
+  amount_distribution: profile
 
 # Fraud is disabled for a clean baseline.
 fraud:
@@ -168,6 +192,13 @@ file. YAML is the recommended format because it supports comments and readable
 multi-line sections. JSON-shaped content is accepted by the YAML parser, but it
 does not provide the same explanation and editing experience.
 
+`behavior.amount_max` is a ceiling, not a target: the default `profile`
+distribution samples from each customer's spending profile and may stay far
+below that ceiling. Use `amount_distribution: uniform` to spread baseline
+payments across the configured `amount_min`–`amount_max` interval. Large amounts
+also require sufficient `account_finances` and `card_limits`; otherwise balances
+or per-card limits can cap or reject payments.
+
 ## F/P/C identifiers
 
 FraudTwin uses a small vocabulary to make configuration and failures easier to
@@ -191,10 +222,18 @@ Protocol: P08 — instant-payment-scam-protocol
 Capacity: C04 — ledger-debit-capacity
 ```
 
-The default scenario map is an overlay. If `scenarios` is omitted, or only one
-scenario is provided, missing scenarios still receive the built-in defaults:
-`enabled: true`, `weight: 1.0`, and `count: 1`. Explicitly disable the other
-scenario IDs when you need an F04-only run.
+The `scenarios` mapping is an explicit selection overlay. If `scenarios` is
+omitted entirely, the five built-in scenarios receive their default settings:
+`enabled: true`, `weight: 1.0`, and `count: 1`. If a partial `scenarios` map is
+provided, any scenario that is not listed is treated as disabled by default:
+`enabled: false`, `weight: 0.0`, and `count: 0`.
+
+This is intentionally different from optional outputs such as
+`outputs.postgres`, `outputs.kafka`, and `outputs.iceberg`, which default to
+`false` when omitted. The fraud scenario map defaults to an explicit selection
+when a partial map is provided, so you should disable the unused scenarios
+explicitly in a minimal run only when you intend to keep the built-in defaults
+for the scenarios you do list.
 
 ## Configuration at a glance
 
@@ -413,7 +452,7 @@ bytes. Fit a reusable profile from a canonical Parquet transaction table:
 
 ```bash
 fraudtwin calibrate reference.parquet --output calibrated-profile.yaml
-fraudtwin generate configs/minimal.yaml --profile calibrated-profile.yaml --seed 42
+fraudtwin generate configs/minimal-v1.yaml --profile calibrated-profile.yaml --seed 42
 ```
 
 The reference must contain finite positive `amount`, timezone-aware UTC
@@ -610,8 +649,8 @@ fraud:
 
 The F identifiers are part of the typed configuration schema and the built-in
 fraud generator. The authoritative references are the
-[`FraudScenarioId` and `FraudScenarioSettings` definitions](https://github.com/emedinac/fraudtwin/blob/main/src/fraudtwin/config.py)
-and the [scenario dispatch and payment-shape implementation](https://github.com/emedinac/fraudtwin/blob/main/src/fraudtwin/simulation/fraud.py).
+[`FraudScenarioId` and `FraudScenarioSettings` definitions](https://github.com/emedinac/fraud-twin/blob/main/src/fraudtwin/config.py)
+and the [scenario dispatch and payment-shape implementation](https://github.com/emedinac/fraud-twin/blob/main/src/fraudtwin/simulation/fraud.py).
 The generated [configuration reference](configuration-reference.rst) documents
 the field types and allowed values.
 
@@ -640,7 +679,9 @@ scenarios:
     amount_max: 100.0
 ```
 
-To select only F04, explicitly disable every other scenario:
+To select only F04, explicitly disable every other scenario. This is the
+recommended form because a partial `scenarios` map is treated as an explicit
+selection, not a merge of all default scenarios:
 
 ```yaml
 # Merge into the fraud section of an existing configuration.
@@ -819,7 +860,7 @@ fraudtwin config validate config.yaml
 fraudtwin generate config.yaml --output-dir runs/minimal
 ```
 
-When working from a repository checkout, `configs/minimal.yaml` is the
+When working from a repository checkout, `configs/minimal-v1.yaml` is the
 equivalent tracked fixture. The following is an override fragment, not a
 complete file by itself:
 

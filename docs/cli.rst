@@ -173,12 +173,12 @@ Examples by audience
    $ fraudtwin generate config.yaml --output-dir runs/quickstart
 
    # Repository checkout: use a tracked fixture
-   $ fraudtwin config validate configs/minimal.yaml
-   $ fraudtwin generate configs/minimal.yaml --output-dir runs/quickstart
+   $ fraudtwin config validate configs/minimal-v1.yaml
+   $ fraudtwin generate configs/minimal-v1.yaml --output-dir runs/quickstart
 
    # Data scientist: create a point-in-time dataset and backtest
-   $ fraudtwin ml build-dataset configs/minimal.yaml --run-id RUN-... --output-dir runs
-   $ fraudtwin ml backtest configs/minimal.yaml --run-id RUN-... --output-dir runs
+   $ fraudtwin ml build-dataset configs/minimal-v1.yaml --run-id RUN-... --output-dir runs
+   $ fraudtwin ml backtest configs/minimal-v1.yaml --run-id RUN-... --output-dir runs
 
    # MLOps engineer: inspect an integration before publishing
    $ fraudtwin db status

@@ -1,0 +1,62 @@
+# Ten-edge ring constrained to one institution, paired with the cross-institution 10-hop fixture.
+simulation:
+  seed: 5304
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+population:
+  customers: 3000
+  institutions: 12
+  accounts: 3000
+  cards: 1200
+  merchants: 200
+  devices: 1200
+  pix_keys: 0
+
+# 10k baseline payments; graph and fraud generation may add records.
+payments:
+  daily_target: 1000
+  rails: {CARD: 0.65, ACCOUNT_TRANSFER: 0.35}
+
+behavior:
+  amount_min: 25.0
+  amount_max: 5500.0
+  amount_distribution: uniform
+
+fraud:
+  enabled: true
+  target_rate: 0.5
+  scenario_count: 180
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F03:
+      enabled: true
+      weight: 1.0
+      count: 180
+      amount_min: 300.0
+      amount_max: 5500.0
+      attempt_count: 10
+
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 0.9
+  customer_dispute_probability: 0.5
+
+graph:
+  enabled: true
+  export_policy: both
+  scenarios:
+    - type: CYCLIC_RING
+      count: 12
+      member_count: 10
+      min_amount: 800.0
+      max_amount: 5500.0
+      window_seconds: 7200
+      institution_scope: SINGLE_INSTITUTION
+
+outputs:
+  parquet: true

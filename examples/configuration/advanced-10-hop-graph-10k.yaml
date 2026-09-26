@@ -1,0 +1,104 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # A fixed seed and date range make graph runs comparable.
+  seed: 2601
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Many distinct actors support disjoint graph campaigns.
+population:
+  # Large actor pools allow campaigns to use distinct participants.
+  customers: 15000
+  institutions: 12
+  accounts: 3000
+  cards: 1000
+  merchants: 40
+  devices: 300
+  pix_keys: 0
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 500000.0
+  opening_balance_max: 1000000.0
+  credit_limit_min: 0.0
+  credit_limit_max: 25000.0
+  overdraft_limit_min: 0.0
+  overdraft_limit_max: 10000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 5000.0
+  transaction_limit_max: 15000.0
+  daily_limit_min: 150000.0
+  daily_limit_max: 300000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Ordinary card and transfer traffic surrounds the graph events.
+  daily_target: 750
+  rails:
+    CARD: 0.8
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.2
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 1.0
+  amount_max: 10000.0
+  amount_distribution: uniform
+  active_hours: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+  weekday_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 0.8, 0.65]
+  merchant_preference_count: 5
+  preferred_device_limit: 3
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # Fraud injection is off; graph scenarios provide the test patterns.
+  enabled: false
+  target_rate: 0.0
+  scenario_count: 0
+  hard_negative_rate: 0.0
+
+# Controls how fraud events become alerts, cases, disputes, and labels.
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 0.9
+  customer_dispute_probability: 0.6
+  alert_delay_seconds: 60
+  case_open_delay_seconds: 300
+  confirmation_delay_seconds: 21600
+  customer_dispute_delay_seconds: 43200
+  label_delay_seconds: 3600
+
+# G02: each ring is a closed route with ten transfer hops.
+graph:
+  # The ring has ten hops; the stacked network adds intermediaries.
+  enabled: true
+  ring_min_size: 3
+  ring_max_size: 7
+  scenarios:
+    - type: CYCLIC_RING
+      count: 230
+      member_count: 10
+      min_amount: 6500.0
+      max_amount: 10000.0
+      window_seconds: 3600
+      modifiers: [SHORT_DWELL]
+    - type: STACKED_NETWORK
+      count: 10
+      originator_count: 1
+      intermediary_count: 10
+      beneficiary_count: 1
+      min_amount: 6500.0
+      max_amount: 10000.0
+      window_seconds: 7200
+      institution_scope: CROSS_INSTITUTION
+      modifiers: [CROSS_INSTITUTION]
+
+# All graph fraud records enter the normal alert/case workflow.
+outputs:
+  parquet: true

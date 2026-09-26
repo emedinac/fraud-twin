@@ -1,15 +1,19 @@
+# Names this automation so it is identifiable in the project UI.
 name: Release
 
+# Selects the events that trigger this automation.
 on:
   push:
     tags:
       - "v*.*.*"
 
+# Limits the repository permissions granted to this workflow.
 permissions:
   contents: write
   id-token: write
   attestations: write
 
+# Defines the checks and deployment steps run by this workflow.
 jobs:
   package:
     runs-on: ubuntu-latest

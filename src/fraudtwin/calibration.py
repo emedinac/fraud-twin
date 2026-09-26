@@ -792,6 +792,38 @@ def resolve_calibration(
             raise ValueError("calibration seasonality has no mass in configured active_hours")
     config_payload: Any = getattr(config, "model_dump", lambda **_: {})(mode="json")
     if isinstance(config_payload, dict):
+        # New optional controls at their defaults must preserve calibration
+        # identities and the stream fingerprints released before they existed.
+        neutral_sections = {
+            "account_finances": {
+                "currency": "BRL",
+                "opening_balance_min": 100.0,
+                "opening_balance_max": 25_000.0,
+                "credit_limit_min": 0.0,
+                "credit_limit_max": 50_000.0,
+                "overdraft_limit_min": 0.0,
+                "overdraft_limit_max": 5_000.0,
+            },
+            "card_limits": {
+                "transaction_limit_min": 100.0,
+                "transaction_limit_max": 10_000.0,
+                "daily_limit_min": 500.0,
+                "daily_limit_max": 20_000.0,
+            },
+        }
+        for section, defaults in neutral_sections.items():
+            if config_payload.get(section) == defaults:
+                config_payload.pop(section, None)
+        behavior_payload = config_payload.get("behavior")
+        if (
+            isinstance(behavior_payload, dict)
+            and behavior_payload.get("amount_distribution") == "profile"
+        ):
+            behavior_payload.pop("amount_distribution", None)
+        fraud_payload = config_payload.get("fraud")
+        if isinstance(fraud_payload, dict) and fraud_payload.get("scenario_selection") == "merge":
+            fraud_payload.pop("scenario_selection", None)
+
         # Kafka delivery controls are sink concerns and must not perturb the
         # calibrated source-run identity.
         config_payload.pop("kafka", None)

@@ -43,7 +43,7 @@ poetry run python -c \
 Run validation before generation and inspect the first reported field:
 
 ```console
-poetry run fraudtwin config validate configs/minimal.yaml
+poetry run fraudtwin config validate configs/minimal-v1.yaml
 ```
 
 Unknown fields are rejected intentionally. Check required relationships such as

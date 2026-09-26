@@ -1,0 +1,88 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed makes the fan-out pattern repeatable.
+  seed: 4205
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Actor and institution pools supply graph endpoints.
+  customers: 700
+  institutions: 8
+  accounts: 1000
+  cards: 600
+  merchants: 35
+  devices: 450
+  pix_keys: 0
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 300000.0
+  opening_balance_max: 900000.0
+  credit_limit_min: 0.0
+  credit_limit_max: 200000.0
+  overdraft_limit_min: 0.0
+  overdraft_limit_max: 40000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 3000.0
+  transaction_limit_max: 25000.0
+  daily_limit_min: 70000.0
+  daily_limit_max: 400000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Baseline traffic uses CARD and account transfers.
+  daily_target: 420
+  rails:
+    CARD: 0.55
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.45
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 20.0
+  amount_max: 3500.0
+  amount_distribution: uniform
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # F05 attempt count controls the velocity pattern capacity.
+  enabled: true
+  target_rate: 0.5
+  scenario_count: 220
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F05:
+      enabled: true
+      weight: 1.0
+      count: 220
+      amount_min: 300.0
+      amount_max: 3500.0
+      attempt_count: 12
+
+# Defines shared entities and network structures used by graph scenarios.
+graph:
+  # Each source fans out to several destinations within this window.
+  enabled: true
+  scenarios:
+    - type: FAN_OUT
+      count: 75
+      destination_count: 3
+      min_amount: 500.0
+      max_amount: 3500.0
+      window_seconds: 3600
+      institution_scope: CROSS_INSTITUTION
+      modifiers: [CROSS_INSTITUTION]
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true
+  postgres: false
+  kafka: false
+  iceberg: false

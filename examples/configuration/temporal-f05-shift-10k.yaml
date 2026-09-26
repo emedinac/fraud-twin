@@ -1,0 +1,91 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed ten-day window aligns with the two backtest regimes.
+  seed: 2702
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Actor pools provide context for the changing fraud rate.
+  customers: 200
+  institutions: 6
+  accounts: 500
+  cards: 120
+  merchants: 30
+  devices: 150
+  pix_keys: 0
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 5000000.0
+  opening_balance_max: 5000000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 10000.0
+  transaction_limit_max: 15000.0
+  daily_limit_min: 250000.0
+  daily_limit_max: 500000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Baseline traffic stays stable across both regimes.
+  daily_target: 750
+  rails:
+    CARD: 0.70
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.30
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 1.0
+  amount_max: 10000.0
+  amount_distribution: uniform
+  state_change_probability: 0.01
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # F05 is the only campaign whose prevalence changes over time.
+  enabled: true
+  target_rate: 0.5
+  scenario_count: 125
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F05:
+      enabled: true
+      weight: 1.0
+      count: 125
+      amount_min: 1.0
+      amount_max: 10000.0
+      attempt_count: 20
+
+# Frauds are concentrated in the second half of the run.
+backtest:
+  # Regime multipliers create a quiet start followed by a surge.
+  regimes:
+    - id: quiet-start
+      from: 2026-01-01T00:00:00Z
+      to: 2026-01-06T00:00:00Z
+      prevalence_multiplier: 0.25
+      scenario_mix: { F05: 1.0 }
+    - id: fraud-surge
+      from: 2026-01-06T00:00:00Z
+      to: 2026-01-11T00:00:00Z
+      prevalence_multiplier: 1.75
+      scenario_mix: { F05: 1.0 }
+
+# Controls how fraud events become alerts, cases, disputes, and labels.
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 0.9
+  customer_dispute_probability: 0.5
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true

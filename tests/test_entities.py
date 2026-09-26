@@ -19,7 +19,7 @@ from fraudtwin.simulation.parquet import ENTITY_SCHEMAS, write_entity_parquet
 def test_generated_relationships_hold_across_population_sizes(
     customers: int, institutions: int, accounts: int, cards: int, pix_keys: int
 ) -> None:
-    base_config = load_config(Path("configs/minimal.yaml"))
+    base_config = load_config(Path("configs/minimal-v1.yaml"))
     population = base_config.population.model_copy(
         update={
             "customers": customers,
@@ -49,7 +49,7 @@ def test_generated_relationships_hold_across_population_sizes(
 
 
 def test_generator_honors_configured_counts_and_relationships() -> None:
-    dataset = EntityGenerator(load_config(Path("configs/minimal.yaml"))).generate()
+    dataset = EntityGenerator(load_config(Path("configs/minimal-v1.yaml"))).generate()
 
     assert dataset.counts == {
         "customers": 10,
@@ -90,7 +90,7 @@ def test_generator_honors_configured_counts_and_relationships() -> None:
 
 
 def test_same_seed_produces_equivalent_entity_dataset() -> None:
-    config = load_config(Path("configs/minimal.yaml"))
+    config = load_config(Path("configs/minimal-v1.yaml"))
 
     first = EntityGenerator(config).generate()
     second = EntityGenerator(config).generate()
@@ -99,7 +99,7 @@ def test_same_seed_produces_equivalent_entity_dataset() -> None:
 
 
 def test_entity_parquet_files_have_stable_schemas(tmp_path: Path) -> None:
-    dataset = EntityGenerator(load_config(Path("configs/minimal.yaml"))).generate()
+    dataset = EntityGenerator(load_config(Path("configs/minimal-v1.yaml"))).generate()
     paths = write_entity_parquet(dataset, tmp_path / "run-1")
 
     assert set(paths) == set(ENTITY_SCHEMAS)
@@ -113,7 +113,7 @@ def test_entity_parquet_files_have_stable_schemas(tmp_path: Path) -> None:
 
 
 def test_optional_entity_state_history_is_effective_dated(tmp_path: Path) -> None:
-    base = load_config(Path("configs/minimal.yaml"))
+    base = load_config(Path("configs/minimal-v1.yaml"))
     config = base.model_copy(
         update={"behavior": base.behavior.model_copy(update={"state_change_probability": 1.0})}
     )
@@ -123,3 +123,38 @@ def test_optional_entity_state_history_is_effective_dated(tmp_path: Path) -> Non
     paths = write_entity_parquet(dataset, tmp_path / "run")
     assert (tmp_path / "run" / "entities" / "state_history.parquet").is_file()
     assert paths["state_history"] == tmp_path / "run" / "entities" / "state_history.parquet"
+
+    def test_account_financial_configuration_controls_currency_and_funding() -> None:
+        base = load_config(Path("configs/minimal-v1.yaml"))
+        account_finances = base.account_finances.model_copy(
+            update={
+                "currency": "USD",
+                "opening_balance_min": 20_000_000.0,
+                "opening_balance_max": 20_000_000.0,
+                "credit_limit_min": 1_000.0,
+                "credit_limit_max": 1_000.0,
+                "overdraft_limit_min": 2_000.0,
+                "overdraft_limit_max": 2_000.0,
+            }
+        )
+        card_limits = base.card_limits.model_copy(
+            update={
+                "transaction_limit_min": 100_000.0,
+                "transaction_limit_max": 100_000.0,
+                "daily_limit_min": 2_000_000.0,
+                "daily_limit_max": 2_000_000.0,
+            }
+        )
+        config = base.model_copy(
+            update={"account_finances": account_finances, "card_limits": card_limits}
+        )
+
+        dataset = EntityGenerator(config).generate()
+        accounts = dataset.accounts
+
+        assert all(account.currency == "USD" for account in accounts)
+        assert all(account.ledger_balance == 20_000_000.0 for account in accounts)
+        assert all(account.credit_limit == 1_000.0 for account in accounts)
+        assert all(account.overdraft_limit == 2_000.0 for account in accounts)
+        assert all(card.transaction_limit == 100_000.0 for card in dataset.cards)
+        assert all(card.daily_limit == 2_000_000.0 for card in dataset.cards)

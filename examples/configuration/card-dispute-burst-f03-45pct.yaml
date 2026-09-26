@@ -1,0 +1,82 @@
+# Fixes the seed and time window used by this generated run.
+simulation:
+  # Fixed seed makes dispute outcomes reproducible.
+  seed: 4202
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Sets the sizes of the generated customer, account, and service pools.
+population:
+  # Cards and merchants provide the actors needed by the scenario.
+  customers: 600
+  institutions: 5
+  accounts: 800
+  cards: 700
+  merchants: 30
+  devices: 350
+  pix_keys: 0
+
+# Controls account currency, opening balances, credit, and overdraft ranges.
+account_finances:
+  currency: USD
+  opening_balance_min: 150000.0
+  opening_balance_max: 450000.0
+  credit_limit_min: 0.0
+  credit_limit_max: 150000.0
+  overdraft_limit_min: 0.0
+  overdraft_limit_max: 30000.0
+
+# Sets the per-card transaction and daily spending limits.
+card_limits:
+  transaction_limit_min: 3000.0
+  transaction_limit_max: 25000.0
+  daily_limit_min: 50000.0
+  daily_limit_max: 300000.0
+
+# Controls daily payment volume and the share assigned to each rail.
+payments:
+  # Mostly card traffic keeps the example focused on card fraud.
+  daily_target: 360
+  rails:
+    CARD: 0.85
+    PIX: 0.0
+    ACCOUNT_TRANSFER: 0.15
+
+# Shapes legitimate activity, including payment size and active periods.
+behavior:
+  amount_min: 20.0
+  amount_max: 3000.0
+  amount_distribution: uniform
+
+# Selects fraud scenarios and controls their prevalence and campaign sizes.
+fraud:
+  # F03 scenarios exercise dispute behavior at the selected intensity.
+  enabled: true
+  target_rate: 0.45
+  scenario_count: 180
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F03:
+      enabled: true
+      weight: 1.0
+      count: 180
+      amount_min: 250.0
+      amount_max: 3000.0
+
+# Controls how fraud events become alerts, cases, disputes, and labels.
+fraud_workflow:
+  # Probabilities and delays shape the observed case lifecycle.
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 0.9
+  customer_dispute_probability: 0.8
+
+# Chooses which generated artifacts and external sinks are written.
+outputs:
+  parquet: true
+  postgres: false
+  kafka: false
+  iceberg: false

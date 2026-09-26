@@ -1,0 +1,80 @@
+# Fixed seed and ten-day window define a repeatable 10k baseline run.
+simulation:
+  seed: 5309
+  start: 2026-01-01T00:00:00Z
+  duration_days: 10
+  speed: batch
+
+# Entity capacity supports the selected graph relation without reuse.
+population:
+  customers: 3000
+  institutions: 12
+  accounts: 3000
+  cards: 1200
+  merchants: 200
+  devices: 1200
+  pix_keys: 0
+
+# 1,000 baseline payments per day for ten days (graph/fraud can add rows).
+payments:
+  daily_target: 1000
+  rails: {CARD: 0.65, ACCOUNT_TRANSFER: 0.35}
+
+behavior:
+  amount_min: 25.0
+  amount_max: 5500.0
+  amount_distribution: uniform
+
+# F03 is enabled in every fixture; 50% is the campaign target, not a
+# guarantee that half of final payment rows will be fraudulent.
+fraud:
+  enabled: true
+  target_rate: 0.5
+  scenario_count: 180
+  hard_negative_rate: 0.0
+  scenario_selection: explicit
+  scenarios:
+    F03:
+      enabled: true
+      weight: 1.0
+      count: 180
+      amount_min: 300.0
+      amount_max: 5500.0
+      attempt_count: 10
+
+fraud_workflow:
+  enabled: true
+  alert_probability: 1.0
+  case_open_probability: 1.0
+  confirmation_probability: 0.9
+  customer_dispute_probability: 0.5
+
+# A mule campaign changes membership and rotates actors/devices over time.
+graph:
+  enabled: true
+  export_policy: both
+  scenarios:
+    - type: MULE_NETWORK
+      count: 12
+      source_count: 4
+      min_amount: 300.0
+      max_amount: 5500.0
+      window_seconds: 7200
+      institution_scope: CROSS_INSTITUTION
+      modifiers: [CROSS_INSTITUTION]
+
+campaign_dynamics:
+  enabled: true
+  bindings:
+    - profile: linear
+      allowed_rails: [ACCOUNT_TRANSFER, CARD]
+      max_actions: 8
+      max_actor_joins: 1
+      max_actor_leaves: 1
+      max_mule_rotations: 1
+      max_device_rotations: 1
+      max_splits: 0
+      max_merges: 0
+
+outputs:
+  parquet: true
